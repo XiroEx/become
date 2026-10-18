@@ -231,6 +231,9 @@ export default function LiveWorkoutRoute({
   const [addAnchorIndex, setAddAnchorIndex] = useState(0);
 
   const handleAddExercise = (r: AddExerciseResult) => {
+    if (r.bellCount && r.exercise.slug) {
+      setBellChoice(r.exercise.slug, r.bellCount);
+    }
     addExercise({
       exercise: r.exercise,
       placement: r.placement,
@@ -601,6 +604,7 @@ export default function LiveWorkoutRoute({
         anchorSets={workout && workout.exercises[addAnchorIndex]?.sets}
         anchorGroupType={workout && workout.exercises[addAnchorIndex]?.groupType}
         workoutExerciseSlugs={sheetExerciseSlugs}
+        rememberedBells={rememberedBells}
         testID="live-workout-add"
       />
       <ExerciseSwapModal
@@ -614,6 +618,7 @@ export default function LiveWorkoutRoute({
         onSwap={onSelectAlternative}
         onSelect={onSelectAlternative}
         onClose={() => setSwapSlug(null)}
+        rememberedBells={rememberedBells}
       />
       {staleIncomplete ? (
         <IncompleteWorkoutModal

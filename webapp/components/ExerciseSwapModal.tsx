@@ -9,6 +9,9 @@ import { useLockScroll } from "@/lib/useLockScroll";
 import FramedVideo from "@/components/FramedVideo";
 import CustomExerciseFields, { DEFAULT_CUSTOM_EXERCISE_VALUES, type CustomExerciseValues } from "@/components/workout/CustomExerciseFields";
 import UpgradeSheet from "@/components/UpgradeSheet";
+import BellCountToggle from "@/components/workout/BellCountToggle";
+import { getBellWeightInfo } from "@/lib/workout/dumbbellWeight";
+import { resolveBellCount, type BellCount } from "@/lib/workout/bellCount";
 import { gateFrom, type GatePayload } from "@/lib/entitlementsClient";
 
 const DIRECT_VIDEO_FILE = /\.(mp4|mov|webm|mkv|m4v)(\?.*)?$/i;
@@ -75,7 +78,7 @@ export type SwapScope = 'session' | 'program';
 interface ExerciseSwapModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSwap: (alternative: AlternativeExercise, scope: SwapScope) => void;
+  onSwap: (alternative: AlternativeExercise, scope: SwapScope, bellCount?: BellCount) => void;
   exerciseSlug: string;
   exerciseName: string;
   /** Other exercise slugs in the current workout (to avoid duplicates) */
@@ -85,6 +88,7 @@ interface ExerciseSwapModalProps {
   /** Quick sessions have no program — only offer a session-scope swap and hide the
    *  "Swap … for All Future Workouts" (program-wide) button. */
   sessionScopeOnly?: boolean;
+  rememberedBells?: Record<string, BellCount>;
 }
 
 // ─── Equipment display helpers ──────────────────────────────────────────────
@@ -193,8 +197,10 @@ export default function ExerciseSwapModal({
   workoutExerciseSlugs,
   programRole,
   sessionScopeOnly = false,
+  rememberedBells,
 }: ExerciseSwapModalProps) {
   const [alternatives, setAlternatives] = useState<AlternativeExercise[]>([]);
+  const [bellChoices, setBellChoices] = useState<Record<string, BellCount>>({});
   const [source, setSource] = useState<SourceExercise | null>(null);
   const [customExercises, setCustomExercises] = useState<AlternativeExercise[]>([]);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -481,19 +487,27 @@ export default function ExerciseSwapModal({
 
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
 
-  const handleSwap = (alt: AlternativeExercise, scope: SwapScope) => {
+  const handleSwap = (alt: AlternativeExercise, scope: SwapScope, count?: BellCount) => {
     // If the user picked a specific variation, swap to that instead
     const chosenSlug = selectedVariants[alt.slug];
+    let candidateToSwap = alt;
     if (chosenSlug && chosenSlug !== alt.slug) {
       const variations = variationsCache[alt.slug] || [];
       const chosenVariation = variations.find((v) => v.slug === chosenSlug);
       if (chosenVariation) {
-        onSwap({ ...alt, slug: chosenVariation.slug, name: chosenVariation.name, equipment: chosenVariation.equipment }, scope);
-        onClose();
-        return;
+        candidateToSwap = {
+          ...alt,
+          slug: chosenVariation.slug,
+          name: chosenVariation.name,
+          equipment: chosenVariation.equipment,
+        };
       }
     }
-    onSwap(alt, scope);
+    const chosenInfo = getBellWeightInfo(candidateToSwap);
+    const chosenCount = chosenInfo.style
+      ? (count ?? bellChoices[candidateToSwap.slug] ?? resolveBellCount(chosenInfo, rememberedBells?.[candidateToSwap.slug]))
+      : undefined;
+    onSwap(candidateToSwap, scope, chosenCount);
     onClose();
   };
 
@@ -818,13 +832,18 @@ export default function ExerciseSwapModal({
                           alternative={alt}
                           isSelected={selectedSlug === alt.slug}
                           onSelect={() => setSelectedSlug(selectedSlug === alt.slug ? null : alt.slug)}
-                          onSwap={(scope) => handleSwap(alt, scope)}
+                          onSwap={(scope, count) => handleSwap(alt, scope, count)}
                           sessionScopeOnly={sessionScopeOnly}
                           source={source}
                           variations={variationsCache[alt.slug] || null}
                           selectedVariationSlug={selectedVariants[alt.slug] ?? alt.slug}
                           onSelectVariation={(varSlug) =>
                             setSelectedVariants((prev) => ({ ...prev, [alt.slug]: varSlug }))
+                          }
+                          bellChoices={bellChoices}
+                          rememberedBells={rememberedBells}
+                          onBellCountChange={(slug, count) =>
+                            setBellChoices((prev) => ({ ...prev, [slug]: count }))
                           }
                         />
                       </motion.div>
@@ -907,21 +926,32 @@ function AlternativeCard({
   variations,
   selectedVariationSlug,
   onSelectVariation,
+  bellChoices,
+  rememberedBells,
+  onBellCountChange,
 }: {
   alternative: AlternativeExercise;
   isSelected: boolean;
   onSelect: () => void;
-  onSwap: (scope: SwapScope) => void;
+  onSwap: (scope: SwapScope, bellCount?: BellCount) => void;
   sessionScopeOnly?: boolean;
   source: SourceExercise | null;
   variations: ExerciseVariation[] | null;
   selectedVariationSlug: string;
   onSelectVariation: (slug: string) => void;
+  bellChoices: Record<string, BellCount>;
+  rememberedBells?: Record<string, BellCount>;
+  onBellCountChange: (slug: string, count: BellCount) => void;
 }) {
   const hasVariations = variations !== null && variations.length > 1;
   const chosenVariation = hasVariations
     ? variations.find((v) => v.slug === selectedVariationSlug) ?? variations[0]
     : null;
+  const activeExercise = chosenVariation ? { ...alt, ...chosenVariation } : alt;
+  const bellInfo = getBellWeightInfo(activeExercise);
+  const activeBellCount =
+    bellChoices[activeExercise.slug] ??
+    resolveBellCount(bellInfo, rememberedBells?.[activeExercise.slug]);
   const displayName = chosenVariation ? chosenVariation.name : alt.name;
   return (
     <div
@@ -1092,6 +1122,22 @@ function AlternativeCard({
                 </div>
               )}
 
+              {/* One or two dumbbells/kettlebells picker */}
+              {bellInfo.style && (
+                <div className="mb-3" data-testid={`swap-bell-count-${alt.slug}`}>
+                  <p className="mb-1.5 text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                    How many {bellInfo.style === 'kettlebell' ? 'kettlebells' : 'dumbbells'}?
+                  </p>
+                  <BellCountToggle
+                    info={bellInfo}
+                    value={activeBellCount}
+                    onChange={(count) => onBellCountChange(activeExercise.slug, count)}
+                    tone="track"
+                    testId={`swap-bell-toggle-${alt.slug}`}
+                  />
+                </div>
+              )}
+
               {/* Swap buttons. Quick sessions have no program, so only a single
                   session-scope swap is offered (no "All Future Workouts"). */}
               <div className="flex flex-col gap-2">
@@ -1099,7 +1145,7 @@ function AlternativeCard({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      onSwap('session');
+                      onSwap('session', activeBellCount);
                     }}
                     className="w-full rounded-lg bg-green-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-500 active:bg-green-700"
                   >
@@ -1110,7 +1156,7 @@ function AlternativeCard({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        onSwap('program');
+                        onSwap('program', activeBellCount);
                       }}
                       className="w-full rounded-lg bg-green-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-500 active:bg-green-700"
                     >
@@ -1119,7 +1165,7 @@ function AlternativeCard({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        onSwap('session');
+                        onSwap('session', activeBellCount);
                       }}
                       className="w-full rounded-lg border border-zinc-300 py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
                     >

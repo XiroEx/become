@@ -206,6 +206,7 @@ export interface UseLiveWorkoutResult {
   onSelectAlternative: (
     candidate: AlternativeCandidate,
     scope?: "session" | "program",
+    bellCount?: BellCount,
   ) => Promise<void> | void;
   setSwapSlug: (slug: string | null) => void;
   save: (
@@ -750,7 +751,11 @@ export function useLiveWorkout(
     async (
       candidate: AlternativeCandidate,
       scope: "session" | "program" = "session",
+      bellCount?: BellCount,
     ) => {
+      if (candidate.slug && bellCount) {
+        setBellChoice(candidate.slug, bellCount);
+      }
       if (!swapSlug || !workout) return;
       const exIdx = workout.exercises.findIndex((e) => e.slug === swapSlug);
       if (exIdx === -1) return;
@@ -878,6 +883,7 @@ export function useLiveWorkout(
       cacheKey,
       attemptId,
       save,
+      setBellChoice,
     ],
   );
 

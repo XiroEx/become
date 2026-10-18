@@ -36,9 +36,13 @@ import type {
 import {
   DEFAULT_SETS,
   agreesOnSets,
+  getBellWeightInfo,
+  resolveBellCount,
   setUnitLabel,
+  type BellCount,
   type GroupKind,
 } from "@become/core";
+import { BellCountToggle } from "@/components/live/BellCountToggle";
 import { buildSuggestedExercises } from "@/lib/workout/suggestedExercises";
 import { Text } from "@/components/Text";
 import { Input } from "@/components/Input";
@@ -65,6 +69,7 @@ export interface AddExerciseResult {
   placement: AddExercisePlacement;
   /** Only meaningful for placement 'group'. */
   groupKind: GroupKind;
+  bellCount?: BellCount;
 }
 
 export interface AddExerciseSheetProps {
@@ -94,6 +99,7 @@ export interface AddExerciseSheetProps {
   anchorGroupType?: string | null;
   /** Exercise slugs already in this workout, so suggestions don't repeat one. */
   workoutExerciseSlugs?: string[];
+  rememberedBells?: Record<string, BellCount>;
   title?: string;
   testID?: string;
 }
@@ -148,6 +154,7 @@ export function AddExerciseSheet({
   anchorSets,
   anchorGroupType,
   workoutExerciseSlugs = [],
+  rememberedBells,
   title = "Add an exercise",
   testID = "add-exercise-sheet",
 }: AddExerciseSheetProps) {
@@ -166,6 +173,7 @@ export function AddExerciseSheet({
     DEFAULT_CUSTOM_EXERCISE_FORM,
   );
   const [picked, setPicked] = useState<SearchRow | null>(null);
+  const [bellCount, setBellCount] = useState<BellCount>(2);
   const defaultSets =
     anchorSets && anchorSets > 0 ? Math.max(1, Math.floor(anchorSets)) : DEFAULT_SETS;
   const [sets, setSets] = useState(defaultSets);
@@ -191,6 +199,7 @@ export function AddExerciseSheet({
     setResults([]);
     setSuggested([]);
     setPicked(null);
+    setBellCount(2);
     setSets(defaultSets);
     setReps("8-12");
     setSeconds(45);
@@ -315,10 +324,12 @@ export function AddExerciseSheet({
 
   const choose = useCallback((r: SearchRow) => {
     setPicked(r);
+    const info = getBellWeightInfo(r);
+    setBellCount(resolveBellCount(info, rememberedBells?.[slugFor(r)]));
     setReps(isTimed(r.trackingType) ? "" : "8-12");
     setQuery("");
     setResults([]);
-  }, []);
+  }, [rememberedBells]);
 
   // The machine in front of you is not always in the catalog — the same form
   // the library uses, so "custom exercise" means the same thing here and
@@ -391,6 +402,7 @@ export function AddExerciseSheet({
     try {
       const timed = isTimed(picked.trackingType);
       const slug = slugFor(picked);
+      const bellInfo = getBellWeightInfo(picked);
       const exercise: LiveWorkoutExercise = {
         slug,
         name: picked.name,
@@ -405,12 +417,17 @@ export function AddExerciseSheet({
           : {}),
         addedAdHoc: true as const,
       };
-      await onAdd({ exercise, placement, groupKind });
+      await onAdd({
+        exercise,
+        placement,
+        groupKind,
+        ...(bellInfo.style ? { bellCount } : {}),
+      });
       onClose();
     } finally {
       setAdding(false);
     }
-  }, [picked, adding, effectiveSets, reps, seconds, placement, groupKind, onAdd, onClose]);
+  }, [picked, adding, effectiveSets, reps, seconds, placement, groupKind, bellCount, onAdd, onClose]);
 
   if (!visible) return null;
 
@@ -428,6 +445,7 @@ export function AddExerciseSheet({
     ...customMatches.filter((c) => !results.some((r) => r.slug === c.slug)),
   ];
   const timed = isTimed(picked?.trackingType);
+  const bellInfo = picked ? getBellWeightInfo(picked) : { style: null, showTotal: false };
   const setsLabel = setUnitLabel(picked?.trackingType ?? null, effectiveSets);
 
   return (
@@ -629,6 +647,18 @@ export function AddExerciseSheet({
                   </Text>
                 </Pressable>
               </View>
+
+              {bellInfo.style ? (
+                <View style={{ marginBottom: 12 }} testID={`${testID}-bells-container`}>
+                  <BellCountToggle
+                    info={bellInfo}
+                    value={bellCount}
+                    onChange={setBellCount}
+                    label="How many?"
+                    testID={`${testID}-bells`}
+                  />
+                </View>
+              ) : null}
 
               <View style={{ flexDirection: "row", gap: 12 }}>
                 <View style={{ flex: 1 }}>

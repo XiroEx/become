@@ -35,6 +35,12 @@ import {
 import { useEntitlements, syntheticGate } from "@/lib/entitlements";
 import { showUpgradeSheet } from "@/lib/entitlements/upgradeSheet";
 import { Search, X, ChevronDown, ChevronUp, Sparkles, Plus } from "lucide-react-native";
+import { BellCountToggle } from "@/components/live/BellCountToggle";
+import {
+  getBellWeightInfo,
+  resolveBellCount,
+  type BellCount,
+} from "@become/core";
 
 export type SwapScope = "session" | "program";
 
@@ -53,8 +59,9 @@ export interface ExerciseSwapModalProps {
   loading?: boolean;
   /** Quick sessions have no program — only offer session scope. */
   sessionScopeOnly?: boolean;
-  onSelect?: (candidate: AlternativeCandidate, scope?: SwapScope) => void;
-  onSwap?: (candidate: AlternativeCandidate, scope: SwapScope) => void;
+  rememberedBells?: Record<string, BellCount>;
+  onSelect?: (candidate: AlternativeCandidate, scope?: SwapScope, bellCount?: BellCount) => void;
+  onSwap?: (candidate: AlternativeCandidate, scope: SwapScope, bellCount?: BellCount) => void;
   onClose: () => void;
   testID?: string;
 }
@@ -266,6 +273,7 @@ export function ExerciseSwapModal({
   alternatives: propsAlternatives,
   loading: propsLoading = false,
   sessionScopeOnly = false,
+  rememberedBells,
   onSelect,
   onSwap,
   onClose,
@@ -273,6 +281,7 @@ export function ExerciseSwapModal({
 }: ExerciseSwapModalProps) {
   const { colors, scrim } = useThemeTokens();
   const { token } = useAuth();
+  const [bellChoices, setBellChoices] = useState<Record<string, BellCount>>({});
 
   const [internalAlts, setInternalAlts] = useState<AlternativeCandidate[]>([]);
   const [internalLoading, setInternalLoading] = useState(false);
@@ -704,12 +713,26 @@ export function ExerciseSwapModal({
         };
       }
     }
+    const bellInfo = getBellWeightInfo(chosenCandidate);
+    const chosenBellCount = bellInfo.style
+      ? (bellChoices[chosenCandidate.slug] ??
+         resolveBellCount(bellInfo, rememberedBells?.[chosenCandidate.slug]))
+      : undefined;
+
     if (onSwap) {
-      onSwap(chosenCandidate, scope);
+      if (chosenBellCount !== undefined) {
+        onSwap(chosenCandidate, scope, chosenBellCount);
+      } else {
+        onSwap(chosenCandidate, scope);
+      }
     }
     if (onSelect) {
       if (onSwap) {
-        onSelect(chosenCandidate, scope);
+        if (chosenBellCount !== undefined) {
+          onSelect(chosenCandidate, scope, chosenBellCount);
+        } else {
+          onSelect(chosenCandidate, scope);
+        }
       } else {
         // If only onSelect provided (e.g. legacy/stub tests with 1-arg expectations)
         onSelect(chosenCandidate);
@@ -717,7 +740,7 @@ export function ExerciseSwapModal({
     }
     onClose();
     };
-  }, [selectedVariants, variationsCache, onSwap, onSelect, onClose]);
+  }, [selectedVariants, variationsCache, bellChoices, rememberedBells, onSwap, onSelect, onClose]);
   // Stable handle for every press site: always calls the latest render's
   // implementation above (which must read the latest `selectedVariants` —
   // see its note), without changing identity every render.
@@ -1234,6 +1257,40 @@ export function ExerciseSwapModal({
                               </View>
                             </View>
                           ) : null}
+
+                          {/* Bell count picker for dumbbell/kettlebell exercises */}
+                          {(() => {
+                            const chosenVarSlug = selectedVariants[alt.slug];
+                            let candidateForBell = alt;
+                            if (chosenVarSlug && chosenVarSlug !== alt.slug) {
+                              const variations = variationsCache[alt.slug] || [];
+                              const v = variations.find((item) => item.slug === chosenVarSlug);
+                              if (v) {
+                                candidateForBell = { ...alt, ...v };
+                              }
+                            }
+                            const bellInfo = getBellWeightInfo(candidateForBell);
+                            if (!bellInfo.style) return null;
+                            const currentCount =
+                              bellChoices[candidateForBell.slug] ??
+                              resolveBellCount(bellInfo, rememberedBells?.[candidateForBell.slug]);
+                            return (
+                              <View style={{ marginBottom: 12 }}>
+                                <BellCountToggle
+                                  info={bellInfo}
+                                  value={currentCount}
+                                  onChange={(count) =>
+                                    setBellChoices((prev) => ({
+                                      ...prev,
+                                      [candidateForBell.slug]: count,
+                                    }))
+                                  }
+                                  label="How many?"
+                                  testID={`${testID}-option-${candidateForBell.slug}-bells`}
+                                />
+                              </View>
+                            );
+                          })()}
 
                           {/* Scope Buttons */}
                           {sessionScopeOnly ? (

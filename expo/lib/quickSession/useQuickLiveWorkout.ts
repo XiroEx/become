@@ -198,7 +198,7 @@ export interface UseQuickLiveWorkoutResult {
   swapSlug: string | null;
   swapSourceName: string | undefined;
   onRequestSwap: (slug: string) => void;
-  onSelectAlternative: (candidate: AlternativeCandidate) => void;
+  onSelectAlternative: (candidate: AlternativeCandidate, bellCount?: BellCount) => void;
   setSwapSlug: (slug: string | null) => void;
   /** Finish under this title with `needsName: false` (prompt Confirm/Skip). */
   finishWithTitle: (title: string) => Promise<boolean>;
@@ -670,7 +670,10 @@ export function useQuickLiveWorkout(
   }, []);
 
   const onSelectAlternative = useCallback(
-    (candidate: AlternativeCandidate) => {
+    (candidate: AlternativeCandidate, bellCount?: BellCount) => {
+      if (candidate.slug && bellCount) {
+        setBellChoice(candidate.slug, bellCount);
+      }
       const current = workout;
       if (!swapSlug || !current || !sessionId) return;
       const exIdx = current.exercises.findIndex((e) => e.slug === swapSlug);
@@ -774,7 +777,7 @@ export function useQuickLiveWorkout(
 
       setSwapSlug(null);
     },
-    [swapSlug, workout, sessionId, store, postSave],
+    [swapSlug, workout, sessionId, store, postSave, setBellChoice],
   );
 
   const finishWithTitle = useCallback(

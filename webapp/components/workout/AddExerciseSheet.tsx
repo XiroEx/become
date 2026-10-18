@@ -18,11 +18,14 @@ import { Search, Plus, X, Loader2, Layers, Minus, ArrowLeft } from 'lucide-react
 import CustomExerciseBadge from '@/components/workout/CustomExerciseBadge'
 import CustomExerciseFields, { DEFAULT_CUSTOM_EXERCISE_VALUES, type CustomExerciseValues } from '@/components/workout/CustomExerciseFields'
 import ExerciseVariationPicker, { type ExerciseVariation } from '@/components/ExerciseVariationPicker'
+import BellCountToggle from '@/components/workout/BellCountToggle'
 import type { WorkoutExercise } from '@/lib/workoutUtils'
 import { DEFAULT_SETS, agreesOnSets, type GroupKind } from '@/lib/workout/buildAsYouGo'
 import { setUnitLabel } from '@/lib/workout/tracking'
 import { buildSuggestedExercises } from '@/lib/workout/suggestedExercises'
 import { matchesExerciseQuery } from '@/lib/exerciseSearchRanking'
+import { getBellWeightInfo } from '@/lib/workout/dumbbellWeight'
+import { resolveBellCount, bellMemoryKey, type BellCount } from '@/lib/workout/bellCount'
 import UpgradeSheet from '@/components/UpgradeSheet'
 import { gateFrom, type GatePayload } from '@/lib/entitlementsClient'
 
@@ -33,6 +36,7 @@ export interface AddExerciseResult {
   placement: Placement
   /** Only meaningful for placement 'group'. */
   groupKind: GroupKind
+  bellCount?: BellCount
 }
 
 interface SearchExercise {
@@ -66,6 +70,7 @@ export interface AddExerciseSheetProps {
   anchorGroupType?: string
   /** Exercise slugs already in this workout, so suggestions don't repeat one. */
   workoutExerciseSlugs?: string[]
+  rememberedBells?: Record<string, BellCount>
   tone?: 'dark' | 'app'
   title?: string
 }
@@ -87,6 +92,7 @@ export default function AddExerciseSheet({
   anchorSets,
   anchorGroupType,
   workoutExerciseSlugs = [],
+  rememberedBells,
   tone = 'app',
   title = 'Add an exercise',
 }: AddExerciseSheetProps) {
@@ -104,6 +110,7 @@ export default function AddExerciseSheet({
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [customForm, setCustomForm] = useState<CustomExerciseValues>(DEFAULT_CUSTOM_EXERCISE_VALUES)
   const [picked, setPicked] = useState<SearchExercise | null>(null)
+  const [bellCount, setBellCount] = useState<BellCount>(2)
   const defaultSets = anchorSets && anchorSets > 0 ? Math.max(1, Math.floor(anchorSets)) : DEFAULT_SETS
   const [sets, setSets] = useState(defaultSets)
   const [reps, setReps] = useState('8-12')
@@ -121,6 +128,7 @@ export default function AddExerciseSheet({
   useEffect(() => {
     if (!open) return
     setQuery(''); setResults([]); setPicked(null)
+    setBellCount(2)
     setSets(defaultSets); setReps('8-12'); setSeconds(45)
     setPlacement('end'); setGroupKind('superset')
     setShowCreateForm(false); setCreatingError(null); setCustomForm(DEFAULT_CUSTOM_EXERCISE_VALUES)
@@ -197,10 +205,12 @@ export default function AddExerciseSheet({
 
   const choose = useCallback((r: SearchExercise) => {
     setPicked(r)
+    const info = getBellWeightInfo(r)
+    setBellCount(resolveBellCount(info, rememberedBells?.[bellMemoryKey(r)]))
     setReps(isTimed(r.trackingType) ? '' : '8-12')
     setQuery('')
     setResults([])
-  }, [])
+  }, [rememberedBells])
 
   // Switching to a sibling variation (e.g. Machine Chest Press → Dumbbell
   // Chest Press) keeps the prescription, only resetting reps/seconds when
@@ -212,7 +222,9 @@ export default function AddExerciseSheet({
       }
       return { slug: v.slug, name: v.name, trackingType: v.trackingType, equipment: v.equipment, laterality: v.laterality }
     })
-  }, [])
+    const info = getBellWeightInfo(v)
+    setBellCount(resolveBellCount(info, rememberedBells?.[bellMemoryKey(v)]))
+  }, [rememberedBells])
 
   // The machine in front of you is not always in the catalog — same detailed
   // fields the program editor offers, not just a name and a tracking type.
@@ -257,6 +269,8 @@ export default function AddExerciseSheet({
   const lockedSets = joiningCircuit && anchorSets && anchorSets > 0 ? Math.max(1, Math.floor(anchorSets)) : null
   const effectiveSets = lockedSets ?? sets
 
+  const bellInfo = picked ? getBellWeightInfo(picked) : { style: null, showTotal: false }
+
   const submit = useCallback(async () => {
     if (!picked || adding) return
     setAdding(true)
@@ -272,13 +286,19 @@ export default function AddExerciseSheet({
       ...(picked.laterality && { laterality: picked.laterality }),
       ...(picked.movementPatterns && { movementPatterns: picked.movementPatterns }),
     }
+    const currentBellInfo = getBellWeightInfo(picked)
     try {
-      await onAdd({ exercise, placement, groupKind })
+      await onAdd({
+        exercise,
+        placement,
+        groupKind,
+        ...(currentBellInfo.style && { bellCount }),
+      })
       onClose()
     } finally {
       setAdding(false)
     }
-  }, [picked, adding, effectiveSets, reps, seconds, placement, groupKind, onAdd, onClose])
+  }, [picked, adding, effectiveSets, reps, seconds, placement, groupKind, bellCount, onAdd, onClose])
 
   if (!open) return null
 
@@ -439,6 +459,21 @@ export default function AddExerciseSheet({
               dark={dark}
               className="mb-4"
             />
+
+            {bellInfo.style && (
+              <div className="mb-4" data-testid="add-exercise-bell-count">
+                <span className={`mb-1.5 block text-[11px] font-semibold uppercase tracking-wide ${muted}`}>
+                  How many {bellInfo.style === 'kettlebell' ? 'kettlebells' : 'dumbbells'}?
+                </span>
+                <BellCountToggle
+                  info={bellInfo}
+                  value={bellCount}
+                  onChange={setBellCount}
+                  tone={dark ? 'live' : 'track'}
+                  testId="add-exercise-bell-toggle"
+                />
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <Stepper

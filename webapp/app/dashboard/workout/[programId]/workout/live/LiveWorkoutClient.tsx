@@ -39,7 +39,6 @@ import DayChoiceModal from "@/components/workout/DayChoiceModal";
 import { dateKey } from "@/lib/dayWindow";
 import { getBellWeightInfo, bellWeightLabel, weightQuickPicks } from "@/lib/workout/dumbbellWeight";
 import { bellMemoryKey, bellsFromPerformances, resolveBellCount, showsBellTotal, type BellCount } from "@/lib/workout/bellCount";
-import BellCountToggle from "@/components/workout/BellCountToggle";
 import { useMemberWeightUnit } from "@/lib/useMemberWeightUnit";
 
 interface SetData {
@@ -244,6 +243,8 @@ export default function LiveWorkoutPage() {
   // Neither being set means the automatic per-exercise answer, which is what
   // an absent ISetLog.bells has always meant. See lib/workout/bellCount.ts.
   const [bellChoices, setBellChoices] = useState<Record<string, BellCount>>({});
+  const bellChoicesRef = useRef(bellChoices);
+  bellChoicesRef.current = bellChoices;
   const [rememberedBells, setRememberedBells] = useState<Record<string, BellCount>>({});
 
   // Exercise history from past workouts (e.g. "Last time: 185 lbs × 8 reps")
@@ -365,7 +366,7 @@ export default function LiveWorkoutPage() {
     const info = getBellWeightInfo(exercise);
     if (!info.style) return undefined;
     const key = bellMemoryKey(exercise);
-    return resolveBellCount(info, bellChoices[key], rememberedBells[key]);
+    return resolveBellCount(info, bellChoicesRef.current[key] ?? bellChoices[key], rememberedBells[key]);
   }, [bellChoices, rememberedBells]);
   // NP-209: lb/kg is the member's choice (profile.weightUnit), not a hardcoded
   // 'lbs' — see lib/useMemberWeightUnit.ts.
@@ -1546,13 +1547,19 @@ export default function LiveWorkoutPage() {
     setShowSummary(true);
   }, [pendingQuickCompletion, quickSessionId, saveWorkout]);
 
-  const handleSwapExercise = useCallback((alternative: { slug: string; name: string; trackingType: string; equipment: string[]; laterality?: string; movementPatterns?: string[]; category: string }, scope: SwapScope) => {
+  const handleSwapExercise = useCallback((alternative: { slug: string; name: string; trackingType: string; equipment: string[]; laterality?: string; movementPatterns?: string[]; category: string }, scope: SwapScope, bellCount?: BellCount) => {
     const exIdx = currentExerciseIndex;
     const oldExercise = exercises[exIdx];
     if (!oldExercise) return;
 
     const originalSlug = swappedExercises[exIdx]?.originalSlug || oldExercise.exerciseSlug || "";
     const originalName = swappedExercises[exIdx]?.originalName || oldExercise.name;
+
+    const replacementKey = alternative.slug || bellMemoryKey(alternative);
+    if (replacementKey && bellCount) {
+      bellChoicesRef.current = { ...bellChoicesRef.current, [replacementKey]: bellCount };
+      setBellChoices((prev) => ({ ...prev, [replacementKey]: bellCount }));
+    }
 
     // Track the swap
     setSwappedExercises(prev => ({
@@ -1712,6 +1719,11 @@ export default function LiveWorkoutPage() {
   );
 
   const handleAddExercise = useCallback((r: AddExerciseResult) => {
+    const slug = r.exercise.exerciseSlug || bellMemoryKey(r.exercise);
+    if (slug && r.bellCount) {
+      bellChoicesRef.current = { ...bellChoicesRef.current, [slug]: r.bellCount };
+      setBellChoices((prev) => ({ ...prev, [slug]: r.bellCount! }));
+    }
     const fresh: Exercise = { ...r.exercise, addedAdHoc: true } as Exercise;
     const res = r.placement === "group" && exercises[currentExerciseIndex]
       ? addIntoGroup<AdHocExercise>(exercises as AdHocExercise[], currentExerciseIndex, fresh as AdHocExercise, r.groupKind)
@@ -2551,18 +2563,6 @@ export default function LiveWorkoutPage() {
                           placeholder="0"
                           className="w-full rounded-xl bg-white/10 px-4 py-3 text-center text-lg font-bold backdrop-blur-sm placeholder:text-white/30 focus:bg-white/20 focus:outline-none"
                         />
-                        {/* One dumbbell or two — the member's call, not the
-                            catalogue's. Defaulted to the automatic answer (and
-                            to whatever they logged last time), so leaving it
-                            alone behaves exactly as before. Renders nothing
-                            unless this is dumbbell/kettlebell work. */}
-                        <BellCountToggle
-                          info={bellInfo}
-                          value={currentBells}
-                          onChange={(count) => setBellChoices((prev) => ({ ...prev, [bellKey]: count }))}
-                          tone="live"
-                          className="mt-1.5 justify-center"
-                        />
                         {showBellTotal && Number(currentWeight) > 0 && (
                           <div className="mt-1 text-center text-[10px] text-white/40">
                             = {Number(currentWeight) * 2} {memberWeightUnit} total
@@ -3003,18 +3003,20 @@ export default function LiveWorkoutPage() {
         anchorSets={currentExercise?.sets}
         anchorGroupType={currentExercise?.groupType}
         workoutExerciseSlugs={exercises.map(e => e.exerciseSlug || "").filter(Boolean)}
+        rememberedBells={rememberedBells}
         tone="dark"
       />
 
       <ExerciseSwapModal
         isOpen={showSwapModal}
         onClose={() => setShowSwapModal(false)}
-        onSwap={(alt, scope) => handleSwapExercise(alt, scope)}
+        onSwap={(alt, scope, bellCount) => handleSwapExercise(alt, scope, bellCount)}
         exerciseSlug={currentExercise?.exerciseSlug || ""}
         exerciseName={currentExercise?.name || ""}
         workoutExerciseSlugs={exercises.map(e => e.exerciseSlug || "").filter(Boolean)}
         programRole={undefined}
         sessionScopeOnly={isQuick}
+        rememberedBells={rememberedBells}
       />
     </div>
   );

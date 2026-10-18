@@ -9,10 +9,8 @@ import {
   setInputsFor,
   type LiveSetState,
 } from "@/components/live/LiveSetRow";
-import { BellCountToggle } from "@/components/live/BellCountToggle";
 import {
   bellCountFor,
-  bellMemoryKeyFor,
   showsBellTotal,
   type BellChoices,
   type BellCount,
@@ -278,32 +276,22 @@ export function TrackWorkoutView({
    * weight box or no implement to count.
    */
   const renderBellChoice = (ex: LiveWorkoutExercise, withHint = true) => {
-    if (!onBellChoice) return null;
+    if (!withHint) return null;
     if (!setInputsFor(ex.trackingType).weight) return null;
     const info = getBellWeightInfo(ex);
     if (!info.style) return null;
     const bells = bellCountFor(ex, bellChoices, rememberedBells);
     const implement = info.style === "dumbbell" ? "dumbbell" : "kettlebell";
-    const memoryKey = bellMemoryKeyFor(ex);
     return (
       <View style={{ gap: 6, marginBottom: 8 }}>
-        <BellCountToggle
-          info={info}
-          value={bells}
-          onChange={(count) => onBellChoice(memoryKey, count)}
-          label="How many?"
-          testID={`${testID}-${ex.slug}-bells`}
-        />
-        {withHint ? (
-          <Text
-            testID={`${testID}-${ex.slug}-bell-hint`}
-            className="text-muted-foreground text-xs"
-          >
-            {`Enter the weight of one ${implement}${
-              showsBellTotal(info, bells) ? " — not the combined total." : "."
-            }`}
-          </Text>
-        ) : null}
+        <Text
+          testID={`${testID}-${ex.slug}-bell-hint`}
+          className="text-muted-foreground text-xs"
+        >
+          {`Enter the weight of one ${implement}${
+            showsBellTotal(info, bells) ? " — not the combined total." : "."
+          }`}
+        </Text>
       </View>
     );
   };

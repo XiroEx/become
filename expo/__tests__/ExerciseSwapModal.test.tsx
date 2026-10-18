@@ -196,7 +196,7 @@ describe("ExerciseSwapModal", () => {
     expect(getByTestId("swap-modal-option-db-press-session")).toBeTruthy();
 
     fireEvent.press(getByTestId("swap-modal-option-db-press-program"));
-    expect(onSwap).toHaveBeenCalledWith(alts[0], "program");
+    expect(onSwap).toHaveBeenCalledWith(alts[0], "program", 2);
   });
 
   it("expands alternative to choose session scope and fires onSwap with 'session'", () => {
@@ -212,7 +212,7 @@ describe("ExerciseSwapModal", () => {
     );
     fireEvent.press(getByTestId("swap-modal-option-db-press-expand"));
     fireEvent.press(getByTestId("swap-modal-option-db-press-session"));
-    expect(onSwap).toHaveBeenCalledWith(alts[0], "session");
+    expect(onSwap).toHaveBeenCalledWith(alts[0], "session", 2);
   });
 
   it("hides program scope button when sessionScopeOnly is true", () => {
@@ -231,7 +231,25 @@ describe("ExerciseSwapModal", () => {
     expect(queryByTestId("swap-modal-option-db-press-program")).toBeNull();
     expect(getByTestId("swap-modal-option-db-press-swap")).toBeTruthy();
     fireEvent.press(getByTestId("swap-modal-option-db-press-swap"));
-    expect(onSwap).toHaveBeenCalledWith(alts[0], "session");
+    expect(onSwap).toHaveBeenCalledWith(alts[0], "session", 2);
+  });
+
+  it("(id: 9d6d2d61) allows picking 1 vs 2 dumbbells before swapping and passes the choice", () => {
+    const onSwap = jest.fn();
+    const { getByTestId } = render(
+      <ExerciseSwapModal
+        visible
+        sourceName="Bench"
+        alternatives={alts}
+        onSwap={onSwap}
+        onClose={() => {}}
+      />,
+    );
+    fireEvent.press(getByTestId("swap-modal-option-db-press-expand"));
+    expect(getByTestId("swap-modal-option-db-press-bells")).toBeTruthy();
+    fireEvent.press(getByTestId("swap-modal-option-db-press-bells-1"));
+    fireEvent.press(getByTestId("swap-modal-option-db-press-session"));
+    expect(onSwap).toHaveBeenCalledWith(alts[0], "session", 1);
   });
 
   it("loads and allows selecting equipment variations", async () => {
@@ -279,6 +297,7 @@ describe("ExerciseSwapModal", () => {
         name: "Incline DB Bench Press",
       }),
       "program",
+      2,
     );
   });
 

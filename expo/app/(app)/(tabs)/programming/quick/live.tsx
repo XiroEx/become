@@ -423,6 +423,9 @@ export default function QuickLiveRoute({
   }
 
   const handleAddExercise = (r: AddExerciseResult) => {
+    if (r.bellCount && r.exercise.slug) {
+      setBellChoice(r.exercise.slug, r.bellCount);
+    }
     addExercise({
       exercise: r.exercise,
       placement: r.placement,
@@ -531,6 +534,7 @@ export default function QuickLiveRoute({
         anchorSets={workout && workout.exercises[addAnchorIndex]?.sets}
         anchorGroupType={workout && workout.exercises[addAnchorIndex]?.groupType}
         workoutExerciseSlugs={sheetExerciseSlugs}
+        rememberedBells={rememberedBells}
         testID="quick-live-add"
       />
       <ExerciseSwapModal
@@ -539,8 +543,10 @@ export default function QuickLiveRoute({
         exerciseSlug={swapSlug ?? undefined}
         workoutExerciseSlugs={sheetExerciseSlugs}
         sessionScopeOnly
-        onSwap={(candidate) => onSelectAlternative(candidate)}
+        onSwap={(candidate, _scope, bellCount) => onSelectAlternative(candidate, bellCount)}
+        onSelect={(candidate, _scope, bellCount) => onSelectAlternative(candidate, bellCount)}
         onClose={() => setSwapSlug(null)}
+        rememberedBells={rememberedBells}
         testID="quick-live-swap"
       />
       <ThinSessionModal

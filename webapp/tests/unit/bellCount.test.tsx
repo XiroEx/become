@@ -59,6 +59,8 @@ const readSource = (rel: string) => fs.readFileSync(path.join(ROOT, rel), 'utf8'
 
 const LIVE = 'app/dashboard/workout/[programId]/workout/live/LiveWorkoutClient.tsx'
 const TRACK = 'app/dashboard/workout/[programId]/workout/WorkoutFormClient.tsx'
+const ADD_SHEET = 'components/workout/AddExerciseSheet.tsx'
+const SWAP_MODAL = 'components/ExerciseSwapModal.tsx'
 
 const PAIRED_DB = getBellWeightInfo({ name: 'Dumbbell Bench Press', equipment: ['dumbbell'], laterality: 'bilateral' })
 const SINGLE_DB = getBellWeightInfo({ name: 'Single-Arm Dumbbell Row', equipment: ['dumbbell'], laterality: 'unilateral' })
@@ -301,45 +303,64 @@ test('the control offers one and two, and marks the one in effect', () => {
   assert.equal(renderToStaticMarkup(<BellCountToggle info={BARBELL} value={2} onChange={() => {}} />), '')
 })
 
-test('Live: the control sits on the weight input, and the total hint follows it', () => {
+test('(id: 9d6d2d62) The in-logging-row 1-vs-2 toggle is removed from Live and Track set rows', () => {
   const live = readSource(LIVE)
-  assert.match(live, /<BellCountToggle/)
+  const track = readSource(TRACK)
+  // Control is removed from both logging views.
+  assert.doesNotMatch(live, /<BellCountToggle/)
+  assert.doesNotMatch(track, /<BellCountToggle/)
+
   // The hint is gated on the CHOICE, not on bellInfo.showTotal any more.
   assert.match(live, /const showBellTotal = showsBellTotal\(bellInfo, currentBells\)/)
   assert.match(live, /\{showBellTotal && Number\(currentWeight\) > 0 && \(/)
   assert.doesNotMatch(live, /bellInfo\.showTotal/)
-  // Defaulted to the member's pick, then last time, then the automatic answer.
-  assert.match(live, /resolveBellCount\(bellInfo, bellChoices\[bellKey\], rememberedBells\[bellKey\]\)/)
-  // …and saved with every set of the exercise.
-  assert.match(live, /const bells = bellsForExercise\(exercise\)/)
-  assert.match(live, /\.\.\.\(bells && \{ bells \}\)/)
-  // Remembered from the member's own most recent logged set.
-  assert.match(live, /setRememberedBells\(bellsFromPerformances\(data\.performances\)\)/)
-})
 
-test('Track: the same control, the same rule, on the exercise card and in rounds', () => {
-  const track = readSource(TRACK)
-  const controls = track.match(/<BellCountToggle/g) ?? []
-  assert.equal(controls.length, 2, 'the expanded exercise card AND a grouped round-1 row')
+  // In Track, the hint paragraph follows the choice.
   assert.match(track, /showsBellTotal\(bellInfo, bells\) \? ' — not the combined total\.' : '\.'/)
   assert.doesNotMatch(track, /bellInfo\.showTotal/)
-  assert.match(track, /resolveBellCount\(bellInfo, bellChoices\[memoryKey\], rememberedBells\[memoryKey\]\)/)
-  assert.match(track, /setRememberedBells\(bellsFromPerformances\(d\.performances\)\)/)
-  // All three save payloads Track builds carry the choice.
-  const sent = track.match(/\.\.\.\(bells && \{ bells \}\)/g) ?? []
-  assert.equal(sent.length, 3, 'program autosave, quick completion and the add-exercise save')
 })
 
-test('the choice is remembered without a new preferences collection or model', () => {
+test('(id: 9d6d2d61) On Add exercise / swap sheet for a dumbbell or kettlebell exercise, member picks one or two before the exercise is added', () => {
+  const addSheet = readSource(ADD_SHEET)
+  const swapModal = readSource(SWAP_MODAL)
+
+  // Both AddExerciseSheet and ExerciseSwapModal render BellCountToggle up front.
+  assert.match(addSheet, /<BellCountToggle/)
+  assert.match(swapModal, /<BellCountToggle/)
+
+  // AddExerciseSheet passes bellCount on submit
+  assert.match(addSheet, /currentBellInfo\.style && \{ bellCount \}/)
+  assert.match(addSheet, /data-testid="add-exercise-bell-count"/)
+
+  // ExerciseSwapModal renders the toggle in the candidate card before swapping
+  assert.match(swapModal, /data-testid=\{`swap-bell-count-\$\{alt\.slug\}`\}/)
+  assert.match(swapModal, /onSwap\(candidateToSwap, scope, chosenCount\)/)
+})
+
+test('(id: 9d6d2d63) The pre-selected choice is saved with every set and remembered per exercise', () => {
+  const live = readSource(LIVE)
+  const track = readSource(TRACK)
+
+  // Live saves the choice with every set of the exercise.
+  assert.match(live, /const bells = bellsForExercise\(exercise\)/)
+  assert.match(live, /\.\.\.\(bells && \{ bells \}\)/)
+  assert.match(live, /setRememberedBells\(bellsFromPerformances\(data\.performances\)\)/)
+
+  // Track saves the choice across its save payloads.
+  const sent = track.match(/\.\.\.\(bells && \{ bells \}\)/g) ?? []
+  assert.equal(sent.length, 3, 'program autosave, quick completion and the add-exercise save')
+  assert.match(track, /setRememberedBells\(bellsFromPerformances\(d\.performances\)\)/)
+
   // UserProgress is the ONLY model that knows about it — the member's own
   // logged sets are the store, as the card requires.
   const models = fs.readdirSync(path.join(ROOT, 'models')).filter((f) => f.endsWith('.ts'))
   const carriers = models.filter((f) => /\bbells\b/.test(readSource(path.join('models', f))))
   assert.deepEqual(carriers, ['UserProgress.ts'])
+
   // And both views read it from the one endpoint that already answers "what
   // did I do last time?", keyed by exercise slug.
-  assert.match(readSource(LIVE), /api\/workouts\/last-performance/)
-  assert.match(readSource(TRACK), /api\/workouts\/last-performance/)
+  assert.match(live, /api\/workouts\/last-performance/)
+  assert.match(track, /api\/workouts\/last-performance/)
 })
 
 // ── 5. Volume and PRs do not move ───────────────────────────────────────────

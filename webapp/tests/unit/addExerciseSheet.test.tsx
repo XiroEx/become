@@ -76,3 +76,12 @@ test('AddExerciseSheet: "Create an exercise" is present alongside the Suggested 
   assert.match(html, /data-testid="add-exercise-suggested"/)
   assert.match(html, /data-testid="add-exercise-create-open"/)
 })
+
+test('(id: 9d6d2d61) AddExerciseSheet: includes bell count picker wiring for dumbbell/kettlebell exercises', () => {
+  const fs = require('node:fs')
+  const path = require('node:path')
+  const src = fs.readFileSync(path.join(__dirname, '../../components/workout/AddExerciseSheet.tsx'), 'utf8')
+  assert.match(src, /<BellCountToggle/)
+  assert.match(src, /add-exercise-bell-count/)
+  assert.match(src, /currentBellInfo\.style && \{ bellCount \}/)
+})

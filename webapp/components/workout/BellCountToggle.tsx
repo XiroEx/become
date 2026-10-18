@@ -44,6 +44,7 @@ interface BellCountToggleProps {
    *  control sits directly under the "Weight per DB" input. */
   label?: string;
   className?: string;
+  testId?: string;
 }
 
 export default function BellCountToggle({
@@ -53,6 +54,7 @@ export default function BellCountToggle({
   tone = "track",
   label,
   className = "",
+  testId,
 }: BellCountToggleProps) {
   // Barbells, machines, cables and bodyweight have no such question to answer.
   if (!info.style) return null;
@@ -63,6 +65,7 @@ export default function BellCountToggle({
     <div
       role="group"
       aria-label={`How many ${implement}`}
+      data-testid={testId || "bell-count-toggle"}
       className={`flex items-center gap-1.5 ${className}`.trim()}
     >
       {label && <span className={`text-xs ${styles.label}`}>{label}</span>}
@@ -71,6 +74,7 @@ export default function BellCountToggle({
           key={count}
           type="button"
           aria-pressed={value === count}
+          data-testid={testId ? `${testId}-${count}` : `bell-count-${count}`}
           onClick={(e) => {
             // Track renders this inside a card whose header toggles expansion.
             e.stopPropagation();
