@@ -22,6 +22,9 @@ import {
   type CustomExercise,
 } from "@become/api-client";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { BellCountToggle } from "@/components/live/BellCountToggle";
+import { bellMemoryKeyFor, resolveBellCount, type BellCount } from "@/lib/live/bellCount";
+import { getBellWeightInfo } from "@become/core";
 import { useAuth } from "@/lib/auth/useAuth";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { FramedVideo } from "@/components/FramedVideo";
@@ -53,9 +56,10 @@ export interface ExerciseSwapModalProps {
   loading?: boolean;
   /** Quick sessions have no program — only offer session scope. */
   sessionScopeOnly?: boolean;
-  onSelect?: (candidate: AlternativeCandidate, scope?: SwapScope) => void;
-  onSwap?: (candidate: AlternativeCandidate, scope: SwapScope) => void;
+  onSelect?: (candidate: AlternativeCandidate, scope?: SwapScope, bells?: BellCount) => void;
+  onSwap?: (candidate: AlternativeCandidate, scope: SwapScope, bells?: BellCount) => void;
   onClose: () => void;
+  rememberedBells?: Record<string, BellCount>;
   testID?: string;
 }
 
@@ -269,11 +273,13 @@ export function ExerciseSwapModal({
   onSelect,
   onSwap,
   onClose,
+  rememberedBells,
   testID = "swap-modal",
 }: ExerciseSwapModalProps) {
   const { colors, scrim } = useThemeTokens();
   const { token } = useAuth();
 
+  const [selectedBells, setSelectedBells] = useState<Record<string, BellCount>>({});
   const [internalAlts, setInternalAlts] = useState<AlternativeCandidate[]>([]);
   const [internalLoading, setInternalLoading] = useState(false);
   const [customExercises, setCustomExercises] = useState<AlternativeCandidate[]>([]);
@@ -681,10 +687,10 @@ export function ExerciseSwapModal({
   // the implementation lives in a ref updated by effect (outside render), and
   // the stable handle calls through it.
   const handleSwapRef = useRef(
-    (_alt: AlternativeCandidate, _scope: SwapScope) => {},
+    (_alt: AlternativeCandidate, _scope: SwapScope, _bells?: BellCount) => {},
   );
   useEffect(() => {
-    handleSwapRef.current = (alt: AlternativeCandidate, scope: SwapScope) => {
+    handleSwapRef.current = (alt: AlternativeCandidate, scope: SwapScope, bells?: BellCount) => {
     const chosenVarSlug = selectedVariants[alt.slug];
     let chosenCandidate = alt;
     if (chosenVarSlug && chosenVarSlug !== alt.slug) {
@@ -704,12 +710,24 @@ export function ExerciseSwapModal({
         };
       }
     }
+    const bellInfo = getBellWeightInfo(chosenCandidate);
+    const resolvedBells = bellInfo.style
+      ? (bells ?? selectedBells[chosenCandidate.slug] ?? resolveBellCount(bellInfo, rememberedBells?.[bellMemoryKeyFor(chosenCandidate)]))
+      : undefined;
     if (onSwap) {
-      onSwap(chosenCandidate, scope);
+      if (resolvedBells !== undefined) {
+        onSwap(chosenCandidate, scope, resolvedBells);
+      } else {
+        onSwap(chosenCandidate, scope);
+      }
     }
     if (onSelect) {
       if (onSwap) {
-        onSelect(chosenCandidate, scope);
+        if (resolvedBells !== undefined) {
+          onSelect(chosenCandidate, scope, resolvedBells);
+        } else {
+          onSelect(chosenCandidate, scope);
+        }
       } else {
         // If only onSelect provided (e.g. legacy/stub tests with 1-arg expectations)
         onSelect(chosenCandidate);
@@ -717,13 +735,13 @@ export function ExerciseSwapModal({
     }
     onClose();
     };
-  }, [selectedVariants, variationsCache, onSwap, onSelect, onClose]);
+  }, [selectedVariants, variationsCache, onSwap, onSelect, onClose, selectedBells, rememberedBells]);
   // Stable handle for every press site: always calls the latest render's
   // implementation above (which must read the latest `selectedVariants` —
   // see its note), without changing identity every render.
   const handleSwap = useCallback(
-    (alt: AlternativeCandidate, scope: SwapScope) => {
-      handleSwapRef.current(alt, scope);
+    (alt: AlternativeCandidate, scope: SwapScope, bells?: BellCount) => {
+      handleSwapRef.current(alt, scope, bells);
     },
     [],
   );
@@ -1048,6 +1066,21 @@ export function ExerciseSwapModal({
                     : null;
                   const displayName = chosenVariation ? chosenVariation.name : alt.name;
 
+                  const targetCandidate = chosenVariation
+                    ? {
+                        ...alt,
+                        slug: chosenVariation.slug,
+                        name: chosenVariation.name,
+                        equipment: chosenVariation.equipment,
+                        laterality: chosenVariation.laterality,
+                      }
+                    : alt;
+                  const bellInfo = getBellWeightInfo(targetCandidate);
+                  const memKey = bellMemoryKeyFor(targetCandidate);
+                  const currentBells =
+                    selectedBells[targetCandidate.slug] ??
+                    resolveBellCount(bellInfo, rememberedBells?.[memKey]);
+
                   return (
                     <View
                       key={alt.slug}
@@ -1116,7 +1149,7 @@ export function ExerciseSwapModal({
                         {/* Quick Swap button (session scope) */}
                         <Pressable
                           testID={`${testID}-option-${alt.slug}`}
-                          onPress={() => handleSwap(alt, "session")}
+                          onPress={() => handleSwap(alt, "session", bellInfo.style ? currentBells : undefined)}
                           accessibilityRole="button"
                           accessibilityLabel={`Swap to ${displayName}`}
                           className="bg-primary/10 border border-primary/30 rounded-lg px-2.5 py-1.5 ml-2"
@@ -1235,13 +1268,31 @@ export function ExerciseSwapModal({
                             </View>
                           ) : null}
 
+                          {/* Bell count toggle for dumbbell / kettlebell exercises */}
+                          {bellInfo.style ? (
+                            <View className="mb-3">
+                              <BellCountToggle
+                                info={bellInfo}
+                                value={currentBells}
+                                onChange={(count) =>
+                                  setSelectedBells((prev) => ({
+                                    ...prev,
+                                    [targetCandidate.slug]: count,
+                                  }))
+                                }
+                                label="How many?"
+                                testID={`${testID}-option-${alt.slug}-bells`}
+                              />
+                            </View>
+                          ) : null}
+
                           {/* Scope Buttons */}
                           {sessionScopeOnly ? (
                             <Button
                               testID={`${testID}-option-${alt.slug}-swap`}
                               variant="primary"
                               size="sm"
-                              onPress={() => handleSwap(alt, "session")}
+                              onPress={() => handleSwap(alt, "session", bellInfo.style ? currentBells : undefined)}
                             >
                               Swap {chosenVariation ? chosenVariation.name : "Exercise"}
                             </Button>
@@ -1251,7 +1302,7 @@ export function ExerciseSwapModal({
                                 testID={`${testID}-option-${alt.slug}-program`}
                                 variant="primary"
                                 size="sm"
-                                onPress={() => handleSwap(alt, "program")}
+                                onPress={() => handleSwap(alt, "program", bellInfo.style ? currentBells : undefined)}
                               >
                                 {chosenVariation
                                   ? `Swap "${chosenVariation.name}" for All Future Workouts`
@@ -1261,7 +1312,7 @@ export function ExerciseSwapModal({
                                 testID={`${testID}-option-${alt.slug}-session`}
                                 variant="secondary"
                                 size="sm"
-                                onPress={() => handleSwap(alt, "session")}
+                                onPress={() => handleSwap(alt, "session", bellInfo.style ? currentBells : undefined)}
                               >
                                 Just This Session
                               </Button>

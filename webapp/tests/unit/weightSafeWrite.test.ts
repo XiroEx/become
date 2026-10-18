@@ -22,7 +22,7 @@ import { NextRequest } from "next/server";
 import UserProgress from "../../models/UserProgress";
 import User from "../../models/User";
 import { signToken } from "../../lib/auth";
-import { localDateKey, utcMidnightDateKey } from "../../lib/dayWindow";
+import { dateKey, localDateKey, utcMidnightDateKey } from "../../lib/dayWindow";
 
 const USER_ID = "65f00000000000000000ee77";
 
@@ -488,8 +488,9 @@ test("(id: 96d41109) Backdated weigh-in: leaves consecutiveSkips and lastPromptD
   });
 
   try {
-    // Log a weight backdated to 2026-10-10
-    const res = await postWeight(makeWeightRequest({ weight: 172, date: "2026-10-10", tz: 0 }, token));
+    // Log a weight backdated within the 7-day window
+    const backdateStr = dateKey(new Date(Date.now() - 2 * 86_400_000), 0);
+    const res = await postWeight(makeWeightRequest({ weight: 172, date: backdateStr, tz: 0 }, token));
     assert.equal(res.status, 200);
     assert.ok(updateArgs);
     // consecutiveSkips and lastPromptDate should NOT be in $set
@@ -498,7 +499,7 @@ test("(id: 96d41109) Backdated weigh-in: leaves consecutiveSkips and lastPromptD
     // Since there were no later entries, isNewestWeighIn is true, so lastWeightDate is updated
     assert.deepEqual(
       updateArgs.update.$set?.["weightSkipTracking.lastWeightDate"],
-      utcMidnightDateKey("2026-10-10"),
+      utcMidnightDateKey(backdateStr),
     );
   } finally {
     findOneMock.mock.restore();
@@ -623,7 +624,9 @@ test("(id: 96d41109) Stale replay precedence: older loggedAt for same day is acc
 
 test("(id: 96d41109) isNewestWeighIn precedence: backdated entry older than newest does not update lastWeightDate", async () => {
   const token = await makeAuthToken();
-  const latestDate = utcMidnightDateKey("2026-10-14");
+  const latestStr = dateKey(new Date(Date.now() - 1 * 86_400_000), 0);
+  const backdateStr = dateKey(new Date(Date.now() - 3 * 86_400_000), 0);
+  const latestDate = utcMidnightDateKey(latestStr);
 
   const doc = {
     _id: "doc_newest_check",
@@ -635,7 +638,7 @@ test("(id: 96d41109) isNewestWeighIn precedence: backdated entry older than newe
     weightHistory: [
       {
         date: latestDate,
-        loggedAt: new Date("2026-10-14T09:00:00.000Z"),
+        loggedAt: new Date(Date.now() - 1 * 86_400_000),
         weight: 175,
         unit: "lbs",
       },
@@ -661,7 +664,7 @@ test("(id: 96d41109) isNewestWeighIn precedence: backdated entry older than newe
       makeWeightRequest(
         {
           weight: 177,
-          date: "2026-10-10",
+          date: backdateStr,
           tz: 0,
         },
         token,
@@ -763,7 +766,8 @@ test("(id: 96d4110b) recordStreakActivity, bustTilesCache and goalReached still 
     assert.equal(skipJson.streak, undefined, "Skip must not touch streak");
 
     // 3. Backdated weigh-in: streak does NOT run (streak not in response)
-    const backdateRes = await postWeight(makeWeightRequest({ weight: 172, date: "2026-10-10", tz: 0 }, token));
+    const backdateStr = dateKey(new Date(Date.now() - 2 * 86_400_000), 0);
+    const backdateRes = await postWeight(makeWeightRequest({ weight: 172, date: backdateStr, tz: 0 }, token));
     assert.equal(backdateRes.status, 200);
     const backdateJson = await backdateRes.json();
     assert.equal(backdateJson.streak, undefined, "Backdated weigh-in must not touch streak");

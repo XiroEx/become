@@ -61,6 +61,7 @@ import {
 import { localDateKey } from "@/lib/time/localDay";
 import { coachingFieldsFrom } from "@/lib/live/coachingFields";
 import {
+  bellMemoryKeyFor,
   bellsFromPerformances,
   type BellChoices,
   type BellCount,
@@ -206,6 +207,7 @@ export interface UseLiveWorkoutResult {
   onSelectAlternative: (
     candidate: AlternativeCandidate,
     scope?: "session" | "program",
+    bells?: BellCount,
   ) => Promise<void> | void;
   setSwapSlug: (slug: string | null) => void;
   save: (
@@ -256,6 +258,7 @@ export interface UseLiveWorkoutResult {
     placement: "end" | "group";
     groupKind?: GroupKind;
     anchorIndex?: number;
+    bells?: BellCount;
   }) => void;
 }
 
@@ -750,8 +753,12 @@ export function useLiveWorkout(
     async (
       candidate: AlternativeCandidate,
       scope: "session" | "program" = "session",
+      bells?: BellCount,
     ) => {
       if (!swapSlug || !workout) return;
+      if (bells) {
+        setBellChoice(bellMemoryKeyFor(candidate), bells);
+      }
       const exIdx = workout.exercises.findIndex((e) => e.slug === swapSlug);
       if (exIdx === -1) return;
       const oldEx = workout.exercises[exIdx];
@@ -878,6 +885,7 @@ export function useLiveWorkout(
       cacheKey,
       attemptId,
       save,
+      setBellChoice,
     ],
   );
 
@@ -1560,8 +1568,12 @@ export function useLiveWorkout(
       placement: "end" | "group";
       groupKind?: GroupKind;
       anchorIndex?: number;
+      bells?: BellCount;
     }) => {
       if (!workout) return;
+      if (input.bells) {
+        setBellChoice(bellMemoryKeyFor(input.exercise), input.bells);
+      }
       const list = workout.exercises;
       const fresh: LiveWorkoutExercise = {
         ...input.exercise,
@@ -1625,6 +1637,7 @@ export function useLiveWorkout(
       cacheKey,
       attemptId,
       save,
+      setBellChoice,
     ],
   );
 

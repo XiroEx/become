@@ -428,6 +428,7 @@ export default function QuickLiveRoute({
       placement: r.placement,
       groupKind: r.groupKind,
       anchorIndex: addAnchorIndex,
+      bells: r.bells,
     });
   };
 
@@ -531,6 +532,7 @@ export default function QuickLiveRoute({
         anchorSets={workout && workout.exercises[addAnchorIndex]?.sets}
         anchorGroupType={workout && workout.exercises[addAnchorIndex]?.groupType}
         workoutExerciseSlugs={sheetExerciseSlugs}
+        rememberedBells={rememberedBells}
         testID="quick-live-add"
       />
       <ExerciseSwapModal
@@ -539,8 +541,9 @@ export default function QuickLiveRoute({
         exerciseSlug={swapSlug ?? undefined}
         workoutExerciseSlugs={sheetExerciseSlugs}
         sessionScopeOnly
-        onSwap={(candidate) => onSelectAlternative(candidate)}
+        onSwap={(candidate, scope, bells) => onSelectAlternative(candidate, scope, bells)}
         onClose={() => setSwapSlug(null)}
+        rememberedBells={rememberedBells}
         testID="quick-live-swap"
       />
       <ThinSessionModal

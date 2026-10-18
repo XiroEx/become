@@ -10,6 +10,9 @@
 // (incomplete sets are ignored). Sets with weight=0 still count for maxReps
 // (bodyweight PRs); sets with reps=0 are ignored entirely.
 
+import { readBellCount, type BellCount } from './workout/bellCount'
+import { getBellWeightInfo } from './workout/dumbbellWeight'
+
 export type PRDimensionName = 'maxWeight' | 'maxReps' | 'maxE1RM'
 
 export interface IPRDimension {
@@ -42,6 +45,8 @@ export interface IPRSetCandidate {
   completed?: boolean
   /** The unit `weight` was entered in — NP-209. See IPRDimension.unit. */
   weightUnit?: 'lbs' | 'kg' | null
+  /** One dumbbell or two — 1-DB and 2-DB get tracked as separate PRs. */
+  bells?: BellCount | null
 }
 
 export interface IPRSetContext {
@@ -60,6 +65,7 @@ export interface IPRExerciseCandidate {
   name: string
   exerciseSlug?: string
   sets?: IPRSetCandidate[] | null
+  equipment?: string[] | null
 }
 
 export interface WorkoutPRUpdateResult {
@@ -92,6 +98,30 @@ function slugify(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 }
 
+export function bellSuffixFor(
+  bells: unknown,
+  exercise?: { name?: string; exerciseSlug?: string; equipment?: string[] | null } | null,
+): { slugSuffix: string; nameSuffix: string } {
+  const count = readBellCount(bells)
+  if (!count) return { slugSuffix: '', nameSuffix: '' }
+
+  const info = getBellWeightInfo({
+    name: exercise?.name,
+    equipment: exercise?.equipment ? (exercise.equipment as string[]) : undefined,
+  })
+  const isKb =
+    info.style === 'kettlebell' ||
+    /\b(kettlebell|kb)\b/i.test(exercise?.name ?? '') ||
+    /\b(kettlebell|kb)\b/i.test(exercise?.exerciseSlug ?? '')
+  const tag = isKb ? 'kb' : 'db'
+  const tagUpper = isKb ? 'KB' : 'DB'
+
+  return {
+    slugSuffix: `-${count}-${tag}`,
+    nameSuffix: ` (${count} ${tagUpper})`,
+  }
+}
+
 // Apply a single set's effect to an exercise's PR record. Returns the new PR
 // record plus the list of dimensions that were newly broken by this set.
 export function updatePRsForSet(
@@ -99,11 +129,23 @@ export function updatePRsForSet(
   set: IPRSetCandidate,
   context: IPRSetContext,
 ): PRUpdateResult {
-  const base = existing ?? emptyPR(context.exerciseSlug, context.exerciseName)
+  const count = readBellCount(set.bells)
+  let targetSlug = context.exerciseSlug
+  let targetName = context.exerciseName
+  if (count) {
+    const { slugSuffix, nameSuffix } = bellSuffixFor(count, {
+      name: targetName,
+      exerciseSlug: targetSlug,
+    })
+    if (!targetSlug.endsWith(slugSuffix)) targetSlug = `${targetSlug}${slugSuffix}`
+    if (!targetName.endsWith(nameSuffix)) targetName = `${targetName}${nameSuffix}`
+  }
+
+  const base = existing ?? emptyPR(targetSlug, targetName)
   // Refresh display name to whatever the caller has now (handles renames).
   const next: IExercisePR = {
     exerciseSlug: base.exerciseSlug,
-    exerciseName: context.exerciseName || base.exerciseName,
+    exerciseName: targetName || base.exerciseName,
     maxWeight: base.maxWeight,
     maxReps: base.maxReps,
     maxE1RM: base.maxE1RM,
@@ -259,34 +301,60 @@ export function updatePRsForWorkout(
   const allNewPRs: WorkoutPRUpdateResult['newPRsAchieved'] = []
 
   for (const ex of exercises) {
-    const slug = (ex.exerciseSlug?.trim() || slugify(ex.name)).toLowerCase()
-    if (!slug) continue
+    const baseSlug = (ex.exerciseSlug?.trim() || slugify(ex.name)).toLowerCase()
+    if (!baseSlug) continue
 
-    const broken = new Set<PRDimensionName>()
-    let current = prMap.get(slug) ?? null
+    // Group sets by target PR slug so 1-DB and 2-DB sets form separate PRs
+    const setsBySlug = new Map<string, { slug: string; name: string; sets: IPRSetCandidate[] }>()
 
     for (const set of ex.sets ?? []) {
-      const { pr, newPRsAchieved } = updatePRsForSet(current, set, {
-        exerciseSlug: slug,
-        exerciseName: ex.name,
-        date,
-        programId,
-      })
-      current = pr
-      for (const d of newPRsAchieved) broken.add(d)
+      const count = readBellCount(set.bells)
+      let setSlug = baseSlug
+      let setName = ex.name
+      if (count) {
+        const { slugSuffix, nameSuffix } = bellSuffixFor(count, {
+          name: ex.name,
+          exerciseSlug: baseSlug,
+          equipment: ex.equipment,
+        })
+        if (!setSlug.endsWith(slugSuffix)) setSlug = `${setSlug}${slugSuffix}`
+        if (!setName.endsWith(nameSuffix)) setName = `${setName}${nameSuffix}`
+      }
+      let group = setsBySlug.get(setSlug)
+      if (!group) {
+        group = { slug: setSlug, name: setName, sets: [] }
+        setsBySlug.set(setSlug, group)
+      }
+      group.sets.push(set)
     }
 
-    // Only persist a PR record if at least one dimension carries data. This
-    // avoids littering the array with empty placeholders for exercises whose
-    // sets were all incomplete.
-    if (current && (current.maxWeight || current.maxReps || current.maxE1RM)) {
-      prMap.set(slug, current)
-      if (broken.size > 0) {
-        allNewPRs.push({
-          exerciseSlug: slug,
-          exerciseName: ex.name,
-          dimensions: Array.from(broken),
+    for (const group of setsBySlug.values()) {
+      const broken = new Set<PRDimensionName>()
+      let current = prMap.get(group.slug) ?? null
+
+      for (const set of group.sets) {
+        const { pr, newPRsAchieved } = updatePRsForSet(current, set, {
+          exerciseSlug: group.slug,
+          exerciseName: group.name,
+          date,
+          programId,
         })
+        current = pr
+        for (const d of newPRsAchieved) broken.add(d)
+      }
+
+      // Only persist a PR record if at least one dimension carries data. This
+      // avoids littering the array with empty placeholders for exercises whose
+      // sets were all incomplete.
+      if (current && (current.maxWeight || current.maxReps || current.maxE1RM)) {
+        prMap.set(group.slug, current)
+        if (broken.size > 0) {
+          allNewPRs.push({
+            exerciseSlug: group.slug,
+            exerciseName: group.name,
+            dimensions: Array.from(broken),
+          })
+        }
       }
     }
   }
