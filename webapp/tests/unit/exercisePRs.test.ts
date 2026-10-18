@@ -554,3 +554,85 @@ test('formatPRsForLiveWorkout carries the unit through for a kg PR, omits it for
   assert.deepEqual(result['Back Squat'], { weight: 315, reps: 3 })
   assert.equal('unit' in result['Back Squat'], false)
 })
+
+// ── (id: 9d6d2d74) 1-DB PR and 2-DB PR tracked separately ───────────────────
+
+test('(id: 9d6d2d74) 1-DB and 2-DB versions track separate PRs for dumbbell exercises', () => {
+  const date = new Date('2026-10-18T12:00:00Z')
+  const first = updatePRsForWorkout(
+    [],
+    [{
+      name: 'Split Squat',
+      exerciseSlug: 'split-squat',
+      equipment: ['dumbbell'],
+      sets: [{ weight: 40, reps: 10, completed: true, bells: 1 }],
+    }],
+    date,
+  )
+  assert.equal(first.prs.length, 1)
+  assert.equal(first.prs[0].exerciseSlug, 'split-squat-1-db')
+  assert.equal(first.prs[0].exerciseName, 'Split Squat (1 DB)')
+  assert.equal(first.prs[0].maxWeight?.weight, 40)
+
+  // Next workout: 2 DBs
+  const second = updatePRsForWorkout(
+    first.prs,
+    [{
+      name: 'Split Squat',
+      exerciseSlug: 'split-squat',
+      equipment: ['dumbbell'],
+      sets: [{ weight: 35, reps: 10, completed: true, bells: 2 }],
+    }],
+    date,
+  )
+  assert.equal(second.prs.length, 2)
+  const oneDb = second.prs.find((p) => p.exerciseSlug === 'split-squat-1-db')
+  const twoDb = second.prs.find((p) => p.exerciseSlug === 'split-squat-2-db')
+  assert.ok(oneDb)
+  assert.ok(twoDb)
+  assert.equal(oneDb!.maxWeight?.weight, 40)
+  assert.equal(twoDb!.maxWeight?.weight, 35)
+  assert.equal(twoDb!.exerciseName, 'Split Squat (2 DB)')
+})
+
+test('(id: 9d6d2d74) kettlebell exercises track separate PRs with KB tag', () => {
+  const date = new Date('2026-10-18T12:00:00Z')
+  const res = updatePRsForWorkout(
+    [],
+    [{
+      name: 'Goblet Squat',
+      exerciseSlug: 'goblet-squat',
+      equipment: ['kettlebell'],
+      sets: [
+        { weight: 24, reps: 12, completed: true, bells: 1 },
+        { weight: 32, reps: 8, completed: true, bells: 2 },
+      ],
+    }],
+    date,
+  )
+  assert.equal(res.prs.length, 2)
+  const oneKb = res.prs.find((p) => p.exerciseSlug === 'goblet-squat-1-kb')
+  const twoKb = res.prs.find((p) => p.exerciseSlug === 'goblet-squat-2-kb')
+  assert.ok(oneKb)
+  assert.ok(twoKb)
+  assert.equal(oneKb!.exerciseName, 'Goblet Squat (1 KB)')
+  assert.equal(twoKb!.exerciseName, 'Goblet Squat (2 KB)')
+  assert.equal(oneKb!.maxWeight?.weight, 24)
+  assert.equal(twoKb!.maxWeight?.weight, 32)
+})
+
+test('(id: 9d6d2d74) legacy sets without bells preserve base slug and name', () => {
+  const date = new Date('2026-10-18T12:00:00Z')
+  const res = updatePRsForWorkout(
+    [],
+    [{
+      name: 'Dumbbell Bench Press',
+      exerciseSlug: 'dumbbell-bench-press',
+      sets: [{ weight: 50, reps: 10, completed: true }],
+    }],
+    date,
+  )
+  assert.equal(res.prs.length, 1)
+  assert.equal(res.prs[0].exerciseSlug, 'dumbbell-bench-press')
+  assert.equal(res.prs[0].exerciseName, 'Dumbbell Bench Press')
+})

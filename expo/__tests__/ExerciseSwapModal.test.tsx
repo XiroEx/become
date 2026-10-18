@@ -196,7 +196,7 @@ describe("ExerciseSwapModal", () => {
     expect(getByTestId("swap-modal-option-db-press-session")).toBeTruthy();
 
     fireEvent.press(getByTestId("swap-modal-option-db-press-program"));
-    expect(onSwap).toHaveBeenCalledWith(alts[0], "program");
+    expect(onSwap).toHaveBeenCalledWith(alts[0], "program", 2);
   });
 
   it("expands alternative to choose session scope and fires onSwap with 'session'", () => {
@@ -212,7 +212,7 @@ describe("ExerciseSwapModal", () => {
     );
     fireEvent.press(getByTestId("swap-modal-option-db-press-expand"));
     fireEvent.press(getByTestId("swap-modal-option-db-press-session"));
-    expect(onSwap).toHaveBeenCalledWith(alts[0], "session");
+    expect(onSwap).toHaveBeenCalledWith(alts[0], "session", 2);
   });
 
   it("hides program scope button when sessionScopeOnly is true", () => {
@@ -231,7 +231,7 @@ describe("ExerciseSwapModal", () => {
     expect(queryByTestId("swap-modal-option-db-press-program")).toBeNull();
     expect(getByTestId("swap-modal-option-db-press-swap")).toBeTruthy();
     fireEvent.press(getByTestId("swap-modal-option-db-press-swap"));
-    expect(onSwap).toHaveBeenCalledWith(alts[0], "session");
+    expect(onSwap).toHaveBeenCalledWith(alts[0], "session", 2);
   });
 
   it("loads and allows selecting equipment variations", async () => {
@@ -279,7 +279,34 @@ describe("ExerciseSwapModal", () => {
         name: "Incline DB Bench Press",
       }),
       "program",
+      2,
     );
+  });
+
+  it("(id: 9d6d2d71) allows choosing 1 vs 2 bells before swapping", () => {
+    const onSwap = jest.fn();
+    const { getByTestId } = render(
+      <ExerciseSwapModal
+        visible
+        sourceName="Bench"
+        alternatives={alts}
+        onSwap={onSwap}
+        onClose={() => {}}
+      />,
+    );
+    fireEvent.press(getByTestId("swap-modal-option-db-press-expand"));
+    expect(getByTestId("swap-modal-option-db-press-bells")).toBeTruthy();
+    expect(
+      getByTestId("swap-modal-option-db-press-bells-2").props.accessibilityState
+        .selected,
+    ).toBe(true);
+    fireEvent.press(getByTestId("swap-modal-option-db-press-bells-1"));
+    expect(
+      getByTestId("swap-modal-option-db-press-bells-1").props.accessibilityState
+        .selected,
+    ).toBe(true);
+    fireEvent.press(getByTestId("swap-modal-option-db-press-session"));
+    expect(onSwap).toHaveBeenCalledWith(alts[0], "session", 1);
   });
 
   it("loads custom exercises and allows using them directly", async () => {

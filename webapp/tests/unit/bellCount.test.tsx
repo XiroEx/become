@@ -301,13 +301,47 @@ test('the control offers one and two, and marks the one in effect', () => {
   assert.equal(renderToStaticMarkup(<BellCountToggle info={BARBELL} value={2} onChange={() => {}} />), '')
 })
 
-test('Live: the control sits on the weight input, and the total hint follows it', () => {
+test('(id: 9d6d2d71) AddExerciseSheet and ExerciseSwapModal offer the BellCountToggle upfront', () => {
+  const addSheet = readSource('components/workout/AddExerciseSheet.tsx')
+  assert.match(addSheet, /<BellCountToggle/)
+  assert.match(addSheet, /resolveBellCount/)
+  assert.match(addSheet, /bells\?: BellCount/)
+
+  const swapModal = readSource('components/ExerciseSwapModal.tsx')
+  assert.match(swapModal, /<BellCountToggle/)
+  assert.match(swapModal, /resolveBellCount/)
+
+  const nativeAdd = readSource('../expo/components/workout/AddExerciseSheet.tsx')
+  assert.match(nativeAdd, /<BellCountToggle/)
+  assert.match(nativeAdd, /resolveBellCount/)
+
+  const nativeSwap = readSource('../expo/components/live/ExerciseSwapModal.tsx')
+  assert.match(nativeSwap, /<BellCountToggle/)
+  assert.match(nativeSwap, /resolveBellCount/)
+})
+
+test('(id: 9d6d2d72) in-logging-row 1-vs-2 toggle removed from Live and Track rows', () => {
   const live = readSource(LIVE)
-  assert.match(live, /<BellCountToggle/)
+  assert.doesNotMatch(live, /<BellCountToggle/)
   // The hint is gated on the CHOICE, not on bellInfo.showTotal any more.
   assert.match(live, /const showBellTotal = showsBellTotal\(bellInfo, currentBells\)/)
   assert.match(live, /\{showBellTotal && Number\(currentWeight\) > 0 && \(/)
   assert.doesNotMatch(live, /bellInfo\.showTotal/)
+
+  const track = readSource(TRACK)
+  assert.doesNotMatch(track, /<BellCountToggle/)
+  assert.match(track, /showsBellTotal\(bellInfo, bells\) \? ' — not the combined total\.' : '\.'/)
+  assert.doesNotMatch(track, /bellInfo\.showTotal/)
+
+  const nativeLive = readSource('../expo/components/live/LiveStepInputs.tsx')
+  assert.doesNotMatch(nativeLive, /<BellCountToggle/)
+
+  const nativeTrack = readSource('../expo/components/live/TrackWorkoutView.tsx')
+  assert.doesNotMatch(nativeTrack, /<BellCountToggle/)
+})
+
+test('(id: 9d6d2d73) the pre-selected choice is saved with every set and remembered per exercise', () => {
+  const live = readSource(LIVE)
   // Defaulted to the member's pick, then last time, then the automatic answer.
   assert.match(live, /resolveBellCount\(bellInfo, bellChoices\[bellKey\], rememberedBells\[bellKey\]\)/)
   // …and saved with every set of the exercise.
@@ -315,17 +349,10 @@ test('Live: the control sits on the weight input, and the total hint follows it'
   assert.match(live, /\.\.\.\(bells && \{ bells \}\)/)
   // Remembered from the member's own most recent logged set.
   assert.match(live, /setRememberedBells\(bellsFromPerformances\(data\.performances\)\)/)
-})
 
-test('Track: the same control, the same rule, on the exercise card and in rounds', () => {
   const track = readSource(TRACK)
-  const controls = track.match(/<BellCountToggle/g) ?? []
-  assert.equal(controls.length, 2, 'the expanded exercise card AND a grouped round-1 row')
-  assert.match(track, /showsBellTotal\(bellInfo, bells\) \? ' — not the combined total\.' : '\.'/)
-  assert.doesNotMatch(track, /bellInfo\.showTotal/)
   assert.match(track, /resolveBellCount\(bellInfo, bellChoices\[memoryKey\], rememberedBells\[memoryKey\]\)/)
   assert.match(track, /setRememberedBells\(bellsFromPerformances\(d\.performances\)\)/)
-  // All three save payloads Track builds carry the choice.
   const sent = track.match(/\.\.\.\(bells && \{ bells \}\)/g) ?? []
   assert.equal(sent.length, 3, 'program autosave, quick completion and the add-exercise save')
 })
@@ -342,7 +369,7 @@ test('the choice is remembered without a new preferences collection or model', (
   assert.match(readSource(TRACK), /api\/workouts\/last-performance/)
 })
 
-// ── 5. Volume and PRs do not move ───────────────────────────────────────────
+// ── 5. Volume and PRs ───────────────────────────────────────────────────────
 
 test('volume is unchanged by the choice — the number typed, never doubled', () => {
   const exercises = [{ name: 'Dumbbell Bench Press', trackingType: 'reps_weight' }]
@@ -356,26 +383,47 @@ test('volume is unchanged by the choice — the number typed, never doubled', ()
   assert.deepEqual(summaryTotals(exercises, two), baseline)
 })
 
-test('PRs are unchanged by the choice — same records, same weights', () => {
+test('(id: 9d6d2d74) 1-DB PR and 2-DB PR tracked separately, no old-data migration', () => {
   const date = new Date('2026-10-14T12:00:00.000Z')
-  const of = (bells?: BellCount) => updatePRsForWorkout(
+  const res = updatePRsForWorkout(
     [],
     [{
       name: 'Dumbbell Bench Press',
       exerciseSlug: 'dumbbell-bench-press',
-      sets: [{ weight: 50, reps: 10, completed: true, ...(bells && { bells }) }],
+      equipment: ['dumbbell'],
+      sets: [
+        { weight: 50, reps: 10, completed: true, bells: 1 },
+        { weight: 60, reps: 8, completed: true, bells: 2 },
+      ],
     }],
     date,
   )
-  const baseline = of()
-  assert.equal(baseline.prs[0].maxWeight?.weight, 50)
-  assert.deepEqual(of(1), baseline)
-  assert.deepEqual(of(2), baseline)
+  assert.equal(res.prs.length, 2)
+  const pr1 = res.prs.find((p) => p.exerciseSlug === 'dumbbell-bench-press-1-db')
+  const pr2 = res.prs.find((p) => p.exerciseSlug === 'dumbbell-bench-press-2-db')
+  assert.ok(pr1 && pr2)
+  assert.equal(pr1.exerciseName, 'Dumbbell Bench Press (1 DB)')
+  assert.equal(pr1.maxWeight?.weight, 50)
+  assert.equal(pr2.exerciseName, 'Dumbbell Bench Press (2 DB)')
+  assert.equal(pr2.maxWeight?.weight, 60)
+
+  // Legacy set without bells keeps base slug and name
+  const legacy = updatePRsForWorkout(
+    [],
+    [{
+      name: 'Dumbbell Bench Press',
+      exerciseSlug: 'dumbbell-bench-press',
+      equipment: ['dumbbell'],
+      sets: [{ weight: 50, reps: 10, completed: true }],
+    }],
+    date,
+  )
+  assert.equal(legacy.prs.length, 1)
+  assert.equal(legacy.prs[0].exerciseSlug, 'dumbbell-bench-press')
+  assert.equal(legacy.prs[0].exerciseName, 'Dumbbell Bench Press')
 })
 
-test('neither the volume nor the PR module has heard of `bells`', () => {
-  // The open question — whether one vs two should count differently — is
-  // George's and Jon's to answer, and this card deliberately does not.
+test("volume has not heard of 'bells', PR module tracks 'bells'", () => {
   assert.doesNotMatch(readSource('lib/workout/summaryMetrics.ts'), /bells/)
-  assert.doesNotMatch(readSource('lib/exercisePRs.ts'), /bells/)
+  assert.match(readSource('lib/exercisePRs.ts'), /bells/)
 })

@@ -57,6 +57,9 @@ import { useDebouncedValue } from "@/lib/programs/useDebouncedValue";
 import { useEntitlements, syntheticGate } from "@/lib/entitlements";
 import { showUpgradeSheet } from "@/lib/entitlements/upgradeSheet";
 import type { LiveWorkoutExercise } from "@/components/live/LiveWorkoutClient";
+import { BellCountToggle } from "@/components/live/BellCountToggle";
+import { bellMemoryKeyFor, resolveBellCount, type BellCount } from "@/lib/live/bellCount";
+import { getBellWeightInfo } from "@become/core";
 
 export type AddExercisePlacement = "end" | "group";
 
@@ -65,6 +68,7 @@ export interface AddExerciseResult {
   placement: AddExercisePlacement;
   /** Only meaningful for placement 'group'. */
   groupKind: GroupKind;
+  bells?: BellCount;
 }
 
 export interface AddExerciseSheetProps {
@@ -94,6 +98,7 @@ export interface AddExerciseSheetProps {
   anchorGroupType?: string | null;
   /** Exercise slugs already in this workout, so suggestions don't repeat one. */
   workoutExerciseSlugs?: string[];
+  rememberedBells?: Record<string, BellCount>;
   title?: string;
   testID?: string;
 }
@@ -148,6 +153,7 @@ export function AddExerciseSheet({
   anchorSets,
   anchorGroupType,
   workoutExerciseSlugs = [],
+  rememberedBells,
   title = "Add an exercise",
   testID = "add-exercise-sheet",
 }: AddExerciseSheetProps) {
@@ -166,6 +172,8 @@ export function AddExerciseSheet({
     DEFAULT_CUSTOM_EXERCISE_FORM,
   );
   const [picked, setPicked] = useState<SearchRow | null>(null);
+  const [bells, setBells] = useState<BellCount>(1);
+  const bellInfo = picked ? getBellWeightInfo(picked) : { style: null, showTotal: false };
   const defaultSets =
     anchorSets && anchorSets > 0 ? Math.max(1, Math.floor(anchorSets)) : DEFAULT_SETS;
   const [sets, setSets] = useState(defaultSets);
@@ -191,6 +199,7 @@ export function AddExerciseSheet({
     setResults([]);
     setSuggested([]);
     setPicked(null);
+    setBells(1);
     setSets(defaultSets);
     setReps("8-12");
     setSeconds(45);
@@ -316,9 +325,13 @@ export function AddExerciseSheet({
   const choose = useCallback((r: SearchRow) => {
     setPicked(r);
     setReps(isTimed(r.trackingType) ? "" : "8-12");
+    const info = getBellWeightInfo(r);
+    if (info.style) {
+      setBells(resolveBellCount(info, rememberedBells?.[bellMemoryKeyFor(r)]));
+    }
     setQuery("");
     setResults([]);
-  }, []);
+  }, [rememberedBells]);
 
   // The machine in front of you is not always in the catalog — the same form
   // the library uses, so "custom exercise" means the same thing here and
@@ -405,12 +418,17 @@ export function AddExerciseSheet({
           : {}),
         addedAdHoc: true as const,
       };
-      await onAdd({ exercise, placement, groupKind });
+      await onAdd({
+        exercise,
+        placement,
+        groupKind,
+        ...(bellInfo.style ? { bells } : {}),
+      });
       onClose();
     } finally {
       setAdding(false);
     }
-  }, [picked, adding, effectiveSets, reps, seconds, placement, groupKind, onAdd, onClose]);
+  }, [picked, adding, effectiveSets, reps, seconds, placement, groupKind, onAdd, onClose, bellInfo.style, bells]);
 
   if (!visible) return null;
 
@@ -629,6 +647,18 @@ export function AddExerciseSheet({
                   </Text>
                 </Pressable>
               </View>
+
+              {bellInfo.style ? (
+                <View style={{ marginBottom: 12 }}>
+                  <BellCountToggle
+                    info={bellInfo}
+                    value={bells}
+                    onChange={setBells}
+                    label="How many?"
+                    testID={`${testID}-bells`}
+                  />
+                </View>
+              ) : null}
 
               <View style={{ flexDirection: "row", gap: 12 }}>
                 <View style={{ flex: 1 }}>

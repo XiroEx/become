@@ -236,6 +236,7 @@ export default function LiveWorkoutRoute({
       placement: r.placement,
       groupKind: r.groupKind,
       anchorIndex: addAnchorIndex,
+      bells: r.bells,
     });
   };
 
@@ -601,6 +602,7 @@ export default function LiveWorkoutRoute({
         anchorSets={workout && workout.exercises[addAnchorIndex]?.sets}
         anchorGroupType={workout && workout.exercises[addAnchorIndex]?.groupType}
         workoutExerciseSlugs={sheetExerciseSlugs}
+        rememberedBells={rememberedBells}
         testID="live-workout-add"
       />
       <ExerciseSwapModal
@@ -614,6 +616,7 @@ export default function LiveWorkoutRoute({
         onSwap={onSelectAlternative}
         onSelect={onSelectAlternative}
         onClose={() => setSwapSlug(null)}
+        rememberedBells={rememberedBells}
       />
       {staleIncomplete ? (
         <IncompleteWorkoutModal

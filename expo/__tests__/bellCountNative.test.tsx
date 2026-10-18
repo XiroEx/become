@@ -201,101 +201,71 @@ describe("(id: 96d40d2b) the saved field is the web's `bells`, absent means auto
 });
 
 // ───────────────────────────────────────────────────────────────────────────
-// (id: 96d40d2a) The control, in BOTH views
+// (id: 9d6d2d71) The control upfront in AddExerciseSheet and ExerciseSwapModal
 // ───────────────────────────────────────────────────────────────────────────
 
-describe("(id: 96d40d2a) native Live and native Track both offer the one/two choice", () => {
-  it("Track shows it on dumbbell and kettlebell work, and never on a barbell lift", () => {
-    const { getByTestId, queryByTestId } = render(
-      <LiveWorkoutClient
-        workout={workoutOf([dbPress, goblet, barbell, pushup])}
-        onBellChoice={jest.fn()}
-      />,
+describe("(id: 9d6d2d71) upfront bell count picker in AddExerciseSheet and ExerciseSwapModal", () => {
+  it("AddExerciseSheet and ExerciseSwapModal source code contains BellCountToggle", () => {
+    const addSheet = fs.readFileSync(
+      path.join(EXPO_ROOT, "components/workout/AddExerciseSheet.tsx"),
+      "utf8",
     );
-    expect(getByTestId("live-workout-dumbbell-bench-press-bells")).toBeTruthy();
-    expect(getByTestId("live-workout-dumbbell-bench-press-bells-1")).toBeTruthy();
-    expect(getByTestId("live-workout-dumbbell-bench-press-bells-2")).toBeTruthy();
-    expect(getByTestId("live-workout-goblet-squat-bells")).toBeTruthy();
-    expect(queryByTestId("live-workout-back-squat-bells")).toBeNull();
-    expect(queryByTestId("live-workout-push-up-bells")).toBeNull();
-  });
+    expect(addSheet).toMatch(/<BellCountToggle/);
+    expect(addSheet).toMatch(/resolveBellCount/);
 
-  it("Track labels the choice by implement and starts on the automatic answer", () => {
-    const { getByTestId } = render(
-      <LiveWorkoutClient
-        workout={workoutOf([dbPress, goblet])}
-        onBellChoice={jest.fn()}
-      />,
+    const swapModal = fs.readFileSync(
+      path.join(EXPO_ROOT, "components/live/ExerciseSwapModal.tsx"),
+      "utf8",
     );
-    expect(
-      getByTestId("live-workout-dumbbell-bench-press-bells-2-label").props.children,
-    ).toBe("2 DB");
-    expect(
-      getByTestId("live-workout-goblet-squat-bells-1-label").props.children,
-    ).toBe("1 KB");
-    // Pre-selected: the pair for the press, the single bell for the goblet.
-    expect(
-      getByTestId("live-workout-dumbbell-bench-press-bells-2").props
-        .accessibilityState.selected,
-    ).toBe(true);
-    expect(
-      getByTestId("live-workout-goblet-squat-bells-1").props.accessibilityState
-        .selected,
-    ).toBe(true);
-  });
-
-  it("Live shows the same control under the weight box, and reports the choice", () => {
-    const onBellChoice = jest.fn();
-    const { getByTestId, queryByTestId } = render(
-      <LiveWorkoutClient
-        workout={workoutOf([dbPress, barbell])}
-        initialView="live"
-        onBellChoice={onBellChoice}
-      />,
-    );
-    const toggle = "live-workout-live-dumbbell-bench-press-set-0-bells";
-    expect(getByTestId(toggle)).toBeTruthy();
-    fireEvent.press(getByTestId(`${toggle}-1`));
-    expect(onBellChoice).toHaveBeenCalledWith("dumbbell-bench-press", 1);
-
-    // Step on to the barbell lift: no question there.
-    fireEvent.press(getByTestId("live-workout-live-next"));
-    fireEvent.press(getByTestId("live-workout-live-next"));
-    expect(queryByTestId("live-workout-live-back-squat-set-0-bells")).toBeNull();
-  });
-
-  it("a choice made in Track is the choice Live shows (one workout, two views)", () => {
-    const { getByTestId } = render(
-      <LiveWorkoutClient
-        workout={workoutOf([dbPress])}
-        onBellChoice={jest.fn()}
-      />,
-    );
-    fireEvent.press(getByTestId("live-workout-dumbbell-bench-press-bells-1"));
-    fireEvent.press(getByTestId("live-workout-view-live"));
-    expect(
-      getByTestId("live-workout-live-dumbbell-bench-press-set-0-bells-1").props
-        .accessibilityState.selected,
-    ).toBe(true);
+    expect(swapModal).toMatch(/<BellCountToggle/);
+    expect(swapModal).toMatch(/resolveBellCount/);
   });
 });
 
 // ───────────────────────────────────────────────────────────────────────────
-// (id: 96d40d2c) The "= X total" hint, and the per-exercise memory
+// (id: 9d6d2d72) In-logging-row 1-vs-2 toggle removed from Live and Track rows
 // ───────────────────────────────────────────────────────────────────────────
 
-describe('(id: 96d40d2c) the "= X total" hint and the per-exercise memory', () => {
+describe("(id: 9d6d2d72) in-logging-row 1-vs-2 toggle removed from Live and Track rows", () => {
+  it("neither Track nor Live renders the BellCountToggle in logging rows", () => {
+    const { queryByTestId } = render(
+      <LiveWorkoutClient
+        workout={workoutOf([dbPress, goblet, barbell, pushup])}
+      />,
+    );
+    expect(queryByTestId("live-workout-dumbbell-bench-press-bells")).toBeNull();
+    expect(queryByTestId("live-workout-goblet-squat-bells")).toBeNull();
+  });
+
+  it("Live does not render the toggle under the weight box", () => {
+    const { queryByTestId } = render(
+      <LiveWorkoutClient
+        workout={workoutOf([dbPress, barbell])}
+        initialView="live"
+      />,
+    );
+    expect(
+      queryByTestId("live-workout-live-dumbbell-bench-press-set-0-bells"),
+    ).toBeNull();
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// (id: 9d6d2d73) The \"= X total\" hint, and the per-exercise memory
+// ───────────────────────────────────────────────────────────────────────────
+
+describe('(id: 9d6d2d73) the \"= X total\" hint and the per-exercise memory', () => {
   it("Track: the hint and the copy follow the choice, not the catalogue", () => {
     const { getByTestId, queryByTestId } = render(
       <LiveWorkoutClient
         workout={workoutOf([dbPress])}
-        onBellChoice={jest.fn()}
+        bellChoices={{ "dumbbell-bench-press": 2 }}
       />,
     );
     const weight = "live-workout-dumbbell-bench-press-set-0-weight";
     fireEvent.changeText(getByTestId(weight), "50");
 
-    // Two dumbbells (the automatic answer): a combined total worth showing.
+    // Two dumbbells: a combined total worth showing.
     expect(
       getByTestId("live-workout-dumbbell-bench-press-set-0-helper").props.children,
     ).toBe("= 100 lbs total");
@@ -304,28 +274,41 @@ describe('(id: 96d40d2c) the "= X total" hint and the per-exercise memory', () =
     ).toBe("Enter the weight of one dumbbell — not the combined total.");
 
     // One dumbbell: the number typed IS the load, so the hint goes.
-    fireEvent.press(getByTestId("live-workout-dumbbell-bench-press-bells-1"));
+    const { queryByTestId: queryOne, getByTestId: getOne } = render(
+      <LiveWorkoutClient
+        workout={workoutOf([dbPress])}
+        bellChoices={{ "dumbbell-bench-press": 1 }}
+      />,
+    );
+    fireEvent.changeText(getOne(weight), "50");
     expect(
-      queryByTestId("live-workout-dumbbell-bench-press-set-0-helper"),
+      queryOne("live-workout-dumbbell-bench-press-set-0-helper"),
     ).toBeNull();
     expect(
-      getByTestId("live-workout-dumbbell-bench-press-bell-hint").props.children,
+      getOne("live-workout-dumbbell-bench-press-bell-hint").props.children,
     ).toBe("Enter the weight of one dumbbell.");
   });
 
   it("Live: the hint follows the choice too", () => {
-    const { getByTestId, queryByTestId } = render(
+    const { getByTestId } = render(
       <LiveWorkoutClient
         workout={workoutOf([dbPress])}
         initialView="live"
-        onBellChoice={jest.fn()}
+        bellChoices={{ "dumbbell-bench-press": 2 }}
       />,
     );
     const set = "live-workout-live-dumbbell-bench-press-set-0";
     fireEvent.changeText(getByTestId(`${set}-weight`), "40");
     expect(getByTestId(`${set}-helper`).props.children).toBe("= 80 lbs total");
 
-    fireEvent.press(getByTestId(`${set}-bells-1`));
+    const { queryByTestId } = render(
+      <LiveWorkoutClient
+        workout={workoutOf([dbPress])}
+        initialView="live"
+        bellChoices={{ "dumbbell-bench-press": 1 }}
+      />,
+    );
+    fireEvent.changeText(getByTestId(`${set}-weight`), "40");
     expect(queryByTestId(`${set}-helper`)).toBeNull();
   });
 
@@ -334,7 +317,7 @@ describe('(id: 96d40d2c) the "= X total" hint and the per-exercise memory', () =
       <LiveWorkoutClient
         workout={workoutOf([dbPress])}
         weightUnit="kg"
-        onBellChoice={jest.fn()}
+        bellChoices={{ "dumbbell-bench-press": 2 }}
       />,
     );
     fireEvent.changeText(
@@ -346,21 +329,14 @@ describe('(id: 96d40d2c) the "= X total" hint and the per-exercise memory', () =
     ).toBe("= 80 kg total");
   });
 
-  it("last time's answer is the default, and the member's pick still beats it", () => {
+  it("last time's answer is the default, and the session choice beats it", () => {
     const remembered = { "dumbbell-bench-press": 1 as const };
     const { getByTestId, queryByTestId } = render(
       <LiveWorkoutClient
         workout={workoutOf([dbPress])}
         rememberedBells={remembered}
-        onBellChoice={jest.fn()}
       />,
     );
-    // Logged with one dumbbell last time → one is where the control starts,
-    // even though the catalogue's automatic answer is a pair.
-    expect(
-      getByTestId("live-workout-dumbbell-bench-press-bells-1").props
-        .accessibilityState.selected,
-    ).toBe(true);
     fireEvent.changeText(
       getByTestId("live-workout-dumbbell-bench-press-set-0-weight"),
       "50",
@@ -369,10 +345,20 @@ describe('(id: 96d40d2c) the "= X total" hint and the per-exercise memory', () =
       queryByTestId("live-workout-dumbbell-bench-press-set-0-helper"),
     ).toBeNull();
 
-    // …and saying "two" this session wins over the memory.
-    fireEvent.press(getByTestId("live-workout-dumbbell-bench-press-bells-2"));
+    // …and saying \"two\" in bellChoices wins over the memory.
+    const { getByTestId: getByTestId2 } = render(
+      <LiveWorkoutClient
+        workout={workoutOf([dbPress])}
+        rememberedBells={remembered}
+        bellChoices={{ "dumbbell-bench-press": 2 }}
+      />,
+    );
+    fireEvent.changeText(
+      getByTestId2("live-workout-dumbbell-bench-press-set-0-weight"),
+      "50",
+    );
     expect(
-      getByTestId("live-workout-dumbbell-bench-press-set-0-helper").props.children,
+      getByTestId2("live-workout-dumbbell-bench-press-set-0-helper").props.children,
     ).toBe("= 100 lbs total");
   });
 
