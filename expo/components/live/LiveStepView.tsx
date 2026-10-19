@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Animated, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   ChevronDown,
@@ -78,7 +79,11 @@ export const LIVE_PANEL_SPACING = {
   panelPaddingX: 16,
   /** A little less than `p-4` at the top: the scrim above already separates. */
   panelPaddingTop: 12,
-  /** The SafeAreaView adds the home indicator; the web adds `2rem` to it. */
+  /**
+   * The web adds `2rem` past the home indicator; native adds the DEVICE'S
+   * home-indicator inset to this base value itself (NP-381's live screen owns
+   * the whole device edge to edge, so nothing above it pads it for us).
+   */
   panelPaddingBottom: 8,
   /** `mb-4` — exercise block → progress bar → inputs. */
   blockGap: 16,
@@ -100,6 +105,31 @@ export const LIVE_PANEL_SPACING = {
 const PANEL_SCRIM_HEIGHT = 64;
 /** How tall the fade behind the floating top bar is (the web's `from-black/60`). */
 const TOP_SCRIM_HEIGHT = 128;
+
+/**
+ * `useSafeAreaInsets` throws without a `SafeAreaProvider` above it in the
+ * tree; the real app always has one (`app/_layout.tsx`), but this view's own
+ * tests (and `LiveWorkoutClient`'s) mount it alone. Falling back to zero
+ * insets there keeps this a no-op in tests while fixing the real device —
+ * the same pattern `SessionPlayer` and `BarcodeScanner` use (NP-321).
+ *
+ * Why this view needs the real device inset rather than leaning on a
+ * `SafeAreaView`: the clip (the full-screen background video, NP-381) has to
+ * reach every edge of the device — behind the status bar/notch and the home
+ * indicator — exactly like the web's `fixed inset-0`. A `SafeAreaView`
+ * padding this screen would leave those system-bar strips showing the plain
+ * page background instead of video, which is the "cut off" bug this fixes.
+ * So `LiveWorkoutClient` renders Live with no safe-area edges at all, and
+ * this view pads only its OWN chrome — the top bar and the bottom panel —
+ * by the real inset, the clip behind them staying full-bleed.
+ */
+function useSafeAreaInsetsOrZero() {
+  try {
+    return useSafeAreaInsets();
+  } catch {
+    return { top: 0, bottom: 0, left: 0, right: 0 };
+  }
+}
 
 export interface LiveStepViewProps {
   exercises: LiveWorkoutExercise[];
@@ -287,6 +317,10 @@ export function LiveStepView({
   testID,
 }: LiveStepViewProps) {
   const { colors, tint } = useThemeTokens();
+  // The real device inset, applied to THIS view's own chrome — see
+  // `useSafeAreaInsetsOrZero` above for why the clip behind it stays
+  // full-bleed instead.
+  const insets = useSafeAreaInsetsOrZero();
   const total = workoutFlow.length;
   const safeIndex = Math.min(Math.max(stepIndex, 0), Math.max(total - 1, 0));
   const step = workoutFlow[safeIndex];
@@ -514,7 +548,9 @@ export function LiveStepView({
           top: 0,
           left: 0,
           right: 0,
-          height: TOP_SCRIM_HEIGHT,
+          // Covers the notch/status-bar strip too, now that the clip reaches
+          // it (NP-381's full-bleed fix).
+          height: TOP_SCRIM_HEIGHT + insets.top,
         }}
       />
 
@@ -531,7 +567,11 @@ export function LiveStepView({
           justifyContent: "space-between",
           gap: 8,
           paddingHorizontal: 16,
-          paddingVertical: 12,
+          // The clip now reaches the literal top of the device (NP-381), so
+          // this bar — not a SafeAreaView — pads itself past the status
+          // bar/notch, the way the web's floating chrome pads past `env()`.
+          paddingTop: 12 + insets.top,
+          paddingBottom: 12,
         }}
       >
         {onExit ? (
@@ -737,7 +777,9 @@ export function LiveStepView({
             flexShrink: 1,
             maxHeight: LIVE_PANEL_SPACING.panelMaxHeight,
             backgroundColor: colors.background,
-            paddingBottom: LIVE_PANEL_SPACING.panelPaddingBottom,
+            // Past the home indicator, now that nothing above pads this
+            // screen for it (NP-381's full-bleed fix).
+            paddingBottom: LIVE_PANEL_SPACING.panelPaddingBottom + insets.bottom,
           }}
         >
           <ScrollView

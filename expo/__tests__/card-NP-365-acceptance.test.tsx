@@ -83,10 +83,18 @@ describe("(id: np365-topbar) Top Bar Chrome — floating immersive overlay", () 
     const { getByTestId } = render(
       <LiveWorkoutClient workout={TWO_SETS} initialView="live" />,
     );
-    const bar = getByTestId("live-workout-live-topbar").props
-      .style as { paddingHorizontal: number; paddingVertical: number };
+    const bar = getByTestId("live-workout-live-topbar").props.style as {
+      paddingHorizontal: number;
+      paddingTop: number;
+      paddingBottom: number;
+    };
     expect(bar.paddingHorizontal).toBe(16);
-    expect(bar.paddingVertical).toBe(12);
+    // Split top/bottom (not one `paddingVertical`) since the screen is now
+    // full-bleed behind the status bar (NP-381's residual "cut off" fix):
+    // `paddingTop` is `py-3` PLUS the real device inset — zero here, no
+    // `SafeAreaProvider` wraps this render — so it still reads 12.
+    expect(bar.paddingTop).toBe(12);
+    expect(bar.paddingBottom).toBe(12);
   });
 
   it("the Track|Live toggle renders translucent in Live, solid in Track's header", () => {

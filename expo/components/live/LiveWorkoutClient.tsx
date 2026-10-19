@@ -1345,7 +1345,17 @@ export function LiveWorkoutClient({
 
   return (
     <SafeAreaView
-      edges={["top", "bottom"]}
+      // Track is an ordinary dashboard-style screen, so it keeps the normal
+      // top/bottom safe-area padding. Live is the web's `fixed inset-0`
+      // takeover (NP-381): its background video has to reach every edge of
+      // the device — behind the status bar/notch and the home indicator —
+      // the way the web's clip reaches every edge of the viewport. Padding
+      // the SafeAreaView here for Live would leave the system-bar strips
+      // showing the plain page background instead of video (the "cut off"
+      // bug). `LiveStepView` applies the same insets itself, as padding on
+      // its OWN chrome (the top bar and the bottom panel) instead, so
+      // nothing floats under the status bar or the home indicator.
+      edges={view === "live" ? [] : ["top", "bottom"]}
       style={{ flex: 1, backgroundColor: colors.background }}
       testID={testID}
     >
