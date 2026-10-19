@@ -17,10 +17,13 @@
 //     answers 503 and `checkoutAvailable` is false. Until that changes the page
 //     shows the SAME coming-soon note the sheet shows — literally the same
 //     component — and no purchase button at all.
-//  3. NOTHING INVENTED. No trial (none is implemented), no discount, no refund
-//     policy, no launch date, no testimonial, no user count. The allowances come
-//     from FREE_LIMITS via props; the prices come from PLAN_PRICING; the
-//     member's own numbers come from the shared entitlements hook.
+//  3. NOTHING INVENTED. No discount, no refund policy, no launch date, no
+//     testimonial, no user count. The allowances come from FREE_LIMITS via
+//     props; the prices come from PLAN_PRICING; the member's own numbers come
+//     from the shared entitlements hook. The one exception, added by the card
+//     (George, 2026-10-19): the two trial offers below ARE real, and every
+//     number they show (days left, whether a card would do anything) comes
+//     from GET /api/billing/trial/status, never typed out here.
 //
 // The checkout state machine is UpgradeSheet's, imported rather than copied —
 // `CheckoutState`, `checkoutRefusalState` and `CheckoutAction` — so there is one
@@ -78,6 +81,20 @@ import {
 // here instead of 400ing at runtime. Nothing from lib/billing reaches the
 // bundle.
 import type { BillingPlan } from '@/lib/billing/mode'
+// Copy for the two trial offers (George, 2026-10-19) — same house pattern as
+// lib/billingCopy above: app copy, not a clause, read client-side. The ONE
+// piece of state the two offers need (`subscription.freeTrialStartedAt`) does
+// not live on this page's own snapshot — see GET /api/billing/trial/status
+// below for why — so every boolean this section draws comes from THAT route,
+// never recomputed here.
+import {
+  CARD_TRIAL_CTA_LABEL,
+  FREE_TRIAL_CARD_UPSELL,
+  FREE_TRIAL_CTA_LABEL,
+  FREE_TRIAL_HEADING,
+  FREE_TRIAL_SUBHEADING,
+  freeTrialRemainingLine,
+} from '@/lib/trialOfferCopy'
 
 /** The portal state CheckoutAction expects. Taken from its own props type, and
  *  structurally the same union lib/billingPortal exports — the two surfaces
@@ -240,6 +257,162 @@ export function FreeForever() {
           </li>
         ))}
       </ul>
+    </Card>
+  )
+}
+
+// ─── The two trial offers (George, 2026-10-19) ───────────────────────────────
+
+/** GET /api/billing/trial/status's body — every field is already the server
+ *  calling lib/billing/trial.ts's own predicates, so nothing here is
+ *  recomputed client-side. */
+export interface TrialStatus {
+  checkoutAvailable: boolean
+  trialDays: number
+  hasStartedFreeTrial: boolean
+  freeTrialActive: boolean
+  freeTrialOfferDue: boolean
+  freeTrialEndsAt: string | null
+  freeTrialDaysRemaining: number
+  cardTrialAvailable: boolean
+}
+
+export interface FreeTrialSectionProps {
+  /** Null while unknown (first paint, or the read failed) — renders nothing
+   *  rather than guess, same discipline as the rest of this page. */
+  status: TrialStatus | null
+  freeTrialStarting: boolean
+  onStartFreeTrial: () => void
+  cardTrialPlan: BillingPlan
+  onCardTrialPlanChange: (plan: BillingPlan) => void
+  cardTrialCheckout: CheckoutState
+  portalState: PortalState
+  onStartCardTrial: () => void
+  onOpenPortal: () => void
+}
+
+/**
+ * The card, in full: a no-card 7-day trial that is always reachable here
+ * (declining it anywhere else — the onboarding prompt — does not spend it),
+ * and the card-backed "+7 more days" option mentioned up front and still
+ * offered after the free week, during it, or instead of it.
+ *
+ * Deliberately NOT gated by `!isPlus` the way `PlanPricing` is: a member mid
+ * free-trial already reads `tier !== 'free'` (that is the whole mechanism —
+ * see lib/subscription.ts#deriveTier), and they are exactly who the
+ * card-backed CTA has to stay visible for. Every branch below is instead
+ * gated on `status`'s own booleans, which already account for that.
+ */
+export function FreeTrialSection({
+  status,
+  freeTrialStarting,
+  onStartFreeTrial,
+  cardTrialPlan,
+  onCardTrialPlanChange,
+  cardTrialCheckout,
+  portalState,
+  onStartCardTrial,
+  onOpenPortal,
+}: FreeTrialSectionProps) {
+  if (!status) return null
+  if (!status.freeTrialOfferDue && !status.freeTrialActive && !status.cardTrialAvailable) {
+    return null
+  }
+
+  const cardLive = cardTrialCheckout === 'ready' || cardTrialCheckout === 'starting'
+
+  const cardTrialBlock = status.cardTrialAvailable && (
+    <div className={status.freeTrialOfferDue ? 'mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-800' : ''}>
+      {cardLive ? (
+        <>
+          <div role="radiogroup" aria-label="Billing period" className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={cardTrialPlan === 'monthly'}
+              onClick={() => onCardTrialPlanChange('monthly')}
+              className={`rounded-xl border p-3 text-left transition-colors ${
+                cardTrialPlan === 'monthly'
+                  ? 'border-purple-500 bg-purple-50 dark:bg-purple-500/10'
+                  : 'border-zinc-200 dark:border-zinc-800'
+              }`}
+            >
+              <p className="text-sm font-semibold text-zinc-900 dark:text-white">
+                {PLAN_PRICING.monthly.display}
+              </p>
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={cardTrialPlan === 'annual'}
+              onClick={() => onCardTrialPlanChange('annual')}
+              className={`rounded-xl border p-3 text-left transition-colors ${
+                cardTrialPlan === 'annual'
+                  ? 'border-purple-500 bg-purple-50 dark:bg-purple-500/10'
+                  : 'border-zinc-200 dark:border-zinc-800'
+              }`}
+            >
+              <p className="text-sm font-semibold text-zinc-900 dark:text-white">
+                {PLAN_PRICING.annual.display}
+              </p>
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={onStartCardTrial}
+            disabled={cardTrialCheckout === 'starting'}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-purple-300 px-5 py-3 text-sm font-semibold text-purple-700 transition-colors hover:bg-purple-50 disabled:opacity-60 dark:border-purple-500/40 dark:text-purple-300 dark:hover:bg-purple-500/10"
+          >
+            {cardTrialCheckout === 'starting' && <Loader2 className="h-4 w-4 animate-spin" />}
+            {CARD_TRIAL_CTA_LABEL}
+          </button>
+        </>
+      ) : (
+        <CheckoutAction
+          state={cardTrialCheckout}
+          tierName="Plus"
+          portalState={portalState}
+          onStart={onStartCardTrial}
+          onOpenPortal={onOpenPortal}
+        />
+      )}
+    </div>
+  )
+
+  return (
+    <Card>
+      {status.freeTrialActive ? (
+        <>
+          <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
+            {freeTrialRemainingLine(status.freeTrialDaysRemaining)}
+          </h2>
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            Your free trial ends on its own — nothing is charged unless you put a card down.
+          </p>
+        </>
+      ) : status.freeTrialOfferDue ? (
+        <>
+          <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
+            {FREE_TRIAL_HEADING}
+          </h2>
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{FREE_TRIAL_SUBHEADING}</p>
+          {status.cardTrialAvailable && (
+            <p className="mt-3 rounded-xl bg-zinc-50 p-3 text-xs leading-relaxed text-zinc-600 dark:bg-zinc-800/60 dark:text-zinc-400">
+              {FREE_TRIAL_CARD_UPSELL}
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={onStartFreeTrial}
+            disabled={freeTrialStarting}
+            className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-3.5 text-sm font-semibold text-white transition-all hover:from-green-700 hover:to-emerald-700 disabled:opacity-60"
+          >
+            {freeTrialStarting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {FREE_TRIAL_CTA_LABEL}
+          </button>
+        </>
+      ) : null}
+      {cardTrialBlock}
     </Card>
   )
 }
@@ -613,6 +786,72 @@ export default function PlanPageClient({ rows, mindTotalSessions }: PlanPageClie
   const [portalPath, setPortalPath] = useState<string>(BILLING_PORTAL_PATH)
   const checkoutAvailable = data?.checkoutAvailable
 
+  // ─── The two trial offers ───────────────────────────────────────────────
+  const [trialStatus, setTrialStatus] = useState<TrialStatus | null>(null)
+  const [freeTrialStarting, setFreeTrialStarting] = useState(false)
+  const [cardTrialPlan, setCardTrialPlan] = useState<BillingPlan>('monthly')
+  const [cardTrialCheckout, setCardTrialCheckout] = useState<CheckoutState>('ready')
+
+  const refreshTrialStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/billing/trial/status', { headers: authHeaders() })
+      if (!res.ok) {
+        setTrialStatus(null)
+        return
+      }
+      const body: unknown = await res.json().catch(() => null)
+      setTrialStatus(body as TrialStatus)
+    } catch {
+      setTrialStatus(null)
+    }
+  }, [])
+
+  useEffect(() => {
+    refreshTrialStatus()
+  }, [refreshTrialStatus])
+
+  const startFreeTrial = useCallback(async () => {
+    if (freeTrialStarting) return
+    setFreeTrialStarting(true)
+    try {
+      const res = await fetch('/api/billing/trial/start', { method: 'POST', headers: authHeaders() })
+      if (res.ok) {
+        await Promise.all([refresh(), refreshTrialStatus()])
+      }
+    } catch {
+      // The button stays up for a retry — never a dead end.
+    } finally {
+      setFreeTrialStarting(false)
+    }
+  }, [freeTrialStarting, refresh, refreshTrialStatus])
+
+  const startCardTrial = useCallback(async () => {
+    if (cardTrialCheckout !== 'ready' && cardTrialCheckout !== 'error') return
+    setCardTrialCheckout('starting')
+    try {
+      const res = await fetch('/api/billing/checkout', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ plan: cardTrialPlan, trial: true, returnTo: 'web' }),
+      })
+      const body: unknown = await res.json().catch(() => null)
+      if (res.ok) {
+        const url = readString(body, 'url')
+        if (url) {
+          window.location.assign(url)
+          return
+        }
+        setCardTrialCheckout('error')
+        return
+      }
+      const next = checkoutRefusalState(res.status, body)
+      if (next === 'fix-payment') setPortalPath(readString(body, 'portal') ?? BILLING_PORTAL_PATH)
+      setCardTrialCheckout(next)
+    } catch {
+      setCardTrialCheckout('error')
+    }
+  }, [cardTrialCheckout, cardTrialPlan])
+
   // Availability. Unlike the sheet, a `checkoutAvailable: true` snapshot is NOT
   // enough here: that flag is one bit for "monthly OR annual has a price", and
   // this page draws a CTA per period. Rendering an annual button against an
@@ -690,7 +929,7 @@ export default function PlanPageClient({ rows, mindTotalSessions }: PlanPageClie
         // Never fatal. The webhook remains the source of truth; this only saves
         // the member the few seconds Stripe takes to call us.
       }
-      await refresh()
+      await Promise.all([refresh(), refreshTrialStatus()])
       if (cancelled) return
       setCheckoutReturn('confirmed')
       // Drop the query so a reload is not a second activation attempt. Next
@@ -702,7 +941,7 @@ export default function PlanPageClient({ rows, mindTotalSessions }: PlanPageClie
     return () => {
       cancelled = true
     }
-  }, [paidReturn, paidSessionId, refresh])
+  }, [paidReturn, paidSessionId, refresh, refreshTrialStatus])
 
   const startCheckout = useCallback(
     async (plan: BillingPlan) => {
@@ -800,6 +1039,22 @@ export default function PlanPageClient({ rows, mindTotalSessions }: PlanPageClie
       {/* The plan, and — for anyone Stripe is actually billing — the way into
           the portal to change or end it. */}
       <CurrentPlan snapshot={data} portalState={portalState} onOpenPortal={openPortal} />
+
+      {/* The two trial offers. Deliberately NOT behind `!isPlus`: a member
+          mid free-trial already reads tier 'plus', and is exactly who the
+          "put a card down" CTA has to stay visible for. Renders nothing on
+          its own once both offers are spent. */}
+      <FreeTrialSection
+        status={trialStatus}
+        freeTrialStarting={freeTrialStarting}
+        onStartFreeTrial={startFreeTrial}
+        cardTrialPlan={cardTrialPlan}
+        onCardTrialPlanChange={setCardTrialPlan}
+        cardTrialCheckout={cardTrialCheckout}
+        portalState={portalState}
+        onStartCardTrial={startCardTrial}
+        onOpenPortal={openPortal}
+      />
 
       {/* A member who already holds Plus is shown what they have, never a
           second price. Checkout would refuse them anyway (409 already_*). */}

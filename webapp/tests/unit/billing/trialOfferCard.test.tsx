@@ -11,7 +11,7 @@
 //     press, never an automatic grant;
 //   • the offer explains what upgrading gets them;
 //   • the billing period (monthly/annual) is picked BEFORE the trial starts;
-//   • the agreement names the 10-day trial, the post-trial charge and the
+//   • the agreement names the TRIAL_DAYS-day trial, the post-trial charge and the
 //     refund window, and links to the Terms;
 //   • "Continue free" is drawn in every state, including the refusal ones.
 

@@ -1,6 +1,7 @@
 import type { Tier } from '@/lib/entitlements'
 import type { IUserSubscription } from '@/models/User'
 import type { UserRole } from '@/lib/roles'
+import { freeTrialActive } from '@/lib/billing/trial'
 
 /**
  * Grace on a stale currentPeriodEnd, so ONE missed webhook does not downgrade a
@@ -41,29 +42,45 @@ export interface DeriveTierInput {
  * shares the same database), and by hand through
  * `scripts/resweep-subscription-tiers.mjs`, which is the same engine with a CLI
  * on it.
+ *
+ * A THIRD clock branch, added for the no-card free trial (George, 2026-10-19):
+ * `status: 'none'` with `freeTrialStartedAt` set is 'plus' for exactly
+ * TRIAL_DAYS and 'free' the instant after, with no Stripe event marking the
+ * transition either. `lib/billing/tierResweep.ts`'s selector grew a matching
+ * clause for the same reason the other two clocks needed one.
  */
 export function deriveTier(input: DeriveTierInput): Tier {
-  const now = (input.now ?? new Date()).getTime()
+  const now = input.now ?? new Date()
+  const nowMs = now.getTime()
   if (input.role === 'admin') return 'plus'
   if (input.grandfathered === true) return 'plus'
 
   const sub = input.subscription
   if (!sub) return 'free'
+
+  // No Stripe event has ever written this account — but the no-card free
+  // trial does not need one. See lib/billing/trial.ts#freeTrialActive. Checked
+  // ahead of the switch (rather than as a case of it) because `status` is
+  // typed as a required SubscriptionStatus and a lean read can still hand
+  // back a row with no subscription.status at all.
+  if (!sub.status || sub.status === 'none') {
+    return freeTrialActive(sub, now) ? 'plus' : 'free'
+  }
+
   const end = sub.currentPeriodEnd ? new Date(sub.currentPeriodEnd).getTime() : null
 
   switch (sub.status) {
     case 'active':
     case 'trialing':
       // A period that lapsed well past the grace means the webhook never came.
-      if (end !== null && Number.isFinite(end) && end + SUBSCRIPTION_GRACE_MS < now) return 'free'
+      if (end !== null && Number.isFinite(end) && end + SUBSCRIPTION_GRACE_MS < nowMs) return 'free'
       return 'plus'
     case 'canceled':
       // They paid through the period; honor it, with no grace past the end.
-      return end !== null && Number.isFinite(end) && end > now ? 'plus' : 'free'
+      return end !== null && Number.isFinite(end) && end > nowMs ? 'plus' : 'free'
     case 'past_due': // explicitly NOT plus — a lapsed payment is not access
     case 'incomplete':
     case 'unpaid':
-    case 'none':
     default:
       return 'free'
   }

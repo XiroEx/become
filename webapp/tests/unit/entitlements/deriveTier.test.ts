@@ -15,6 +15,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { deriveTier, SUBSCRIPTION_GRACE_MS } from '../../../lib/subscription'
+import { TRIAL_DAYS } from '../../../lib/billing/trial'
 import type { IUserSubscription, SubscriptionStatus } from '../../../models/User'
 
 const ROOT = path.join(__dirname, '../../..')
@@ -31,6 +32,37 @@ test('deriveTier maps every subscription status to the agreed tier', () => {
   const cases: Array<[string, Parameters<typeof deriveTier>[0], 'free' | 'plus']> = [
     ['no subscription at all', {}, 'free'],
     ['status none', { subscription: sub('none') }, 'free'],
+    [
+      'status none, never started the free trial',
+      { subscription: { status: 'none' } },
+      'free',
+    ],
+    [
+      'status none, free trial started 1 day ago',
+      { subscription: { status: 'none', freeTrialStartedAt: at(-1) } },
+      'plus',
+    ],
+    [
+      'status none, free trial started exactly TRIAL_DAYS ago — spent',
+      { subscription: { status: 'none', freeTrialStartedAt: at(-TRIAL_DAYS) } },
+      'free',
+    ],
+    [
+      'status none, free trial started 20 days ago — long spent',
+      { subscription: { status: 'none', freeTrialStartedAt: at(-20) } },
+      'free',
+    ],
+    [
+      'trialing with a card, even though a free trial was also recorded long ago — the real sub wins',
+      {
+        subscription: {
+          status: 'trialing',
+          currentPeriodEnd: at(5),
+          freeTrialStartedAt: at(-30),
+        },
+      },
+      'plus',
+    ],
 
     ['active, period ahead', { subscription: sub('active', at(30)) }, 'plus'],
     ['active, no period recorded', { subscription: sub('active', null) }, 'plus'],

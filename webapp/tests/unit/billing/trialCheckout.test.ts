@@ -1,6 +1,6 @@
 // Run with: npm run test:file tests/unit/billing/trialCheckout.test.ts
 //
-// The 10-day Plus trial — the card: a member must ACTIVATE it (never an
+// The card-backed Plus trial (TRIAL_DAYS, now 7) — the card: a member must ACTIVATE it (never an
 // automatic grant), and once started it still goes through the one checkout
 // route every other purchase does. Two things are load-bearing here and both
 // get their own test:
@@ -50,8 +50,8 @@ test('every real subscription status ever written means the trial is spent', () 
   }
 })
 
-test('TRIAL_DAYS is the 10 days the card asks for', () => {
-  assert.equal(TRIAL_DAYS, 10)
+test('TRIAL_DAYS is the 7 days the card asks for (George, 2026-10-19 shrank it from 10)', () => {
+  assert.equal(TRIAL_DAYS, 7)
 })
 
 // ─── the route's wiring ──────────────────────────────────────────────────────

@@ -16,10 +16,17 @@
 //     is three numbers derived from two, and hand-editing one of them is a
 //     rounding error away at all times. So the arithmetic is recomputed here.
 //
-// Nothing may be invented: there is no trial implemented anywhere in Become, no
-// discount, no refund policy and no launch date, so none of those words may
-// appear. That is asserted as a source scan, because a fabricated claim is one
-// sentence someone adds in a hurry.
+// Nothing may be invented: no discount, no refund policy and no launch date,
+// so none of those words may appear. That is asserted as a source scan,
+// because a fabricated claim is one sentence someone adds in a hurry.
+//
+// TRIAL IS THE ONE EXCEPTION, as of the card (George, 2026-10-19): a real
+// no-card trial and a real card-backed one both exist now, and the Plan page
+// is explicitly where the no-card one must stay reachable after a member
+// declines it elsewhere. So "trial" is no longer forbidden here — but every
+// NUMBER the trial section shows must still come from the server
+// (GET /api/billing/trial/status), never be typed out, which is what the
+// dedicated trial tests (freeTrial.test.ts, freeTrialUi.test.tsx) pin.
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -115,13 +122,12 @@ function stripComments(src: string): string {
   return src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:'"`])\/\/.*$/gm, '$1')
 }
 
-test('nothing on the plan surface invents a trial, a discount or a deadline', () => {
-  // None of these exist in Become. There is no trial implemented anywhere, no
-  // promotional price in code, no refund policy written down, and no launch
-  // date that anybody has committed to. Scanned over the CODE, comments
-  // stripped -- prose about a rule is not a breach of it.
+test('nothing on the plan surface invents a discount or a deadline', () => {
+  // No promotional price in code, no refund policy written down, and no
+  // launch date that anybody has committed to. Scanned over the CODE, comments
+  // stripped -- prose about a rule is not a breach of it. "trial" itself is no
+  // longer on this list — see the header comment above.
   const FORBIDDEN: [RegExp, string][] = [
-    [/free trial|\btrial\b/i, 'no trial is implemented'],
     [/\bmoney[- ]?back\b|\brefund/i, 'no refund policy exists'],
     [/\bguarantee/i, 'nothing is guaranteed'],
     [/limited time|ends (soon|today)|act now|while it lasts/i, 'no deadline exists'],
