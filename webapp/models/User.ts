@@ -97,6 +97,12 @@ export interface IUserSubscription {
    *  but the first, because delivery latency is always positive. See
    *  lib/billing/apply.ts#isStaleEvent. */
   lastEventCreated?: number | null;
+  /** When this account was granted the no-card, no-Stripe free trial (the
+   *  card, George 2026-10-19). Written ONLY by POST /api/billing/trial/start,
+   *  never cleared once set — the one-time record that the free week was
+   *  already given, same discipline as `status` itself for Stripe. Absent
+   *  means never started. See lib/billing/trial.ts. */
+  freeTrialStartedAt?: Date | null;
   updatedAt?: Date;
 }
 
@@ -219,8 +225,9 @@ export interface IUser {
   /** Set when the member asks for their account to be deleted; unset when they
    *  restore it. Absent is the normal state. See lib/accountDeletion.ts. */
   deletion?: IUserDeletion
-  /** DERIVED, persisted. Only admin tooling, scripts/migrate-tiers.mjs, or the
-   *  billing webhook may write this — never derived at request time, because
+  /** DERIVED, persisted. Only admin tooling, scripts/migrate-tiers.mjs, the
+   *  billing webhook, or POST /api/billing/trial/start (the no-card free
+   *  trial grant) may write this — never derived at request time, because
    *  that would grandfather members automatically. Readers use
    *  loadUserEntitlement(), which reads this stored value. */
   tier: Tier
@@ -342,6 +349,7 @@ const UserSubscriptionSchema = new Schema<IUserSubscription>({
   paymentFailedAt: { type: Date, default: null },
   lastEventId: { type: String, default: null },
   lastEventCreated: { type: Number, default: null },
+  freeTrialStartedAt: { type: Date, default: null },
   updatedAt: { type: Date },
 }, { _id: false });
 
