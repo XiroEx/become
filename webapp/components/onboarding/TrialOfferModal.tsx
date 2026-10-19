@@ -45,9 +45,14 @@ import {
   type CheckoutState,
 } from '@/components/UpgradeSheet'
 import type { BillingPlan } from '@/lib/billing/mode'
-import { trialOfferDue } from '@/lib/billing/trial'
+import { cardTrialAvailable, freeTrialOfferDue, trialOfferDue } from '@/lib/billing/trial'
 import {
   CONTINUE_FREE_LABEL,
+  FREE_TRIAL_CARD_UPSELL,
+  FREE_TRIAL_CTA_LABEL,
+  FREE_TRIAL_DECLINE_LABEL,
+  FREE_TRIAL_HEADING,
+  FREE_TRIAL_SUBHEADING,
   TERMS_REFUND_HREF,
   TRIAL_AGREEMENT_TEXT,
   TRIAL_CTA_LABEL,
@@ -71,6 +76,55 @@ function readString(body: unknown, key: string): string | undefined {
   if (body === null || typeof body !== 'object') return undefined
   const value = (body as Record<string, unknown>)[key]
   return typeof value === 'string' && value ? value : undefined
+}
+
+export interface FreeTrialPromptProps {
+  /** Whether putting a card down would actually start anything today — the
+   *  same `checkoutAvailable`-gated question `cardTrialAvailable` answers.
+   *  Mentioning a CTA that cannot work is worse than not mentioning it. */
+  cardOptionAvailable: boolean
+  starting: boolean
+  onStart: () => void
+}
+
+/**
+ * The no-card, no-Stripe half of the offer — the ONE card asks every member
+ * sees, whether or not Stripe is even configured. Pure and props-driven, same
+ * reasoning as `TrialOfferCard`: the repo has no DOM test environment, so a
+ * state reachable only through an effect and a fetch is otherwise untestable.
+ *
+ * Shown ABOVE `TrialOfferCard` in the modal below, never instead of it: the
+ * two are independent offers a member may take in either order, or both.
+ */
+export function FreeTrialPrompt({ cardOptionAvailable, starting, onStart }: FreeTrialPromptProps) {
+  return (
+    <div className="px-5 pt-5">
+      <div className="flex items-center gap-2">
+        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-green-600/10 text-green-600 dark:text-green-400">
+          <Gift className="h-5 w-5" />
+        </span>
+        <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-50">{FREE_TRIAL_HEADING}</h2>
+      </div>
+      <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{FREE_TRIAL_SUBHEADING}</p>
+
+      {/* THE UP-FRONT MENTION the card asks for, before anyone decides. */}
+      {cardOptionAvailable && (
+        <p className="mt-3 rounded-xl bg-zinc-50 p-3 text-xs leading-relaxed text-zinc-600 dark:bg-zinc-800/60 dark:text-zinc-400">
+          {FREE_TRIAL_CARD_UPSELL}
+        </p>
+      )}
+
+      <button
+        type="button"
+        onClick={onStart}
+        disabled={starting}
+        className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-3.5 text-sm font-semibold text-white transition-all hover:from-green-700 hover:to-emerald-700 disabled:opacity-60"
+      >
+        {starting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+        {FREE_TRIAL_CTA_LABEL}
+      </button>
+    </div>
+  )
 }
 
 export interface TrialOfferCardProps {
@@ -139,7 +193,7 @@ export function TrialOfferCard({
       {live && (
         <>
           {/* Picked BEFORE the trial starts, per the card: the member chooses
-              what they will be charged once the 10 days end, not after. */}
+              what they will be charged once TRIAL_DAYS end, not after. */}
           <div
             role="radiogroup"
             aria-label="Billing period"
@@ -265,12 +319,13 @@ export interface TrialOfferModalProps {
  * to /dashboard.
  */
 export default function TrialOfferModal({ onDismiss }: TrialOfferModalProps) {
-  const { data, loading } = useEntitlements()
+  const { data, loading, refresh } = useEntitlements()
   const [plan, setPlan] = useState<BillingPlan>('monthly')
   const [agreed, setAgreed] = useState(false)
   const [checkout, setCheckout] = useState<CheckoutState>('ready')
   const [portalState, setPortalState] = useState<PortalState>('idle')
   const [portalPath, setPortalPath] = useState<string>('/api/billing/portal')
+  const [freeTrialStarting, setFreeTrialStarting] = useState(false)
   useLockScroll(true)
 
   /** The offer is answered at most once. `onDismiss` navigates, and it is a
@@ -285,19 +340,52 @@ export default function TrialOfferModal({ onDismiss }: TrialOfferModalProps) {
     onDismiss()
   }, [onDismiss])
 
-  // Nothing honest to offer — see trialOfferDue(). This surface has nowhere
-  // else to send the member, so it moves them on instead of showing a dead end
-  // in the middle of onboarding.
+  // THE TWO OFFERS, independently due. The no-card trial needs no Stripe
+  // configuration at all — see lib/billing/trial.ts#freeTrialOfferDue — so
+  // `showFreeTrial` is very often the only one of the two that is true on an
+  // install with no billing block configured yet (today's state).
+  const showFreeTrial = freeTrialOfferDue(data)
+  const showCardTrial = trialOfferDue(data)
+
+  // Nothing honest to offer — see above. This surface has nowhere else to
+  // send the member, so it moves them on instead of showing a dead end in the
+  // middle of onboarding.
   //
   // An EFFECT because dismissing is a side effect on the parent (it navigates),
   // keyed on an external-system read — the entitlements snapshot. It sets no
   // state of its own, so it needs no react-hooks/set-state-in-effect
   // suppression; the render below reaches the same verdict through the same
-  // function, so the two cannot disagree.
+  // predicates, so the two cannot disagree.
   useEffect(() => {
     if (loading) return
-    if (!trialOfferDue(data)) answer()
-  }, [loading, data, answer])
+    if (!showFreeTrial && !showCardTrial) answer()
+  }, [loading, showFreeTrial, showCardTrial, answer])
+
+  // The no-card trial's own CTA. Unlike the card trial, there is no checkout
+  // session to redirect to — success simply means the account is already on
+  // Plus, so this answers (moves on to /dashboard) rather than waiting on a
+  // navigation that is never coming. A failure is left ON screen so the
+  // member can retry; per the card, declining or failing never removes the
+  // offer — see the plan page's FreeTrialSection for the same CTA reachable
+  // again later.
+  const startFreeTrial = useCallback(async () => {
+    if (freeTrialStarting) return
+    setFreeTrialStarting(true)
+    try {
+      const res = await fetch('/api/billing/trial/start', {
+        method: 'POST',
+        headers: authHeaders(),
+      })
+      if (res.ok) {
+        await refresh()
+        answer()
+        return
+      }
+    } catch {
+      // Fall through — the button stays up for a retry.
+    }
+    setFreeTrialStarting(false)
+  }, [freeTrialStarting, refresh, answer])
 
   const startCheckout = useCallback(async () => {
     if (checkout !== 'ready' && checkout !== 'error') return
@@ -346,30 +434,59 @@ export default function TrialOfferModal({ onDismiss }: TrialOfferModalProps) {
   }, [portalPath])
 
   if (loading) return null
-  // The SAME predicate the effect above reads. It used to be a second,
+  // The SAME predicates the effect above reads. They used to be a second,
   // hand-written copy of the condition — the shape that lets a surface dismiss
   // itself and paint at the same time.
-  if (!trialOfferDue(data)) return null
+  if (!showFreeTrial && !showCardTrial) return null
 
   return (
     <div className="fixed inset-0 z-[300] flex items-end justify-center bg-black/50 backdrop-blur-sm sm:items-center">
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={TRIAL_OFFER_HEADING}
+        aria-label={showFreeTrial ? FREE_TRIAL_HEADING : TRIAL_OFFER_HEADING}
         className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white dark:bg-zinc-900 sm:max-w-md sm:rounded-2xl"
       >
-        <TrialOfferCard
-          plan={plan}
-          onPlanChange={setPlan}
-          agreed={agreed}
-          onAgreedChange={setAgreed}
-          checkout={checkout}
-          portalState={portalState}
-          onStart={startCheckout}
-          onOpenPortal={openPortal}
-          onContinueFree={answer}
-        />
+        {showFreeTrial && (
+          <FreeTrialPrompt
+            cardOptionAvailable={cardTrialAvailable(data)}
+            starting={freeTrialStarting}
+            onStart={startFreeTrial}
+          />
+        )}
+
+        {showFreeTrial && showCardTrial && (
+          <div className="mx-5 mt-5 border-t border-zinc-100 dark:border-zinc-800" />
+        )}
+
+        {showCardTrial && (
+          <TrialOfferCard
+            plan={plan}
+            onPlanChange={setPlan}
+            agreed={agreed}
+            onAgreedChange={setAgreed}
+            checkout={checkout}
+            portalState={portalState}
+            onStart={startCheckout}
+            onOpenPortal={openPortal}
+            onContinueFree={answer}
+          />
+        )}
+
+        {/* TrialOfferCard carries its own "Continue free" — this is only
+            needed when the no-card prompt is on screen alone. Declining costs
+            nothing: the offer is reachable again from the Plan page. */}
+        {showFreeTrial && !showCardTrial && (
+          <div className="px-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-3">
+            <button
+              type="button"
+              onClick={answer}
+              className="w-full rounded-2xl px-4 py-2.5 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+            >
+              {FREE_TRIAL_DECLINE_LABEL}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

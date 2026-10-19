@@ -109,11 +109,26 @@ test('fails closed on a missing snapshot — a read failure costs an upsell, nev
 
 test('the effect and the render share the predicate instead of restating it', () => {
   const src = read(MODAL)
-  // Two hand-written copies of the condition is how a surface ends up
-  // dismissing itself and painting at the same time.
-  const uses = src.match(/trialOfferDue\(/g) ?? []
-  assert.ok(uses.length >= 2, 'both the bail effect and the render must call trialOfferDue')
+  // ONE call into trialOfferDue, assigned once — `showCardTrial` — and READ
+  // (never recomputed) by both the bail effect and the render. This is
+  // stricter than two hand-written calls to the same function, which is how a
+  // surface ends up dismissing itself and painting at the same time if the
+  // two calls are ever edited to disagree.
+  const calls = src.match(/trialOfferDue\(/g) ?? []
+  assert.equal(calls.length, 1, 'trialOfferDue itself is called exactly once')
+  assert.match(src, /const showCardTrial = trialOfferDue\(data\)/)
+  const uses = src.match(/showCardTrial/g) ?? []
+  assert.ok(uses.length >= 3, 'the definition, the bail effect and the render must all read it')
   assert.match(src, /from ['"]@\/lib\/billing\/trial['"]/)
+})
+
+test('the no-card free trial is offered through the same shared pattern', () => {
+  // The card's other half (George, 2026-10-19): a second, independent offer
+  // with its OWN predicate, shared the same way.
+  const src = read(MODAL)
+  assert.match(src, /const showFreeTrial = freeTrialOfferDue\(data\)/)
+  const uses = src.match(/showFreeTrial/g) ?? []
+  assert.ok(uses.length >= 3, 'the definition, the bail effect and the render must all read it')
 })
 
 test('onDismiss fires at most once, however often the effect re-runs', () => {

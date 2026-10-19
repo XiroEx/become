@@ -45,10 +45,13 @@
 // `wrote` reports that, so a caller can hold itself to the same rule.
 
 import { deriveTier, SUBSCRIPTION_GRACE_MS } from '../subscription'
+import { TRIAL_DAYS } from './trial'
 import type { Tier } from '../entitlements'
 import type { IUserSubscription, UserRole } from '../../models/User'
 
 export { SUBSCRIPTION_GRACE_MS }
+
+const DAY_MS = 24 * 60 * 60 * 1000
 
 /** The projection this needs, and the shape deriveTier is fed. */
 export interface ResweepUserDoc {
@@ -118,17 +121,24 @@ export interface ResweepOptions {
 }
 
 /**
- * Rows whose tier MIGHT have gone stale with the clock. Both clauses mirror a
- * deriveTier branch:
+ * Rows whose tier MIGHT have gone stale with the clock. Three clauses mirror a
+ * deriveTier branch each:
  *
  *  1. `canceled` and the paid period is over (or was never recorded).
  *  2. `active`/`trialing` whose period end is past the grace — the missed
  *     webhook case.
+ *  3. `none` (no Stripe event ever) with a no-card free trial that was
+ *     granted at least TRIAL_DAYS ago — the free week's own missing event.
+ *     Scoped to `tier: 'plus'` because that is the only direction this clause
+ *     can possibly move a row: deriveTier's free-trial branch only grants
+ *     'plus' for a bounded window, so a row already 'free' is correct no
+ *     matter how long ago the trial started.
  *
  * Nothing else can change answer without an event, so nothing else is read.
  */
 export function resweepSelector(now: Date): Record<string, unknown> {
   const graceCutoff = new Date(now.getTime() - SUBSCRIPTION_GRACE_MS)
+  const freeTrialCutoff = new Date(now.getTime() - TRIAL_DAYS * DAY_MS)
   return {
     $or: [
       {
@@ -141,6 +151,11 @@ export function resweepSelector(now: Date): Record<string, unknown> {
       {
         'subscription.status': { $in: ['active', 'trialing'] },
         'subscription.currentPeriodEnd': { $lt: graceCutoff },
+      },
+      {
+        tier: 'plus',
+        'subscription.status': 'none',
+        'subscription.freeTrialStartedAt': { $lte: freeTrialCutoff },
       },
     ],
   }

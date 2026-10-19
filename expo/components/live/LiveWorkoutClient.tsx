@@ -1345,7 +1345,13 @@ export function LiveWorkoutClient({
 
   return (
     <SafeAreaView
-      edges={["top", "bottom"]}
+      // Track keeps the safe-area box (NP-364's sticky header sits inside
+      // it); Live gets NONE (NP-365's directive): the clip is full-bleed
+      // edge-to-edge, behind the status bar and the home indicator too, not
+      // confined to a box those strips show the plain page colour around.
+      // `LiveStepView` pads its own chrome (top bar, top scrim, bottom
+      // panel) with the real device inset instead, via `useSafeAreaInsets`.
+      edges={view === "live" ? [] : ["top", "bottom"]}
       style={{ flex: 1, backgroundColor: colors.background }}
       testID={testID}
     >

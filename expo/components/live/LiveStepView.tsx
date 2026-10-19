@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Animated, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   ChevronDown,
   ChevronLeft,
@@ -78,7 +79,12 @@ export const LIVE_PANEL_SPACING = {
   panelPaddingX: 16,
   /** A little less than `p-4` at the top: the scrim above already separates. */
   panelPaddingTop: 12,
-  /** The SafeAreaView adds the home indicator; the web adds `2rem` to it. */
+  /**
+   * The web adds `2rem` under the panel. `LiveWorkoutClient` no longer wraps
+   * Live in a `SafeAreaView` (NP-365: the clip has to run full-bleed behind
+   * the home indicator), so this is only the panel's OWN padding — the real
+   * device inset is added on top of it at render time, via `useSafeAreaInsets`.
+   */
   panelPaddingBottom: 8,
   /** `mb-4` — exercise block → progress bar → inputs. */
   blockGap: 16,
@@ -100,6 +106,21 @@ export const LIVE_PANEL_SPACING = {
 const PANEL_SCRIM_HEIGHT = 64;
 /** How tall the fade behind the floating top bar is (the web's `from-black/60`). */
 const TOP_SCRIM_HEIGHT = 128;
+
+/**
+ * `useSafeAreaInsets` throws without a `SafeAreaProvider` above it in the
+ * tree; the real app always has one, but the many existing tests mount this
+ * view bare. Falling back to zero insets there keeps every one of those a
+ * no-op while fixing the real device (the same pattern as `SessionPlayer`,
+ * `BarcodeScanner` and `lib/navigation/tabBarInset.ts`'s `useTabBarScreenInset`).
+ */
+function useSafeAreaInsetsOrZero() {
+  try {
+    return useSafeAreaInsets();
+  } catch {
+    return { top: 0, bottom: 0, left: 0, right: 0 };
+  }
+}
 
 export interface LiveStepViewProps {
   exercises: LiveWorkoutExercise[];
@@ -287,6 +308,13 @@ export function LiveStepView({
   testID,
 }: LiveStepViewProps) {
   const { colors, tint } = useThemeTokens();
+  // THE REAL DEVICE INSET (NP-365): `LiveWorkoutClient` no longer wraps Live
+  // in a `SafeAreaView`, so the status-bar and home-indicator strips are
+  // exactly where the clip now shows through. This view pads its own chrome
+  // instead — the top bar drops by `insets.top`, the panel's bottom padding
+  // grows by `insets.bottom` — so the controls stay clear of those strips
+  // without boxing the video back in.
+  const insets = useSafeAreaInsetsOrZero();
   const total = workoutFlow.length;
   const safeIndex = Math.min(Math.max(stepIndex, 0), Math.max(total - 1, 0));
   const step = workoutFlow[safeIndex];
@@ -514,7 +542,10 @@ export function LiveStepView({
           top: 0,
           left: 0,
           right: 0,
-          height: TOP_SCRIM_HEIGHT,
+          // Extended by the top inset so it still sits behind the whole of
+          // the top bar now that the bar itself is pushed down below the
+          // status bar/notch rather than starting at the screen edge.
+          height: TOP_SCRIM_HEIGHT + insets.top,
         }}
       />
 
@@ -531,7 +562,11 @@ export function LiveStepView({
           justifyContent: "space-between",
           gap: 8,
           paddingHorizontal: 16,
-          paddingVertical: 12,
+          // No SafeAreaView above this screen in Live (NP-365), so the bar's
+          // own top padding carries the status-bar/notch inset; the bottom
+          // stays the web's plain 12.
+          paddingTop: 12 + insets.top,
+          paddingBottom: 12,
         }}
       >
         {onExit ? (
@@ -737,7 +772,10 @@ export function LiveStepView({
             flexShrink: 1,
             maxHeight: LIVE_PANEL_SPACING.panelMaxHeight,
             backgroundColor: colors.background,
-            paddingBottom: LIVE_PANEL_SPACING.panelPaddingBottom,
+            // No SafeAreaView above this screen in Live (NP-365), so the
+            // panel's own bottom padding carries the home-indicator inset on
+            // top of its ordinary spacing.
+            paddingBottom: LIVE_PANEL_SPACING.panelPaddingBottom + insets.bottom,
           }}
         >
           <ScrollView
