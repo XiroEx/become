@@ -27,18 +27,24 @@ import {
   type ResweepUserDoc,
   type ResweepUsersCollection,
 } from '../../../lib/billing/tierResweep'
+import { TRIAL_DAYS } from '../../../lib/billing/trial'
 
 const NOW = new Date('2026-09-22T12:00:00.000Z')
 const DAY = 86_400_000
 const at = (days: number) => new Date(NOW.getTime() + days * DAY)
+const TRIAL_MS = TRIAL_DAYS * DAY
 
 /**
  * The candidate rule, restated independently of lib/billing/tierResweep so the
- * fake cannot simply agree with a broken selector. It is the same two branches
- * the real selector encodes — see the shape assertions at the bottom.
+ * fake cannot simply agree with a broken selector. It is the same three
+ * branches the real selector encodes — see the shape assertions at the bottom.
  */
 function isCandidate(doc: ResweepUserDoc, now: Date): boolean {
   const sub = doc.subscription
+  if (sub?.freeTrialStartedAt) {
+    const started = new Date(sub.freeTrialStartedAt).getTime()
+    if (started < now.getTime() - TRIAL_MS) return true
+  }
   if (!sub) return false
   const end = sub.currentPeriodEnd ? new Date(sub.currentPeriodEnd).getTime() : null
   if (sub.status === 'canceled') return end === null || end < now.getTime()
@@ -364,13 +370,13 @@ test('a missing tier is repaired rather than skipped', async () => {
 
 // ── The selector, read directly ──────────────────────────────────────────────
 
-test('the selector reads exactly the two clock-dependent deriveTier branches', () => {
+test('the selector reads exactly the three clock-dependent deriveTier branches', () => {
   const selector = resweepSelector(NOW) as {
     $or: Array<Record<string, unknown>>
   }
-  assert.equal(selector.$or.length, 2)
+  assert.equal(selector.$or.length, 3)
 
-  const [cancelled, stale] = selector.$or
+  const [cancelled, stale, freeTrial] = selector.$or
   assert.equal(cancelled['subscription.status'], 'canceled')
   assert.deepEqual(cancelled.$or, [
     { 'subscription.currentPeriodEnd': { $lt: NOW } },
@@ -382,9 +388,50 @@ test('the selector reads exactly the two clock-dependent deriveTier branches', (
     $lt: new Date(NOW.getTime() - SUBSCRIPTION_GRACE_MS),
   })
 
+  // The no-card trial: no `status`/`currentPeriodEnd` involved at all, because
+  // no Stripe event ever fires for it — see the file header.
+  assert.deepEqual(freeTrial['subscription.freeTrialStartedAt'], {
+    $lt: new Date(NOW.getTime() - TRIAL_MS),
+    $ne: null,
+  })
+
   // past_due / unpaid / incomplete are NOT here: they derive to free the moment
   // the event lands, so nothing about them changes with time.
   assert.doesNotMatch(JSON.stringify(selector), /past_due|unpaid|incomplete/)
+})
+
+test('a no-card trial loses Plus once TRIAL_DAYS have passed with no card added', async () => {
+  const users = new FakeUsers([
+    {
+      _id: 'free-trial-lapsed',
+      tier: 'plus',
+      subscription: { status: 'none', freeTrialStartedAt: at(-TRIAL_DAYS - 1) },
+    },
+  ])
+
+  const result = await runTierResweep({ users, now: NOW, apply: true })
+
+  assert.equal(result.candidates, 1)
+  assert.equal(result.modified, 1)
+  assert.deepEqual(result.changes.map((c) => [c.userId, c.from, c.to]), [
+    ['free-trial-lapsed', 'plus', 'free'],
+  ])
+})
+
+test('a no-card trial still inside its window is not even a candidate', async () => {
+  const users = new FakeUsers([
+    {
+      _id: 'free-trial-running',
+      tier: 'plus',
+      subscription: { status: 'none', freeTrialStartedAt: at(-1) },
+    },
+  ])
+  users.refuseWrites = true
+
+  const result = await runTierResweep({ users, now: NOW, apply: true })
+
+  assert.equal(result.candidates, 0)
+  assert.equal(result.wrote, false)
 })
 
 test('classifyRow returns null for a row that is already right', () => {

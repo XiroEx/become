@@ -1,6 +1,7 @@
 import type { Tier } from '@/lib/entitlements'
 import type { IUserSubscription } from '@/models/User'
 import type { UserRole } from '@/lib/roles'
+import { freeTrialActive } from '@/lib/billing/trial'
 
 /**
  * Grace on a stale currentPeriodEnd, so ONE missed webhook does not downgrade a
@@ -41,6 +42,13 @@ export interface DeriveTierInput {
  * shares the same database), and by hand through
  * `scripts/resweep-subscription-tiers.mjs`, which is the same engine with a CLI
  * on it.
+ *
+ * A THIRD clock-dependent branch, besides the two above: the no-card trial
+ * (`subscription.freeTrialStartedAt`, lib/billing/trial.ts#freeTrialActive).
+ * No Stripe event ever closes it either, so it is checked here as a FALLBACK
+ * once the Stripe-shaped branches above have already said 'free' — it never
+ * overrides an active/trialing/canceled-but-paid-through subscription, it only
+ * covers the gap while there is none.
  */
 export function deriveTier(input: DeriveTierInput): Tier {
   const now = (input.now ?? new Date()).getTime()
@@ -48,25 +56,34 @@ export function deriveTier(input: DeriveTierInput): Tier {
   if (input.grandfathered === true) return 'plus'
 
   const sub = input.subscription
-  if (!sub) return 'free'
-  const end = sub.currentPeriodEnd ? new Date(sub.currentPeriodEnd).getTime() : null
 
-  switch (sub.status) {
-    case 'active':
-    case 'trialing':
-      // A period that lapsed well past the grace means the webhook never came.
-      if (end !== null && Number.isFinite(end) && end + SUBSCRIPTION_GRACE_MS < now) return 'free'
-      return 'plus'
-    case 'canceled':
-      // They paid through the period; honor it, with no grace past the end.
-      return end !== null && Number.isFinite(end) && end > now ? 'plus' : 'free'
-    case 'past_due': // explicitly NOT plus — a lapsed payment is not access
-    case 'incomplete':
-    case 'unpaid':
-    case 'none':
-    default:
-      return 'free'
+  if (sub) {
+    const end = sub.currentPeriodEnd ? new Date(sub.currentPeriodEnd).getTime() : null
+
+    switch (sub.status) {
+      case 'active':
+      case 'trialing':
+        // A period that lapsed well past the grace means the webhook never came.
+        if (!(end !== null && Number.isFinite(end) && end + SUBSCRIPTION_GRACE_MS < now)) {
+          return 'plus'
+        }
+        break
+      case 'canceled':
+        // They paid through the period; honor it, with no grace past the end.
+        if (end !== null && Number.isFinite(end) && end > now) return 'plus'
+        break
+      case 'past_due': // explicitly NOT plus — a lapsed payment is not access
+      case 'incomplete':
+      case 'unpaid':
+      case 'none':
+      default:
+        break
+    }
   }
+
+  if (freeTrialActive(sub, now)) return 'plus'
+
+  return 'free'
 }
 
 /** Convenience for the billing webhook: what to $set on the user document. */

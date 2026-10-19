@@ -28,6 +28,17 @@
 // first cut of this card shipped) lives with the predicate in
 // lib/billing/trial.ts#trialOfferDue. Both the effect and the render read that
 // one function rather than restating the condition.
+//
+// George, 2026-10-19: there is now a SECOND, earlier offer on this same
+// surface — the no-card, no-Stripe trial (FreeTrialPrompt below) — shown
+// ABOVE the card-trial block whenever `GET /api/billing/trial/status` says it
+// is still available (`trialStatus.offerDue`). That status call is its own
+// fetch rather than a field on `useEntitlements()`'s snapshot: the published
+// `@become/core` EntitlementsSnapshot has no `freeTrialStartedAt` and cannot
+// gain one without a version bump and a manual publish (AGENTS.md) — see the
+// route's own header. Declining ("Continue free") answers neither offer, so
+// the no-card trial is exactly as reachable afterwards as it was before — on
+// the Plan page, which is the fix for the bug the card opens with.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
@@ -48,6 +59,9 @@ import type { BillingPlan } from '@/lib/billing/mode'
 import { trialOfferDue } from '@/lib/billing/trial'
 import {
   CONTINUE_FREE_LABEL,
+  FREE_TRIAL_CTA_LABEL,
+  FREE_TRIAL_HEADING,
+  FREE_TRIAL_SUBHEADING,
   TERMS_REFUND_HREF,
   TRIAL_AGREEMENT_TEXT,
   TRIAL_CTA_LABEL,
@@ -57,6 +71,86 @@ import {
 } from '@/lib/trialOfferCopy'
 
 type PortalState = CheckoutActionProps['portalState']
+
+/** What GET /api/billing/trial/status answers — see that route's header for
+ *  why this travels on its own fetch rather than on the entitlements snapshot. */
+export interface FreeTrialStatus {
+  offerDue: boolean
+}
+
+function isFreeTrialStatus(body: unknown): body is FreeTrialStatus {
+  return (
+    body !== null &&
+    typeof body === 'object' &&
+    typeof (body as { offerDue?: unknown }).offerDue === 'boolean'
+  )
+}
+
+export interface FreeTrialPromptProps {
+  /** Whether the card-trial block (TrialOfferCard) is ALSO on screen below
+   *  this one, so the up-front mention has something to point at and so this
+   *  card draws its own way out only when it is the whole modal. */
+  cardOptionShown: boolean
+  starting: boolean
+  /** Set after a refused attempt; cleared on the next press. */
+  failed: boolean
+  onStart: () => void
+  onContinueFree: () => void
+}
+
+/**
+ * The no-card trial's own CTA — the PRIMARY offer per the card: "7 days free
+ * absolutely no Stripe / no card required." Pure and props-driven, the same
+ * reason TrialOfferCard is (see its own comment): no network call, every
+ * reachable state on screen.
+ */
+export function FreeTrialPrompt({
+  cardOptionShown,
+  starting,
+  failed,
+  onStart,
+  onContinueFree,
+}: FreeTrialPromptProps) {
+  return (
+    <div className="px-5 pt-5 pb-3">
+      <div className="flex items-center gap-2">
+        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-purple-600/10 text-purple-600 dark:text-purple-400">
+          <Gift className="h-5 w-5" />
+        </span>
+        <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-50">{FREE_TRIAL_HEADING}</h2>
+      </div>
+      {/* The up-front mention, per the card: before the button, not after. */}
+      <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{FREE_TRIAL_SUBHEADING}</p>
+
+      <button
+        type="button"
+        onClick={onStart}
+        disabled={starting}
+        className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-3.5 text-sm font-semibold text-white transition-all hover:from-purple-700 hover:to-indigo-700 disabled:opacity-60"
+      >
+        {starting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+        {FREE_TRIAL_CTA_LABEL}
+      </button>
+      {failed && (
+        <p className="mt-2 text-center text-xs font-medium text-red-600 dark:text-red-400">
+          That didn&apos;t start — try again.
+        </p>
+      )}
+
+      {/* Only this card's own way out while the card-trial block is not also
+          on screen (no Stripe configured): otherwise TrialOfferCard draws it. */}
+      {!cardOptionShown && (
+        <button
+          type="button"
+          onClick={onContinueFree}
+          className="mt-3 w-full rounded-2xl px-4 py-2.5 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+        >
+          {CONTINUE_FREE_LABEL}
+        </button>
+      )}
+    </div>
+  )
+}
 
 function authHeaders(): HeadersInit {
   const token = getToken()
@@ -271,7 +365,33 @@ export default function TrialOfferModal({ onDismiss }: TrialOfferModalProps) {
   const [checkout, setCheckout] = useState<CheckoutState>('ready')
   const [portalState, setPortalState] = useState<PortalState>('idle')
   const [portalPath, setPortalPath] = useState<string>('/api/billing/portal')
+  const [trialStatus, setTrialStatus] = useState<FreeTrialStatus | null>(null)
+  const [trialStatusLoading, setTrialStatusLoading] = useState(true)
+  const [freeTrialStarting, setFreeTrialStarting] = useState(false)
+  const [freeTrialFailed, setFreeTrialFailed] = useState(false)
   useLockScroll(true)
+
+  // GET /api/billing/trial/status, once. See FreeTrialStatus's comment for
+  // why this is its own fetch rather than a field on the entitlements
+  // snapshot.
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch('/api/billing/trial/status', { headers: authHeaders() })
+        const body: unknown = res.ok ? await res.json().catch(() => null) : null
+        if (cancelled) return
+        setTrialStatus(isFreeTrialStatus(body) ? body : { offerDue: false })
+      } catch {
+        if (!cancelled) setTrialStatus({ offerDue: false })
+      } finally {
+        if (!cancelled) setTrialStatusLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   /** The offer is answered at most once. `onDismiss` navigates, and it is a
    *  plain prop — a parent that hands over a fresh closure on every render
@@ -295,9 +415,31 @@ export default function TrialOfferModal({ onDismiss }: TrialOfferModalProps) {
   // suppression; the render below reaches the same verdict through the same
   // function, so the two cannot disagree.
   useEffect(() => {
-    if (loading) return
-    if (!trialOfferDue(data)) answer()
-  }, [loading, data, answer])
+    if (loading || trialStatusLoading) return
+    if (!trialOfferDue(data) && trialStatus?.offerDue !== true) answer()
+  }, [loading, trialStatusLoading, data, trialStatus, answer])
+
+  /** POST /api/billing/trial/start — no Stripe, no body. On success the
+   *  entitlements tier flips to 'plus' server-side; this surface does not
+   *  wait on a refetch of it, because the one thing left to do either way is
+   *  move on to /dashboard. */
+  const startFreeTrial = useCallback(async () => {
+    if (freeTrialStarting) return
+    setFreeTrialStarting(true)
+    setFreeTrialFailed(false)
+    try {
+      const res = await fetch('/api/billing/trial/start', { method: 'POST', headers: authHeaders() })
+      if (!res.ok) {
+        setFreeTrialFailed(true)
+        setFreeTrialStarting(false)
+        return
+      }
+      answer()
+    } catch {
+      setFreeTrialFailed(true)
+      setFreeTrialStarting(false)
+    }
+  }, [freeTrialStarting, answer])
 
   const startCheckout = useCallback(async () => {
     if (checkout !== 'ready' && checkout !== 'error') return
@@ -345,31 +487,44 @@ export default function TrialOfferModal({ onDismiss }: TrialOfferModalProps) {
     }
   }, [portalPath])
 
-  if (loading) return null
+  if (loading || trialStatusLoading) return null
+  const freeDue = trialStatus?.offerDue === true
   // The SAME predicate the effect above reads. It used to be a second,
   // hand-written copy of the condition — the shape that lets a surface dismiss
   // itself and paint at the same time.
-  if (!trialOfferDue(data)) return null
+  const cardDue = trialOfferDue(data)
+  if (!cardDue && !freeDue) return null
 
   return (
     <div className="fixed inset-0 z-[300] flex items-end justify-center bg-black/50 backdrop-blur-sm sm:items-center">
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={TRIAL_OFFER_HEADING}
+        aria-label={freeDue ? FREE_TRIAL_HEADING : TRIAL_OFFER_HEADING}
         className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white dark:bg-zinc-900 sm:max-w-md sm:rounded-2xl"
       >
-        <TrialOfferCard
-          plan={plan}
-          onPlanChange={setPlan}
-          agreed={agreed}
-          onAgreedChange={setAgreed}
-          checkout={checkout}
-          portalState={portalState}
-          onStart={startCheckout}
-          onOpenPortal={openPortal}
-          onContinueFree={answer}
-        />
+        {freeDue && (
+          <FreeTrialPrompt
+            cardOptionShown={cardDue}
+            starting={freeTrialStarting}
+            failed={freeTrialFailed}
+            onStart={startFreeTrial}
+            onContinueFree={answer}
+          />
+        )}
+        {cardDue && (
+          <TrialOfferCard
+            plan={plan}
+            onPlanChange={setPlan}
+            agreed={agreed}
+            onAgreedChange={setAgreed}
+            checkout={checkout}
+            portalState={portalState}
+            onStart={startCheckout}
+            onOpenPortal={openPortal}
+            onContinueFree={answer}
+          />
+        )}
       </div>
     </div>
   )

@@ -50,8 +50,9 @@ test('every real subscription status ever written means the trial is spent', () 
   }
 })
 
-test('TRIAL_DAYS is the 10 days the card asks for', () => {
-  assert.equal(TRIAL_DAYS, 10)
+test('TRIAL_DAYS is the 7 days the card asks for', () => {
+  // George, 2026-10-19: 7 days free no card, +7 more once a card is added.
+  assert.equal(TRIAL_DAYS, 7)
 })
 
 // ─── the route's wiring ──────────────────────────────────────────────────────

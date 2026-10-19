@@ -15,6 +15,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { deriveTier, SUBSCRIPTION_GRACE_MS } from '../../../lib/subscription'
+import { TRIAL_DAYS } from '../../../lib/billing/trial'
 import type { IUserSubscription, SubscriptionStatus } from '../../../models/User'
 
 const ROOT = path.join(__dirname, '../../..')
@@ -56,6 +57,30 @@ test('deriveTier maps every subscription status to the agreed tier', () => {
   for (const [label, input, expected] of cases) {
     assert.equal(deriveTier({ ...input, now: NOW }), expected, label)
   }
+})
+
+test('the no-card trial grants plus for exactly TRIAL_DAYS, no Stripe status involved', () => {
+  const DAY_MS = 24 * 60 * 60 * 1000
+  const startedRecently: IUserSubscription = { status: 'none', freeTrialStartedAt: at(-1) }
+  const startedLongAgo: IUserSubscription = {
+    status: 'none',
+    freeTrialStartedAt: new Date(NOW.getTime() - TRIAL_DAYS * DAY_MS - 1_000),
+  }
+  assert.equal(deriveTier({ subscription: startedRecently, now: NOW }), 'plus')
+  assert.equal(deriveTier({ subscription: startedLongAgo, now: NOW }), 'free')
+  // Absent entirely (never started) is free, same as any other member.
+  assert.equal(deriveTier({ subscription: { status: 'none' }, now: NOW }), 'free')
+})
+
+test('a real subscription always wins over a stale free-trial timestamp', () => {
+  // Starting the free trial never touches `status`, so a member who goes on to
+  // buy for real must not be read as "still just on the free trial".
+  const sub: IUserSubscription = {
+    status: 'active',
+    currentPeriodEnd: at(20),
+    freeTrialStartedAt: new Date(NOW.getTime() - 999 * 24 * 60 * 60 * 1000),
+  }
+  assert.equal(deriveTier({ subscription: sub, now: NOW }), 'plus')
 })
 
 test('the grace window is exactly SUBSCRIPTION_GRACE_MS, not open-ended', () => {

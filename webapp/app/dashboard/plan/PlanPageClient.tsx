@@ -78,6 +78,15 @@ import {
 // here instead of 400ing at runtime. Nothing from lib/billing reaches the
 // bundle.
 import type { BillingPlan } from '@/lib/billing/mode'
+import {
+  ADD_CARD_EXTEND_LABEL,
+  ADD_CARD_INSTEAD_LABEL,
+  FREE_TRIAL_CTA_LABEL,
+  FREE_TRIAL_ENDED_HEADING,
+  FREE_TRIAL_HEADING,
+  FREE_TRIAL_SUBHEADING,
+  freeTrialDaysLeftLabel,
+} from '@/lib/trialOfferCopy'
 
 /** The portal state CheckoutAction expects. Taken from its own props type, and
  *  structurally the same union lib/billingPortal exports — the two surfaces
@@ -472,6 +481,163 @@ export function CurrentPlan({ snapshot, portalState, onOpenPortal }: CurrentPlan
   )
 }
 
+// ─── The no-card trial — George, 2026-10-19 ─────────────────────────────────
+//
+// The fix for "declines the prompt and the trial disappears": this is the
+// SAME offer the onboarding modal makes (components/onboarding/TrialOfferModal
+// — FreeTrialPrompt), but it never goes away just because that one-time modal
+// did. It also covers the state the modal never reaches at all: a member whose
+// no-card trial has already run out, or who is still inside it and wants to
+// add a card for the +7 more days the card asks for.
+//
+// Driven by GET /api/billing/trial/status rather than `useEntitlements()`'s
+// snapshot, for the same reason the modal reads it on its own: the published
+// `@become/core` EntitlementsSnapshot has no `freeTrialStartedAt` field and
+// cannot gain one without a version bump and a manual publish (AGENTS.md) —
+// see that route's header.
+
+export interface FreeTrialState {
+  /** Never started, still eligible — the no-card offer itself. */
+  offerDue: boolean
+  /** Started and still inside its window. */
+  active: boolean
+  /** Started, and the window has closed with no card ever added. */
+  ended: boolean
+  daysRemaining: number
+  /** Can a card still be added for the Stripe trial — gated on
+   *  checkoutAvailable, unlike `offerDue`/`active`/`ended`. */
+  cardAvailable: boolean
+}
+
+export interface FreeTrialSectionProps {
+  trial: FreeTrialState
+  trialDays: number
+  /** The no-card POST is in flight. */
+  starting: boolean
+  startFailed: boolean
+  /** The shared checkout state machine (see PlanPricing above) — reused so
+   *  the add-a-card row never draws a button checkout has already found
+   *  cannot work. */
+  checkout: CheckoutState
+  onStartFreeTrial: () => void
+  onStartCardTrial: (plan: BillingPlan) => void
+}
+
+/**
+ * The two-button "add a card" row — monthly or annual, both starting the SAME
+ * Stripe trial checkout (`trial: true`) the onboarding modal's card option
+ * does. Shown next to all three trial states (offer / active / ended)
+ * whenever `cardAvailable`, never when it is not: no button that cannot work.
+ */
+function AddCardRow({
+  label,
+  checkout,
+  onStartCardTrial,
+}: {
+  label: string
+  checkout: CheckoutState
+  onStartCardTrial: (plan: BillingPlan) => void
+}) {
+  const live = checkout === 'ready' || checkout === 'starting'
+  if (!live) return null
+  return (
+    <div className="mt-3 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+      <p className="text-xs text-zinc-600 dark:text-zinc-400">{label}</p>
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => onStartCardTrial('monthly')}
+          disabled={checkout === 'starting'}
+          className="rounded-xl border border-purple-300 px-3 py-2 text-xs font-semibold text-purple-700 transition-colors hover:bg-purple-50 disabled:opacity-60 dark:border-purple-500/40 dark:text-purple-300 dark:hover:bg-purple-500/10"
+        >
+          Monthly
+        </button>
+        <button
+          type="button"
+          onClick={() => onStartCardTrial('annual')}
+          disabled={checkout === 'starting'}
+          className="rounded-xl border border-purple-300 px-3 py-2 text-xs font-semibold text-purple-700 transition-colors hover:bg-purple-50 disabled:opacity-60 dark:border-purple-500/40 dark:text-purple-300 dark:hover:bg-purple-500/10"
+        >
+          Annual
+        </button>
+      </div>
+    </div>
+  )
+}
+
+export function FreeTrialSection({
+  trial,
+  trialDays,
+  starting,
+  startFailed,
+  checkout,
+  onStartFreeTrial,
+  onStartCardTrial,
+}: FreeTrialSectionProps) {
+  if (!trial.offerDue && !trial.active && !(trial.ended && trial.cardAvailable)) return null
+
+  return (
+    <Card variant="compact" className="border-purple-300 dark:border-purple-500/40">
+      {trial.offerDue && (
+        <>
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">
+            {FREE_TRIAL_HEADING}
+          </h2>
+          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{FREE_TRIAL_SUBHEADING}</p>
+          <button
+            type="button"
+            onClick={onStartFreeTrial}
+            disabled={starting}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 px-5 py-3 text-sm font-semibold text-white transition-all hover:from-purple-700 hover:to-indigo-700 disabled:opacity-60"
+          >
+            {starting && <Loader2 className="h-4 w-4 animate-spin" />}
+            {FREE_TRIAL_CTA_LABEL}
+          </button>
+          {startFailed && (
+            <p className="mt-2 text-center text-xs font-medium text-red-600 dark:text-red-400">
+              That didn&apos;t start — try again.
+            </p>
+          )}
+          <AddCardRow
+            label={ADD_CARD_INSTEAD_LABEL}
+            checkout={checkout}
+            onStartCardTrial={onStartCardTrial}
+          />
+        </>
+      )}
+
+      {trial.active && (
+        <>
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">
+            {freeTrialDaysLeftLabel(trial.daysRemaining)}
+          </h2>
+          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+            Add a card for monthly or yearly before it ends and get {trialDays} more days instantly.
+          </p>
+          <AddCardRow
+            label={ADD_CARD_EXTEND_LABEL}
+            checkout={checkout}
+            onStartCardTrial={onStartCardTrial}
+          />
+        </>
+      )}
+
+      {!trial.offerDue && !trial.active && trial.ended && (
+        <>
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">
+            {FREE_TRIAL_ENDED_HEADING}
+          </h2>
+          <AddCardRow
+            label={ADD_CARD_EXTEND_LABEL}
+            checkout={checkout}
+            onStartCardTrial={onStartCardTrial}
+          />
+        </>
+      )}
+    </Card>
+  )
+}
+
 // ─── The page with the switch off ────────────────────────────────────────────
 
 export interface UnenforcedPlanProps {
@@ -613,6 +779,39 @@ export default function PlanPageClient({ rows, mindTotalSessions }: PlanPageClie
   const [portalPath, setPortalPath] = useState<string>(BILLING_PORTAL_PATH)
   const checkoutAvailable = data?.checkoutAvailable
 
+  // GET /api/billing/trial/status — see FreeTrialSection's header for why this
+  // is its own fetch rather than a field on `data`. Re-run on every `refresh`
+  // of the entitlements hook so starting the no-card trial (which this page
+  // also refreshes after) is reflected without a reload.
+  const [trial, setTrial] = useState<FreeTrialState | null>(null)
+  const [trialDays, setTrialDays] = useState<number>(7)
+  const [freeTrialStarting, setFreeTrialStarting] = useState(false)
+  const [freeTrialFailed, setFreeTrialFailed] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch('/api/billing/trial/status', { headers: authHeaders() })
+        const body: unknown = res.ok ? await res.json().catch(() => null) : null
+        if (cancelled || body === null || typeof body !== 'object') return
+        const b = body as Partial<FreeTrialState> & { trialDays?: unknown }
+        setTrial({
+          offerDue: b.offerDue === true,
+          active: b.active === true,
+          ended: b.ended === true,
+          daysRemaining: typeof b.daysRemaining === 'number' ? b.daysRemaining : 0,
+          cardAvailable: b.cardAvailable === true,
+        })
+        if (typeof b.trialDays === 'number') setTrialDays(b.trialDays)
+      } catch {
+        // Leave `trial` null — FreeTrialSection renders nothing for that.
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [data])
+
   // Availability. Unlike the sheet, a `checkoutAvailable: true` snapshot is NOT
   // enough here: that flag is one bit for "monthly OR annual has a price", and
   // this page draws a CTA per period. Rendering an annual button against an
@@ -739,6 +938,62 @@ export default function PlanPageClient({ rows, mindTotalSessions }: PlanPageClie
     [checkout],
   )
 
+  /** POST /api/billing/trial/start — no Stripe, no body. Refreshes BOTH the
+   *  trial status (so the offer's own card updates) and the entitlements
+   *  snapshot (so `tier` flips and the pricing section below reacts), the
+   *  same two-step pattern the checkout-return effect above uses. */
+  const startFreeTrial = useCallback(async () => {
+    if (freeTrialStarting) return
+    setFreeTrialStarting(true)
+    setFreeTrialFailed(false)
+    try {
+      const res = await fetch('/api/billing/trial/start', { method: 'POST', headers: authHeaders() })
+      if (!res.ok) {
+        setFreeTrialFailed(true)
+        return
+      }
+      await refresh()
+    } catch {
+      setFreeTrialFailed(true)
+    } finally {
+      setFreeTrialStarting(false)
+    }
+  }, [freeTrialStarting, refresh])
+
+  /** The "add a card" row's CTA — the SAME checkout route startCheckout uses,
+   *  with `trial: true` added. Kept as its own function (not a parameter on
+   *  startCheckout) so that function's own `JSON.stringify({ plan })` call
+   *  stays exactly what it already is. */
+  const startCardTrial = useCallback(
+    async (plan: BillingPlan) => {
+      if (checkout !== 'ready' && checkout !== 'error') return
+      setCheckout('starting')
+      try {
+        const res = await fetch('/api/billing/checkout', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ plan, trial: true }),
+        })
+        const body: unknown = await res.json().catch(() => null)
+        if (res.ok) {
+          const url = readString(body, 'url')
+          if (url) {
+            window.location.assign(url)
+            return
+          }
+          setCheckout('error')
+          return
+        }
+        const next = checkoutRefusalState(res.status, body)
+        if (next === 'fix-payment') setPortalPath(readString(body, 'portal') ?? BILLING_PORTAL_PATH)
+        setCheckout(next)
+      } catch {
+        setCheckout('error')
+      }
+    },
+    [checkout],
+  )
+
   // Shared with Settings (components/billing/BillingSection.tsx) so there is
   // ONE definition of how a portal session is asked for and followed. It
   // navigates on success, so 'opening' is the last state this page renders in
@@ -800,6 +1055,22 @@ export default function PlanPageClient({ rows, mindTotalSessions }: PlanPageClie
       {/* The plan, and — for anyone Stripe is actually billing — the way into
           the portal to change or end it. */}
       <CurrentPlan snapshot={data} portalState={portalState} onOpenPortal={openPortal} />
+
+      {/* The no-card trial — reachable here whether it was never started, is
+          running right now (which is also why it can be the ONLY thing this
+          page has to offer: isPlus above hides PlanPricing while it is), or
+          has already run out. See FreeTrialSection's own header. */}
+      {trial && (
+        <FreeTrialSection
+          trial={trial}
+          trialDays={trialDays}
+          starting={freeTrialStarting}
+          startFailed={freeTrialFailed}
+          checkout={checkout}
+          onStartFreeTrial={startFreeTrial}
+          onStartCardTrial={startCardTrial}
+        />
+      )}
 
       {/* A member who already holds Plus is shown what they have, never a
           second price. Checkout would refuse them anyway (409 already_*). */}

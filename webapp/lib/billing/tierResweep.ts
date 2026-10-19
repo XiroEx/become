@@ -8,8 +8,8 @@
 //
 // `tier` is WRITTEN, never derived on read (lib/subscription.ts says so, and
 // lib/entitlements.ts deliberately cannot import it). Every writer is an event
-// handler — and two of deriveTier's branches are functions of the CLOCK, not of
-// any event, so at the instant their answer changes there is nothing to run
+// handler — and THREE of deriveTier's branches are functions of the CLOCK, not
+// of any event, so at the instant their answer changes there is nothing to run
 // them:
 //
 //   • `canceled` keeps Plus only while `now < currentPeriodEnd`. Stripe's last
@@ -20,6 +20,10 @@
 //     That grace survives ONE missed webhook; a permanently missed one
 //     (endpoint disabled, secret rotated, an event Stripe gave up retrying) is
 //     never closed by anything.
+//   • the no-card trial (`subscription.freeTrialStartedAt`,
+//     lib/billing/trial.ts#TRIAL_DAYS) expires with NO event at all — there is
+//     no Stripe subscription behind it to emit one. A member who starts it and
+//     never adds a card would otherwise keep Plus forever.
 //
 // IT CALLS THE REAL `deriveTier`, never a copy of its rules. The selector below
 // mirrors two of its branches only to keep the candidate READ cheap; the
@@ -45,8 +49,11 @@
 // `wrote` reports that, so a caller can hold itself to the same rule.
 
 import { deriveTier, SUBSCRIPTION_GRACE_MS } from '../subscription'
+import { TRIAL_DAYS } from './trial'
 import type { Tier } from '../entitlements'
 import type { IUserSubscription, UserRole } from '../../models/User'
+
+const TRIAL_MS = TRIAL_DAYS * 24 * 60 * 60 * 1000
 
 export { SUBSCRIPTION_GRACE_MS }
 
@@ -118,17 +125,24 @@ export interface ResweepOptions {
 }
 
 /**
- * Rows whose tier MIGHT have gone stale with the clock. Both clauses mirror a
+ * Rows whose tier MIGHT have gone stale with the clock. Each clause mirrors a
  * deriveTier branch:
  *
  *  1. `canceled` and the paid period is over (or was never recorded).
  *  2. `active`/`trialing` whose period end is past the grace — the missed
  *     webhook case.
+ *  3. The no-card trial, once TRIAL_DAYS have passed since it started — no
+ *     Stripe status change ever marks this one, so it is read straight off
+ *     `freeTrialStartedAt` rather than off `status`/`currentPeriodEnd`. Not
+ *     scoped to `tier: 'plus'`: a row that started the trial, never got
+ *     upgraded for some other reason, and is already `free` costs classifyRow
+ *     one extra read and no wrong write — see the file header.
  *
  * Nothing else can change answer without an event, so nothing else is read.
  */
 export function resweepSelector(now: Date): Record<string, unknown> {
   const graceCutoff = new Date(now.getTime() - SUBSCRIPTION_GRACE_MS)
+  const freeTrialCutoff = new Date(now.getTime() - TRIAL_MS)
   return {
     $or: [
       {
@@ -141,6 +155,9 @@ export function resweepSelector(now: Date): Record<string, unknown> {
       {
         'subscription.status': { $in: ['active', 'trialing'] },
         'subscription.currentPeriodEnd': { $lt: graceCutoff },
+      },
+      {
+        'subscription.freeTrialStartedAt': { $lt: freeTrialCutoff, $ne: null },
       },
     ],
   }

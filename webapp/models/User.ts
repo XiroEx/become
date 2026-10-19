@@ -97,6 +97,17 @@ export interface IUserSubscription {
    *  but the first, because delivery latency is always positive. See
    *  lib/billing/apply.ts#isStaleEvent. */
   lastEventCreated?: number | null;
+  /**
+   * When the member started the no-card, no-Stripe trial granted by
+   * `POST /api/billing/trial/start` — see lib/billing/trial.ts#TRIAL_DAYS.
+   * Written ONCE and never cleared, the same "already spent" discipline as
+   * `status` above: it is what lets a member who declined the onboarding
+   * offer still find the trial on the Plan page without it being granted
+   * twice. Deriving tier from it is lib/subscription.ts#deriveTier's job, not
+   * this model's; this field is Stripe-free on purpose, so it never touches
+   * `status`, `stripeSubscriptionId` or anything else a webhook owns.
+   */
+  freeTrialStartedAt?: Date | null;
   updatedAt?: Date;
 }
 
@@ -342,6 +353,7 @@ const UserSubscriptionSchema = new Schema<IUserSubscription>({
   paymentFailedAt: { type: Date, default: null },
   lastEventId: { type: String, default: null },
   lastEventCreated: { type: Number, default: null },
+  freeTrialStartedAt: { type: Date, default: null },
   updatedAt: { type: Date },
 }, { _id: false });
 
