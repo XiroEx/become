@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Image, Linking, Pressable, type StyleProp, View, type ViewStyle } from "react-native";
 import { Dumbbell, Play } from "lucide-react-native";
-import { useVideoPlayer, VideoView, type VideoPlayer, type VideoContentFit } from "expo-video";
+import {
+  useVideoPlayer,
+  VideoView,
+  type VideoPlayer,
+  type VideoContentFit,
+  type AudioMixingMode,
+} from "expo-video";
 import { Text } from "@/components/Text";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
@@ -63,6 +69,25 @@ function setPlayerLoop(player: VideoPlayer, loop: boolean) {
 
 function setPlayerMuted(player: VideoPlayer, muted: boolean) {
   player.muted = muted;
+}
+
+/**
+ * DEMO CLIPS ARE ALWAYS SILENT — never take the audio session (this card).
+ *
+ * George's build stopped the member's music the moment Live mounted a clip.
+ * `muted` above silences the PLAYER's own output, but `expo-video`'s default
+ * `audioMixingMode` is `'auto'` — docs say that only avoids interrupting
+ * other audio "when it is muted", which should already have covered us, but
+ * every demo clip is unconditionally silent regardless, so there is no
+ * reason to lean on that conditional at all: `'mixWithOthers'` is the
+ * explicit, unconditional version of the same promise, and it is
+ * `expo-video`'s OWN knob for this (`VideoPlayer.audioMixingMode`) — nothing
+ * to coordinate with `expo-audio`'s separate session calls
+ * (`lib/feedback/restSound.ts`), because expo-video never asks that module
+ * for anything.
+ */
+function setPlayerAudioMixingMode(player: VideoPlayer, mode: AudioMixingMode) {
+  player.audioMixingMode = mode;
 }
 
 /**
@@ -339,6 +364,7 @@ function DirectVideo({
   const player = useVideoPlayer(videoSource, (p) => {
     setPlayerMuted(p, true);
     setPlayerLoop(p, trim.isFullLength);
+    setPlayerAudioMixingMode(p, "mixWithOthers");
     p.timeUpdateEventInterval = 0.25;
     p.play();
   });
@@ -346,6 +372,10 @@ function DirectVideo({
   useEffect(() => {
     setPlayerMuted(player, true);
     setPlayerLoop(player, trim.isFullLength);
+    // Reapplied alongside muted/loop on every exercise change (a new player
+    // is created when `videoSource` changes) — never a one-time mount-only
+    // promise that a later swap could silently drop.
+    setPlayerAudioMixingMode(player, "mixWithOthers");
   }, [player, trim.isFullLength]);
 
   // Handle trim loop and duration listeners

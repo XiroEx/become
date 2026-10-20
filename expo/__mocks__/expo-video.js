@@ -8,6 +8,7 @@ class MockVideoPlayer {
     this.playing = false;
     this.muted = false;
     this.loop = false;
+    this.audioMixingMode = "auto";
     this.currentTime = 0;
     this.duration = 10;
     this.status = "readyToPlay";
