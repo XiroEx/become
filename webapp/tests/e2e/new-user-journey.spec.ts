@@ -3,7 +3,7 @@
  *
  * Full UI-only flow (no direct API calls in the test body):
  *   1. Register (magic link mocked via page.route)
- *   2. Onboard (4-step wizard)
+ *   2. Onboard (6-step wizard)
  *   3. Enroll in a program + set up schedule
  *   4. Complete the first live workout
  *
@@ -174,18 +174,27 @@ test.describe('New User Journey', () => {
     await page.waitForTimeout(400)
     await screenshot(page, '07-onboarding-step4')
 
-    // Step 4 — Equipment: click "Full Gym"
-    await page.locator('button:has-text("Full Gym")').click()
-    await page.waitForTimeout(200)
-    console.log('[phase2] Step 4: equipment selected ✓')
+    // Step 4 — Nutrition: defaults are pre-filled from the primary goal, so
+    // no extra input is required here before continuing.
+    console.log('[phase2] Step 4: nutrition defaults accepted ✓')
 
-    await screenshot(page, '08-onboarding-step4-selected')
-
-    // Step 5 — Review: plays back every answer before committing
+    // Click Next
     await page.locator('button:has-text("Next")').click()
     await page.waitForTimeout(400)
-    await screenshot(page, '08b-onboarding-step5-review')
-    console.log('[phase2] Step 5: review shown ✓')
+    await screenshot(page, '07b-onboarding-step5')
+
+    // Step 5 — Equipment: click "Full Gym"
+    await page.locator('button:has-text("Full Gym")').click()
+    await page.waitForTimeout(200)
+    console.log('[phase2] Step 5: equipment selected ✓')
+
+    await screenshot(page, '08-onboarding-step5-selected')
+
+    // Step 6 — Review: plays back every answer before committing
+    await page.locator('button:has-text("Next")').click()
+    await page.waitForTimeout(400)
+    await screenshot(page, '08b-onboarding-step6-review')
+    console.log('[phase2] Step 6: review shown ✓')
 
     // Click Finish
     await page.locator('button:has-text("Finish")').click()

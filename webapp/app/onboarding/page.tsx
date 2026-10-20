@@ -149,9 +149,13 @@ const DIRECTION_OPTIONS: { value: NutritionDirection; label: string; sub: string
   { value: 'gain',     label: 'Gain Weight', sub: 'TDEE + 300', Icon: TrendingUp },
 ]
 
-const TOTAL_STEPS = 5
+const TOTAL_STEPS = 6
 
-const STEP_TITLES = ['Goals', 'About you', 'Body & nutrition', 'Equipment', 'Review'] as const
+// Body and nutrition used to share one step — a single screen asking for age,
+// height, sex, both weights, calorie direction, activity level AND a macro
+// split at once. Split into two so a member answers "who are you physically"
+// before "how do you want to eat", rather than facing all of it together.
+const STEP_TITLES = ['Goals', 'About you', 'Body', 'Nutrition', 'Equipment', 'Review'] as const
 
 /** Every text box in the wizard, so a new step cannot invent its own. */
 const INPUT_CLS =
@@ -428,12 +432,15 @@ export default function OnboardingPage() {
     setProfile((p) => ({ ...p, nutritionDirection: d }))
   }
 
-  /** Step 3's onChange. Body stats and weights flow straight into the profile,
-   *  but a change to either weight also re-derives the calorie direction from
-   *  them — target weight is the intent; direction is read off it, not
-   *  collected a second time. Only while the member hasn't picked a direction
-   *  explicitly (setDirectionChoice), same as the goal-based default it replaces. */
-  const handleStep3Change = useCallback((updates: Partial<ProfileData>) => {
+  /** Shared onChange for the Body and Nutrition steps. Body stats and weights
+   *  flow straight into the profile, but a change to either weight also
+   *  re-derives the calorie direction from them — target weight is the
+   *  intent; direction (asked on the Nutrition step that follows) is read off
+   *  it, not collected a second time. Only while the member hasn't picked a
+   *  direction explicitly (setDirectionChoice), same as the goal-based
+   *  default it replaces. Nutrition-step updates (activity, macro preset)
+   *  never touch the weight fields, so the re-derivation never fires for them. */
+  const handleProfileChange = useCallback((updates: Partial<ProfileData>) => {
     setProfile((p) => {
       const next = { ...p, ...updates }
       if (!directionTouched && ('currentWeightKg' in updates || 'targetWeightKg' in updates)) {
@@ -654,26 +661,32 @@ export default function OnboardingPage() {
                 />
               )}
               {step === 3 && (
-                <Step3
+                <Step3Body
+                  profile={profile}
+                  onChange={handleProfileChange}
+                />
+              )}
+              {step === 4 && (
+                <Step4Nutrition
                   profile={profile}
                   direction={effectiveDirection}
                   targets={targets}
                   goals={goals}
-                  onChange={handleStep3Change}
+                  onChange={handleProfileChange}
                   onDirectionChange={setDirectionChoice}
                 />
               )}
-              {step === 4 && (
-                <Step4
+              {step === 5 && (
+                <Step5Equipment
                   equipmentAccess={profile.equipmentAccess ?? []}
                   injuryNotes={profile.injuryNotes ?? ''}
                   onEquipmentChange={(v) => setProfile((p) => ({ ...p, equipmentAccess: v }))}
                   onInjuryNotesChange={(v) => setProfile((p) => ({ ...p, injuryNotes: v }))}
                 />
               )}
-              {step === 5 && (
+              {step === 6 && (
                 <>
-                  <Step5Review
+                  <Step6Review
                     name={name}
                     profile={profile}
                     goals={goals}
@@ -1045,102 +1058,24 @@ function Step2({
 // goals page can never disagree about what 210 lb is in kg. Stored values are
 // exact; rounding happens at render time only (displayWeight / roundHeightCm).
 
-// ── Step 3 — Body stats + calorie direction ───────────────────────────────────
+// ── Step 3 — Body stats ─────────────────────────────────────────────────────
+// Physical measurements only. Everything that turns them into calorie and
+// macro targets — direction, activity, macro split, the live preview — lives
+// on Step 4 (Nutrition) so a member fills in "who am I" before "how do I want
+// to eat", instead of facing both asks on one overwhelming screen.
 
-function Step3({
+function Step3Body({
   profile,
-  direction,
-  targets,
-  goals,
   onChange,
-  onDirectionChange,
 }: {
   profile: ProfileData
-  direction: NutritionDirection
-  targets: ReturnType<typeof computeNutritionTargets>
-  goals: FitnessGoal[]
   onChange: (updates: Partial<ProfileData>) => void
-  onDirectionChange: (d: NutritionDirection) => void
 }) {
-  // Activity defaults from training days so the form arrives pre-filled with a
-  // sensible answer, but the member's explicit pick always wins.
-  const activity = profile.activityLevel ?? activityFromTrainingDays(profile.weeklyAvailability)
-  const macroPreset = profile.macroPreset ?? 'recommended'
-  // Which option gets the badge — and why — depends on goal AND experience.
-  // A beginner is pointed at Balanced even when the custom split is the more
-  // "correct" answer, because an accurate target they can't hit is worse than a
-  // slightly softer one they can.
-  const recommendation = recommendPreset(direction, goals, profile.experienceLevel)
-  const suggestedPreset = recommendation.preset
-  // Feeds the personalised "Recommended" split. Until the body stats and the
-  // calorie target exist there is nothing to personalise from, so the cards fall
-  // back to the static per-direction table.
-  const presetContext = targets && profile.currentWeightKg
-    ? { weightLbs: profile.currentWeightKg * 2.2046226218, calories: targets.calories, goals }
-    : undefined
-  // What the target weight alone implies, so the direction buttons below can
-  // be checked against it instead of just accepting whatever's picked. Shown
-  // regardless of direction — a member coming from "Maintain" who then types a
-  // target is exactly the case the field used to hide from.
-  const derivedDirection = directionFromWeights(profile.currentWeightKg, profile.targetWeightKg)
-  const directionMismatch = derivedDirection != null && derivedDirection !== direction
-
   // Imperial unless the member has already told us otherwise: the step mounts
   // only after the profile read in checkAuth, so `profile.weightUnit` is the
   // stored answer when there is one. `?? 'lbs'` is the same house default every
   // other weight readout uses.
   const [useImperial, setUseImperial] = useState((profile.weightUnit ?? 'lbs') === 'lbs')
-
-  // Which figure the member tapped, if any.
-  const [explaining, setExplaining] = useState<MacroKey | 'calories' | null>(null)
-
-  const proteinFlagged = useMemo(
-    () =>
-      !!targets &&
-      proteinNeedsFlag(targets.protein, profile.currentWeightKg, targets.direction, goals),
-    [targets, profile.currentWeightKg, goals],
-  )
-
-  /** The sheet's contents, rebuilt from the SAME targets the card is showing. */
-  const explanation = useMemo(() => {
-    if (!explaining || !targets) return null
-    if (explaining === 'calories') {
-      const c = explainCalories(
-        {
-          currentWeightKg: profile.currentWeightKg,
-          heightCm: profile.heightCm,
-          age: profile.age,
-          biologicalSex: profile.biologicalSex,
-        },
-        targets.activityLevel,
-        targets.direction,
-        profile.paceKgPerWeek ?? defaultPaceKg(targets.direction),
-      )
-      if (!c) return null
-      return {
-        title: 'Where your calories come from',
-        headline: `${c.calories.toLocaleString()} cal / day`,
-        steps: c.steps,
-        note: undefined,
-      }
-    }
-    const m = explainMacro({
-      macro: explaining,
-      grams: targets[explaining],
-      calories: targets.calories,
-      percent: targets.split[explaining],
-      weightKg: profile.currentWeightKg,
-      direction: targets.direction,
-      goals,
-      presetLabel: MACRO_PRESET_LABELS[profile.macroPreset ?? 'recommended'],
-    })
-    return {
-      title: `Where your ${MACRO_LABELS[explaining].toLowerCase()} comes from`,
-      headline: `${m.grams} g${m.perLb ? ` · ${m.perLb} g per lb` : ''}`,
-      steps: m.steps,
-      note: m.note,
-    }
-  }, [explaining, targets, profile.currentWeightKg, profile.heightCm, profile.age, profile.biologicalSex, profile.macroPreset, profile.paceKgPerWeek, goals])
 
   // Imperial display state
   const initialHeight = profile.heightCm ? cmToFtIn(profile.heightCm) : { ft: '', inches: '' }
@@ -1182,8 +1117,9 @@ function Step3({
     }
     setUseImperial(toImperial)
     // Persist the choice — the profile keeps weights in kg, but the weight LOG
-    // and every weight readout use this unit. Without it the toggle was purely
-    // local and a kg user's weights were later rendered as lbs.
+    // and every weight readout use this unit, including the Nutrition step's
+    // pace picker. Without it the toggle was purely local and a kg user's
+    // weights were later rendered as lbs.
     onChange({ weightUnit: toImperial ? 'lbs' : 'kg' })
   }
 
@@ -1220,14 +1156,6 @@ function Step3({
   }
 
   const inputCls = INPUT_CLS
-
-  // What's still missing before we can compute an honest TDEE.
-  const missing = [
-    !profile.age && 'age',
-    !profile.heightCm && 'height',
-    !profile.currentWeightKg && 'weight',
-    (!profile.biologicalSex || profile.biologicalSex === 'prefer_not_to_say') && 'biological sex',
-  ].filter(Boolean) as string[]
 
   return (
     <div>
@@ -1376,7 +1304,127 @@ function Step3({
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  )
+}
 
+// ── Step 4 — Nutrition (direction, activity, macro split, live preview) ─────
+
+function Step4Nutrition({
+  profile,
+  direction,
+  targets,
+  goals,
+  onChange,
+  onDirectionChange,
+}: {
+  profile: ProfileData
+  direction: NutritionDirection
+  targets: ReturnType<typeof computeNutritionTargets>
+  goals: FitnessGoal[]
+  onChange: (updates: Partial<ProfileData>) => void
+  onDirectionChange: (d: NutritionDirection) => void
+}) {
+  // Activity defaults from training days so the form arrives pre-filled with a
+  // sensible answer, but the member's explicit pick always wins.
+  const activity = profile.activityLevel ?? activityFromTrainingDays(profile.weeklyAvailability)
+  const macroPreset = profile.macroPreset ?? 'recommended'
+  // Which option gets the badge — and why — depends on goal AND experience.
+  // A beginner is pointed at Balanced even when the custom split is the more
+  // "correct" answer, because an accurate target they can't hit is worse than a
+  // slightly softer one they can.
+  const recommendation = recommendPreset(direction, goals, profile.experienceLevel)
+  const suggestedPreset = recommendation.preset
+  // Feeds the personalised "Recommended" split. Until the body stats and the
+  // calorie target exist there is nothing to personalise from, so the cards fall
+  // back to the static per-direction table.
+  const presetContext = targets && profile.currentWeightKg
+    ? { weightLbs: profile.currentWeightKg * 2.2046226218, calories: targets.calories, goals }
+    : undefined
+  // What the target weight alone implies, so the direction buttons below can
+  // be checked against it instead of just accepting whatever's picked. Shown
+  // regardless of direction — a member coming from "Maintain" who then types a
+  // target is exactly the case the field used to hide from.
+  const derivedDirection = directionFromWeights(profile.currentWeightKg, profile.targetWeightKg)
+  const directionMismatch = derivedDirection != null && derivedDirection !== direction
+
+  // The Body step owns the unit toggle and persists it straight into the
+  // profile (onChange({ weightUnit })), so this step reads it rather than
+  // keeping a second copy that could drift from what was picked there.
+  const useImperial = (profile.weightUnit ?? 'lbs') === 'lbs'
+
+  // Which figure the member tapped, if any.
+  const [explaining, setExplaining] = useState<MacroKey | 'calories' | null>(null)
+
+  const proteinFlagged = useMemo(
+    () =>
+      !!targets &&
+      proteinNeedsFlag(targets.protein, profile.currentWeightKg, targets.direction, goals),
+    [targets, profile.currentWeightKg, goals],
+  )
+
+  /** The sheet's contents, rebuilt from the SAME targets the card is showing. */
+  const explanation = useMemo(() => {
+    if (!explaining || !targets) return null
+    if (explaining === 'calories') {
+      const c = explainCalories(
+        {
+          currentWeightKg: profile.currentWeightKg,
+          heightCm: profile.heightCm,
+          age: profile.age,
+          biologicalSex: profile.biologicalSex,
+        },
+        targets.activityLevel,
+        targets.direction,
+        profile.paceKgPerWeek ?? defaultPaceKg(targets.direction),
+      )
+      if (!c) return null
+      return {
+        title: 'Where your calories come from',
+        headline: `${c.calories.toLocaleString()} cal / day`,
+        steps: c.steps,
+        note: undefined,
+      }
+    }
+    const m = explainMacro({
+      macro: explaining,
+      grams: targets[explaining],
+      calories: targets.calories,
+      percent: targets.split[explaining],
+      weightKg: profile.currentWeightKg,
+      direction: targets.direction,
+      goals,
+      presetLabel: MACRO_PRESET_LABELS[profile.macroPreset ?? 'recommended'],
+    })
+    return {
+      title: `Where your ${MACRO_LABELS[explaining].toLowerCase()} comes from`,
+      headline: `${m.grams} g${m.perLb ? ` · ${m.perLb} g per lb` : ''}`,
+      steps: m.steps,
+      note: m.note,
+    }
+  }, [explaining, targets, profile.currentWeightKg, profile.heightCm, profile.age, profile.biologicalSex, profile.macroPreset, profile.paceKgPerWeek, goals])
+
+  // What's still missing before we can compute an honest TDEE. The Body step
+  // gates its own Next button on these, so this message is only ever seen by
+  // a member who jumped here directly via the review step's Edit link.
+  const missing = [
+    !profile.age && 'age',
+    !profile.heightCm && 'height',
+    !profile.currentWeightKg && 'weight',
+    (!profile.biologicalSex || profile.biologicalSex === 'prefer_not_to_say') && 'biological sex',
+  ].filter(Boolean) as string[]
+
+  return (
+    <div>
+      <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">
+        Nutrition
+      </h1>
+      <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+        How you want to eat, and the calorie and macro targets we build from your body stats.
+      </p>
+
+      <div className="mt-6 space-y-5">
         {/* ── Pace toward the target ─────────────────────────────────────── */}
         {profile.targetWeightKg && profile.currentWeightKg ? (
           <div className="pt-1">
@@ -1654,9 +1702,9 @@ function Step3({
   )
 }
 
-// ── Step 4 — Equipment & Injuries ─────────────────────────────────────────────
+// ── Step 5 — Equipment & Injuries ─────────────────────────────────────────────
 
-function Step4({
+function Step5Equipment({
   equipmentAccess,
   injuryNotes,
   onEquipmentChange,
@@ -1742,7 +1790,7 @@ function Step4({
   )
 }
 
-// ── Step 5 — Review ───────────────────────────────────────────────────────────
+// ── Step 6 — Review ───────────────────────────────────────────────────────────
 
 function ReviewRow({ label, value }: { label: string; value: string }) {
   return (
@@ -1789,7 +1837,7 @@ function ReviewSection({
   )
 }
 
-function Step5Review({
+function Step6Review({
   name,
   profile,
   goals,
@@ -1873,14 +1921,14 @@ function Step5Review({
           <ReviewRow label="Days / week" value={String(days)} />
         </ReviewSection>
 
-        {/* Body + nutrition */}
+        {/* Body */}
         <ReviewSection
-          title="Body & nutrition"
+          title="Body"
           step={3}
           onEdit={onEdit}
           why={
             targets
-              ? `Mifflin-St Jeor puts your TDEE at ~${targets.tdee.toLocaleString()} cal. We applied ${DIRECTION_EXPLANATION[targets.direction]}. These land in your nutrition tab the moment you finish — no setup needed.`
+              ? `Mifflin-St Jeor puts your TDEE at ~${targets.tdee.toLocaleString()} cal from these numbers alone.`
               : 'Add your age, height, weight and biological sex and we can calculate your calories automatically instead of using generic defaults.'
           }
         >
@@ -1897,6 +1945,19 @@ function Step5Review({
           {profile.targetWeightKg != null && (
             <ReviewRow label="Target weight" value={showWeight(profile.targetWeightKg)} />
           )}
+        </ReviewSection>
+
+        {/* Nutrition */}
+        <ReviewSection
+          title="Nutrition"
+          step={4}
+          onEdit={onEdit}
+          why={
+            targets
+              ? `We applied ${DIRECTION_EXPLANATION[targets.direction]}. These land in your nutrition tab the moment you finish — no setup needed.`
+              : undefined
+          }
+        >
           <ReviewRow
             label="Eating"
             value={direction === 'lose' ? 'Calorie deficit' : direction === 'gain' ? 'Calorie surplus' : 'Maintenance'}
@@ -1915,7 +1976,7 @@ function Step5Review({
         {/* Equipment */}
         <ReviewSection
           title="Equipment & injuries"
-          step={4}
+          step={5}
           onEdit={onEdit}
           why="Programs that need gear you don't have get pushed down your recommendations, and your injury notes ride along with your coach's view of your account."
         >

@@ -73,12 +73,15 @@ async function runOnboarding(page: Page, b: Body) {
   await page.getByTestId('experience-intermediate').click()
   await page.getByTestId('onboarding-next').click()
 
-  // 3 — body stats, activity, direction, macro split
+  // 3 — body stats
   await page.getByTestId('stat-age').fill(String(b.age))
   await page.getByTestId('stat-height-ft').fill(String(b.heightFt))
   await page.getByTestId('stat-height-in').fill(String(b.heightIn))
   await page.getByTestId(`sex-${b.sex}`).click()
   await page.getByTestId('stat-current-weight').fill(String(b.weightLbs))
+  await page.getByTestId('onboarding-next').click()
+
+  // 4 — nutrition: activity, direction, macro split
   await page.getByTestId(`activity-${b.activity}`).click()
   await page.getByTestId(`direction-${b.direction}`).click()
   await page.getByTestId(`macro-preset-${b.preset}`).click()
@@ -129,9 +132,8 @@ test.describe('onboarding macro sanity', () => {
     await page.getByTestId('experience-intermediate').click()
     await page.getByTestId('onboarding-next').click()
 
-    // No stats yet: the wizard must say so and refuse to move on rather than
-    // silently seeding the hardcoded 2000/150/200/65 defaults.
-    await expect(page.getByTestId('targets-incomplete')).toBeVisible()
+    // Step 3 — Body: no stats yet, so Next must refuse to move on rather than
+    // silently seeding the hardcoded 2000/150/200/65 defaults downstream.
     await expect(page.getByTestId('onboarding-next')).toBeDisabled()
 
     await page.getByTestId('stat-age').fill('30')
@@ -140,7 +142,11 @@ test.describe('onboarding macro sanity', () => {
     await page.getByTestId('sex-male').click()
     await page.getByTestId('stat-current-weight').fill('180')
 
-    await expect(page.getByTestId('tdee-preview')).toBeVisible()
     await expect(page.getByTestId('onboarding-next')).toBeEnabled()
+    await page.getByTestId('onboarding-next').click()
+
+    // Step 4 — Nutrition: the live preview is already computed from the body
+    // stats just entered, with no extra answers required to reach it.
+    await expect(page.getByTestId('tdee-preview')).toBeVisible()
   })
 })
