@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AppState, type AppStateStatus } from "react-native";
 import {
   coldOpenFlow,
@@ -34,6 +34,21 @@ import {
  * failure reason (including `no-hardware` from a module that vanished
  * mid-session) is treated the same way: the member asked to be asked, and the
  * ask did not succeed.
+ *
+ * `locked` (returned below) is what obscures the dashboard while the warm
+ * re-verification runs (card "Face ID lock must obscure dashboard during
+ * scan"). It flips to `true` SYNCHRONOUSLY, in the AppState listener itself,
+ * the instant the app leaves the foreground (`background` or `inactive`) —
+ * before any async store read. That ordering is the whole point: the OS
+ * takes the app-switcher snapshot and shows the Face ID sheet right after
+ * that transition, so by the time an `await` could tell us whether the
+ * member even opted in, the window the snapshot was taken through has
+ * already passed. `locked` clears the moment there is nothing left to hide
+ * behind it: a quick hop inside the grace period (no re-auth needed), an
+ * opt-out (the async check), or a warm re-verification settling — on EITHER
+ * verdict, success or failure. A failure already dropped the JWT and calls
+ * `onLocked` before the overlay clears, so the caller's sign-out has fired
+ * and the member lands on sign-in, not a flashed dashboard.
  */
 export const APP_LOCK_GRACE_PERIOD_MS = 5 * 60 * 1000;
 
@@ -75,7 +90,14 @@ interface AppLockDeps {
   onLocked: (() => void) | undefined;
 }
 
-export function useAppLock(options: UseAppLockOptions): null {
+export interface UseAppLockResult {
+  /** True from the instant the app leaves the foreground until a quick-hop
+   * clear, an opt-out, or a warm re-verification settles (success OR
+   * failure). Drives `AppLockOverlay` at the root. */
+  locked: boolean;
+}
+
+export function useAppLock(options: UseAppLockOptions): UseAppLockResult {
   const {
     tokenStore = sessionStore,
     optInStore = biometricsOptInSecureStore,
@@ -117,6 +139,13 @@ export function useAppLock(options: UseAppLockOptions): null {
   const backgroundedAtRef = useRef<number | null>(null);
   const inFlightRef = useRef<boolean>(false);
 
+  // `locked` IS rendered (the overlay reads it), so it is state — unlike
+  // everything else here, which the listener only ever reads or writes
+  // outside React. Set it synchronously in the listener callback itself
+  // (never inside the async IIFE) so the obscuring paint happens on the SAME
+  // event that backgrounded the app, not a tick later.
+  const [locked, setLocked] = useState(false);
+
   useEffect(() => {
     const unsubscribe = depsRef.current.subscribeToAppState((status) => {
       const current = depsRef.current;
@@ -124,13 +153,25 @@ export function useAppLock(options: UseAppLockOptions): null {
         if (backgroundedAtRef.current === null) {
           backgroundedAtRef.current = current.now();
         }
+        // Obscure NOW, before the async opt-in/token reads below ever run —
+        // this is what the app-switcher snapshot and the Face ID sheet sit
+        // on top of.
+        setLocked(true);
         return;
       }
       if (status !== "active") return;
       const backgroundedAt = backgroundedAtRef.current;
       backgroundedAtRef.current = null;
-      if (backgroundedAt === null) return;
-      if (current.now() - backgroundedAt < current.gracePeriodMs) return;
+      if (backgroundedAt === null) {
+        setLocked(false);
+        return;
+      }
+      if (current.now() - backgroundedAt < current.gracePeriodMs) {
+        // A quick hop to the switcher inside the grace period: no re-auth,
+        // so nothing left to hide behind the overlay.
+        setLocked(false);
+        return;
+      }
       if (inFlightRef.current) return;
       inFlightRef.current = true;
       void (async () => {
@@ -138,7 +179,10 @@ export function useAppLock(options: UseAppLockOptions): null {
           const optedIn = await createBiometricsOptInStore(
             current.optInStore,
           ).isOptedIn();
-          if (!optedIn) return;
+          if (!optedIn) {
+            setLocked(false);
+            return;
+          }
           const result = await coldOpenFlow({
             tokenStore: current.tokenStore,
             optInStore: current.optInStore,
@@ -147,6 +191,10 @@ export function useAppLock(options: UseAppLockOptions): null {
           if (result.kind === "login" && result.reason !== "no-jwt") {
             current.onLocked?.();
           }
+          // Settled either way — success reveals the dashboard, failure has
+          // already dropped the JWT and called onLocked above, so the
+          // sign-out is already under way by the time the overlay clears.
+          setLocked(false);
         } finally {
           inFlightRef.current = false;
         }
@@ -155,5 +203,5 @@ export function useAppLock(options: UseAppLockOptions): null {
     return unsubscribe;
   }, []);
 
-  return null;
+  return { locked };
 }

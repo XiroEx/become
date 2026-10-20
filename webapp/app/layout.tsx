@@ -65,6 +65,14 @@ export const metadata: Metadata = {
   },
 };
 
+// NP-205's Safari smart-banner meta tag (see lib/appleAppId.ts) lives on
+// app/dashboard/layout.tsx (via generateMetadata), not here: that is the one
+// segment Tier-3's in-app browser actually reaches, and scoping the
+// per-request cookie check there — rather than here, in the layout EVERY
+// page on the site renders through — keeps the marketing pages (home, terms,
+// login, register…) statically generated instead of forcing the whole site
+// dynamic for a tag they would never need to omit anyway.
+
 export default function RootLayout({
   children,
 }: Readonly<{

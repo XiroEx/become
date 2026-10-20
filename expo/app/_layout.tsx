@@ -8,6 +8,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useColdOpenRedirect } from "@/lib/auth/coldOpenRedirect";
 import { realBiometricsCapability } from "@/lib/auth/localAuthentication";
 import { useAppLock } from "@/lib/auth/useAppLock";
+import { AppLockOverlay } from "@/components/auth/AppLockOverlay";
 import { AuthProvider } from "@/lib/auth/AuthProvider";
 import { useAuth } from "@/lib/auth/useAuth";
 import {
@@ -102,6 +103,18 @@ function raiseUpgradeSheet(error: PlanGateError): void {
  *
  * The warm case — backgrounded past the grace period, then foregrounded — is
  * `useAppLock` below: same flow, same consequence.
+ *
+ * NEITHER case used to render anything, which is the bug this component now
+ * also fixes (card "Face ID lock must obscure dashboard during scan"): the
+ * Face ID sheet prompted over whatever was already painted — the dashboard,
+ * cold open or warm — because nothing stayed up while the verdict was
+ * pending. `AppLockOverlay` is now up for `resolving || locked`: `resolving`
+ * covers cold open (true until `useColdOpenRedirect`'s verdict lands),
+ * `locked` covers the warm re-lock (true the instant the app leaves the
+ * foreground, cleared only once a re-verification settles either way — see
+ * `useAppLock`). It comes down on success (dashboard already mounted behind
+ * it) and on failure (the sign-out below has already fired, so what is
+ * revealed is sign-in, not a flash of dashboard).
  */
 function ColdOpenUnlock() {
   const { signOut } = useAuth();
@@ -115,7 +128,7 @@ function ColdOpenUnlock() {
     [signOut],
   );
 
-  useColdOpenRedirect({
+  const { resolving } = useColdOpenRedirect({
     tokenStore: sessionStore,
     optInStore: biometricsOptInSecureStore,
     biometrics: realBiometricsCapability,
@@ -128,13 +141,14 @@ function ColdOpenUnlock() {
   const onLocked = useCallback(() => {
     void signOut("biometric-fail");
   }, [signOut]);
-  useAppLock({
+  const { locked } = useAppLock({
     tokenStore: sessionStore,
     optInStore: biometricsOptInSecureStore,
     biometrics: realBiometricsCapability,
     onLocked,
   });
-  return null;
+
+  return <AppLockOverlay visible={resolving || locked} />;
 }
 
 /**

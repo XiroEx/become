@@ -5,6 +5,7 @@ import PushSubscription from '@/models/PushSubscription'
 import UserProgress from '@/models/UserProgress'
 import { notificationsAreEnabled } from '@/lib/push/notificationsToggle'
 import { parseSubscribeBody } from '@/lib/push/subscribeBody'
+import { webDeviceOSFromUserAgent } from '@/lib/push/webDeviceOS'
 import {
   computeFreshEnablePrefUpdates,
 } from '@/lib/push/notificationDefaults'
@@ -76,11 +77,42 @@ export async function POST(request: NextRequest) {
     if (keys) update.keys = keys
     else unset.keys = ''
     if (apnsEnvironment) update.apnsEnvironment = apnsEnvironment
+
+    if (platform === 'web') {
+      // Classified once, at subscribe time (NP-205) — see lib/push/webDeviceOS.ts
+      // for why a later re-parse of a possibly-different User-Agent is wrong.
+      update.webOS = webDeviceOSFromUserAgent(request.headers.get('user-agent'))
+      if (reenable === true) {
+        // The one explicit path allowed to undo a mute a native registration
+        // put on this row (see the native branch below) — background resync
+        // never sends reenable:true, so it can never silently undo one.
+        unset.mutedAt = ''
+        unset.mutedReason = ''
+      }
+    }
+
     await PushSubscription.findOneAndUpdate(
       { endpoint },
       Object.keys(unset).length > 0 ? { $set: update, $unset: unset } : { $set: update },
       { upsert: true, new: true },
     )
+
+    if (platform === 'ios' || platform === 'android') {
+      // A native token just registered: the member now gets this reminder
+      // from the phone directly. MUTE (never delete — ensureSubscription.ts's
+      // resync would silently recreate a deleted row the next time that
+      // browser tab reloads with permission still 'granted') every web
+      // subscription whose browser runs the SAME os family, so sendPushToUser
+      // stops sending it there too. webOS 'other' (classified at subscribe
+      // time — an iPad, or any browser iOS/Android can't be told apart from)
+      // is never matched here, and an undefined webOS (subscribed before
+      // NP-205) is never matched either: a second device never loses a
+      // reminder in this switch, even at the cost of an occasional duplicate.
+      await PushSubscription.updateMany(
+        { userId: authResult.userId, platform: 'web', webOS: platform, mutedAt: { $exists: false } },
+        { $set: { mutedAt: new Date(), mutedReason: 'native_registered' } },
+      )
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {
