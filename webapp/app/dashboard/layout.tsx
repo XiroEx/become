@@ -11,6 +11,7 @@ import TimezoneSync from '../../components/TimezoneSync'
 import ConsentGate from '../../components/ConsentGate'
 import AiConsentPrompt from '../../components/AiConsentPrompt'
 import WeightUnitGate from '../../components/WeightUnitGate'
+import GetAppBanner from '../../components/GetAppBanner'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -42,6 +43,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           persists the choice. Here so it covers every protected route, same
           as ConsentGate above. */}
       <WeightUnitGate />
+      {/* NP-205: mobile-web-only "Get the app" prompt. Never renders inside the
+          native app itself — see components/GetAppBanner.tsx. */}
+      <GetAppBanner />
       {/* Shell: full viewport height, flex column, no page-level scroll */}
       <div
         className="flex flex-col overflow-hidden bg-zinc-50 dark:bg-zinc-950"

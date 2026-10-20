@@ -1,8 +1,12 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { cookies } from "next/headers";
 import "./globals.css";
 import ServiceWorkerRegistration from "@/components/ServiceWorkerRegistration";
 import MotionProvider from "@/components/MotionProvider";
+import { getRuntimeConfig } from "@/lib/runtimeConfig";
+import { extractAppleAppId } from "@/lib/appleAppId";
+import { NATIVE_BROWSER_COOKIE } from "@/lib/nativeBrowserMarker";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -54,16 +58,48 @@ export const viewport: Viewport = {
   ],
 };
 
-export const metadata: Metadata = {
+const baseMetadata = {
   title: appName,
   description: appTagline,
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
-    statusBarStyle: "default",
+    statusBarStyle: "default" as const,
     title: appName,
   },
 };
+
+// NP-205: Safari's own "Get the app" smart banner, driven by the
+// apple-itunes-app meta tag — the iOS half of the store-banner requirement
+// (Android gets components/GetAppBanner.tsx instead, since Chrome has no
+// equivalent the server can drive). Dynamic rather than the static `metadata`
+// export this used to be, for one reason: it must never render while this
+// page was opened by the native app's own in-app browser (Tier-3 deep links),
+// which Safari's rendering engine would otherwise still honour. See
+// lib/nativeBrowserMarker.ts and middleware.ts for how that is known here.
+//
+// getRuntimeConfig() is wrapped the same way app/api/app/config/route.ts
+// wraps it: this gate must fail OPEN (no tag) rather than take the whole site
+// down if the secret store is briefly unreachable.
+export async function generateMetadata(): Promise<Metadata> {
+  const jar = await cookies();
+  const openedByNativeApp = jar.get(NATIVE_BROWSER_COOKIE)?.value === "1";
+
+  let appleAppId: string | undefined;
+  try {
+    const config = await getRuntimeConfig();
+    appleAppId = extractAppleAppId(config.app.ios.storeUrl);
+  } catch (error) {
+    console.error("generateMetadata: could not resolve app store config:", error);
+  }
+
+  return {
+    ...baseMetadata,
+    ...(appleAppId && !openedByNativeApp
+      ? { other: { "apple-itunes-app": `app-id=${appleAppId}` } }
+      : {}),
+  };
+}
 
 export default function RootLayout({
   children,

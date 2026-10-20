@@ -67,7 +67,9 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
   const staleIds: string[] = []
 
   // ── Web Push ───────────────────────────────────────────────────────────────
-  const webSubs = subs.filter((sub) => sub.platform === 'web' && sub.keys)
+  // NP-205: a web row `mutedAt` because a native token registered for the same
+  // OS family is deliberately skipped, not deleted — see models/PushSubscription.ts.
+  const webSubs = subs.filter((sub) => sub.platform === 'web' && sub.keys && !sub.mutedAt)
   if (webSubs.length > 0) {
     let vapidReady = true
     try {

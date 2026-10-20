@@ -5,6 +5,7 @@ import PushSubscription from '@/models/PushSubscription'
 import UserProgress from '@/models/UserProgress'
 import { notificationsAreEnabled } from '@/lib/push/notificationsToggle'
 import { parseSubscribeBody } from '@/lib/push/subscribeBody'
+import { classifyWebUserAgent } from '@/lib/push/webDeviceOS'
 import {
   computeFreshEnablePrefUpdates,
 } from '@/lib/push/notificationDefaults'
@@ -76,11 +77,39 @@ export async function POST(request: NextRequest) {
     if (keys) update.keys = keys
     else unset.keys = ''
     if (apnsEnvironment) update.apnsEnvironment = apnsEnvironment
+
+    if (platform === 'web') {
+      update.webOS = classifyWebUserAgent(request.headers.get('user-agent'))
+      // NP-205: only an explicit "turn it back on" action may undo a mute a
+      // native token placed on this row — same rule as `notificationsEnabled`
+      // above, and for the same reason: a background resync must never
+      // silently re-enable something a deliberate switch turned off.
+      if (reenable === true) {
+        unset.mutedAt = ''
+        unset.mutedReason = ''
+      }
+    }
+
     await PushSubscription.findOneAndUpdate(
       { endpoint },
       Object.keys(unset).length > 0 ? { $set: update, $unset: unset } : { $set: update },
       { upsert: true, new: true },
     )
+
+    // NP-205: a native push token is one install on one phone. The moment it
+    // registers, this member's web push subscriptions that are plausibly the
+    // SAME phone — same OS family, never 'other' (desktop, and anything this
+    // cannot confidently place, iPad included) — stop sending, so the member
+    // does not get every reminder twice on it. Muted, not deleted: deleting
+    // would be undone by PushSubscriptionSync re-creating the row from the
+    // browser's still-live subscription object on the member's next page
+    // load, with nothing server-side left to stop it recurring.
+    if (platform === 'ios' || platform === 'android') {
+      await PushSubscription.updateMany(
+        { userId: authResult.userId, platform: 'web', webOS: platform, mutedAt: null },
+        { $set: { mutedAt: new Date(), mutedReason: 'native_app_registered' } },
+      )
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {

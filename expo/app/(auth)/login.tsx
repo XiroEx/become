@@ -299,7 +299,10 @@ export default function LoginScreen({
         }
       : {
           heading: "Sign in",
-          welcome: "Welcome back. Sign in to pick up where you left off.",
+          // NP-205: migrating from the web app. Same email, same account —
+          // streaks, history and everything else in it is already there.
+          welcome:
+            "Welcome back. Sign in with the same email you use on the web to pick up where you left off.",
         };
 
   // The round back button in the web header (webapp/components/Header.tsx,

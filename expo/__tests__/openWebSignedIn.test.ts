@@ -100,7 +100,7 @@ describe("openWebSignedIn", () => {
     });
 
     expect(result).toBe("signed-in");
-    expect(opened).toEqual([`${BASE}${HANDOFF_REDEEM_PATH}?code=abc123`]);
+    expect(opened).toEqual([`${BASE}${HANDOFF_REDEEM_PATH}?code=abc123&app=1`]);
 
     // Minted with this member's session, for this one path.
     expect(calls).toHaveLength(1);
@@ -125,7 +125,7 @@ describe("openWebSignedIn", () => {
       launcher,
     });
 
-    expect(opened).toEqual([`${BASE}${HANDOFF_REDEEM_PATH}?code=a%2Bb%2Fc%3D`]);
+    expect(opened).toEqual([`${BASE}${HANDOFF_REDEEM_PATH}?code=a%2Bb%2Fc%3D&app=1`]);
   });
 
   it("falls back to the plain URL on a network error", async () => {
@@ -142,7 +142,7 @@ describe("openWebSignedIn", () => {
     });
 
     expect(result).toBe("plain");
-    expect(opened).toEqual([`${BASE}${PATH}`]);
+    expect(opened).toEqual([`${BASE}${PATH}?app=1`]);
   });
 
   it("falls back to the plain URL when the server refuses to mint", async () => {
@@ -160,7 +160,7 @@ describe("openWebSignedIn", () => {
         launcher,
       });
       expect(result).toBe("plain");
-      expect(opened).toEqual([`${BASE}${PATH}`]);
+      expect(opened).toEqual([`${BASE}${PATH}?app=1`]);
     }
   });
 
@@ -176,7 +176,7 @@ describe("openWebSignedIn", () => {
     });
 
     expect(result).toBe("plain");
-    expect(opened).toEqual([`${BASE}${PATH}`]);
+    expect(opened).toEqual([`${BASE}${PATH}?app=1`]);
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
@@ -198,7 +198,7 @@ describe("openWebSignedIn", () => {
 
     expect(result).toBe("signed-in");
     expect(opened).toEqual([
-      `${BASE}${HANDOFF_REDEEM_PATH}?code=from-keychain`,
+      `${BASE}${HANDOFF_REDEEM_PATH}?code=from-keychain&app=1`,
     ]);
   });
 

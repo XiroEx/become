@@ -215,3 +215,14 @@ test('the web send path calls the native fan-out (source wiring)', () => {
   assert.match(src, /PushSubscription\.deleteMany\(\{ _id: \{ \$in: staleIds \} \}\)/)
   assert.match(src, /apnsEnvironment: u\.environment/)
 })
+
+test('(id: e015cb2f) a web subscription NP-205 muted is skipped — never sent to twice', () => {
+  const src = readFileSync(join(process.cwd(), 'lib/pushNotification.ts'), 'utf8')
+  const webSubsAt = src.indexOf('const webSubs =')
+  assert.ok(webSubsAt > -1, 'the web subscription filter moved')
+  assert.match(
+    src.slice(webSubsAt, webSubsAt + 200),
+    /!sub\.mutedAt/,
+    'a muted web row must be excluded from the web send, or NP-205 does nothing',
+  )
+})

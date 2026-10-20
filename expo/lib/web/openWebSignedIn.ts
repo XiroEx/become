@@ -38,6 +38,15 @@ export const HANDOFF_MINT_PATH = "/api/auth/handoff";
 /** Where a code is spent. Mirrors HANDOFF_REDEEM_PATH in webapp/lib/authHandoff.ts. */
 export const HANDOFF_REDEEM_PATH = "/auth/handoff";
 
+/**
+ * NP-205: marks every Become page opened this way as opened BY THE APP, so
+ * the web side's "Get the app" prompt (webapp/components/GetAppBanner.tsx)
+ * and Safari's own smart banner (webapp/app/layout.tsx) never show while the
+ * member already has it. Mirrors NATIVE_BROWSER_QUERY_PARAM in
+ * webapp/lib/nativeBrowserMarker.ts.
+ */
+export const NATIVE_BROWSER_QUERY_PARAM = "app";
+
 export interface OpenWebSignedInDeps {
   /** Pluggable for tests; defaults to expo-web-browser. */
   launcher?: BrowserLauncher;
@@ -89,7 +98,7 @@ export async function openWebSignedIn(
 
   const base = (deps.baseUrl ?? WEBAPP_BASE_URL).replace(/\/$/, "");
   const target = path.trim();
-  const plainUrl = `${base}${target}`;
+  const plainUrl = `${base}${target}?${NATIVE_BROWSER_QUERY_PARAM}=1`;
   const launcher = deps.launcher ?? defaultBrowserLauncher;
 
   const openPlain = async (): Promise<OpenWebSignedInResult> => {
@@ -132,7 +141,7 @@ export async function openWebSignedIn(
   if (!code) return openPlain();
 
   await launcher(
-    `${base}${HANDOFF_REDEEM_PATH}?code=${encodeURIComponent(code)}`,
+    `${base}${HANDOFF_REDEEM_PATH}?code=${encodeURIComponent(code)}&${NATIVE_BROWSER_QUERY_PARAM}=1`,
   );
   return "signed-in";
 }

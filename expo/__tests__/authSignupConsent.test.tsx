@@ -94,7 +94,9 @@ describe("Native email-link sign-in and sign-up with consent and resumable wait"
       );
 
       expect(
-        getByText("Welcome back. Sign in to pick up where you left off."),
+        getByText(
+          "Welcome back. Sign in with the same email you use on the web to pick up where you left off.",
+        ),
       ).toBeTruthy();
       expect(queryByTestId("consent-checkbox")).toBeNull();
 
@@ -112,7 +114,9 @@ describe("Native email-link sign-in and sign-up with consent and resumable wait"
       // Switch back to login mode
       fireEvent.press(getByTestId("login-mode-toggle"));
       expect(
-        getByText("Welcome back. Sign in to pick up where you left off."),
+        getByText(
+          "Welcome back. Sign in with the same email you use on the web to pick up where you left off.",
+        ),
       ).toBeTruthy();
       expect(queryByTestId("consent-checkbox")).toBeNull();
       expect(getByTestId("login-email").props.value).toBe(
@@ -439,7 +443,9 @@ describe("Native email-link sign-in and sign-up with consent and resumable wait"
       // Clicking "Sign in instead" switches to login mode, keeps email, clears error
       fireEvent.press(offerBtn);
       expect(
-        getByText("Welcome back. Sign in to pick up where you left off."),
+        getByText(
+          "Welcome back. Sign in with the same email you use on the web to pick up where you left off.",
+        ),
       ).toBeTruthy();
       expect(getByTestId("login-email").props.value).toBe(
         "existinguser@example.com",
