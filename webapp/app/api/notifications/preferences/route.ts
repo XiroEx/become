@@ -3,6 +3,7 @@ import { verifyAuth } from '@/lib/auth'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import User from '@/models/User'
+import PushSubscription from '@/models/PushSubscription'
 import { notificationsAreEnabled } from '@/lib/push/notificationsToggle'
 import { DEFAULT_NOTIFICATION_PREFS, NOTIFICATION_PREF_KEYS } from '@/lib/push/notificationDefaults'
 
@@ -15,13 +16,17 @@ export async function GET(request: NextRequest) {
 
     await dbConnect()
 
-    const [progress, user] = await Promise.all([
+    const [progress, user, nativeDeviceCount] = await Promise.all([
       UserProgress.findOne({ userId: authResult.userId })
         .select('notificationPrefs notificationsEnabled')
         .lean(),
       User.findById(authResult.userId)
         .select('emailPreferences')
         .lean<{ emailPreferences?: { engagement?: boolean } } | null>(),
+      // NP-205: any native device at all, not just this browser's muted row —
+      // the Settings notice is "reminders come from the app" for the member,
+      // regardless of which of their browsers happens to be open right now.
+      PushSubscription.countDocuments({ userId: authResult.userId, platform: { $in: ['ios', 'android'] } }),
     ])
 
     // Every nudge defaults ON (undefined means "never touched the switch").
@@ -46,6 +51,9 @@ export async function GET(request: NextRequest) {
       // Email lives on User (lib/email.ts reads it there), push on UserProgress.
       // One endpoint for both so Settings makes one request. Absent = on.
       emailEngagement: user?.emailPreferences?.engagement !== false,
+      // NP-205: at least one native (ios/android) device is registered —
+      // Settings says reminders now come from the app instead of the browser.
+      nativeAppActive: nativeDeviceCount > 0,
     })
   } catch (error) {
     console.error('Error fetching notification preferences:', error)

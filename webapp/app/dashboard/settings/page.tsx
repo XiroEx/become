@@ -9,6 +9,7 @@ import { getToken } from '@/lib/clientAuth'
 import PacePicker from '@/components/goals/PacePicker'
 import { defaultPaceKg } from '@become/core'
 import { ensurePushSubscription } from '@/lib/push/ensureSubscription'
+import { NATIVE_APP_SETTINGS_NOTICE, shouldShowNativeAppSettingsNotice } from '@/lib/push/nativeAppSettingsNotice'
 import PasskeySetupButton from '@/components/PasskeySetupButton'
 import LegalLinks from '@/components/legal/LegalLinks'
 import DangerZone from '@/components/settings/DangerZone'
@@ -102,6 +103,8 @@ interface PreferencesResponse {
   notificationsEnabled?: boolean
   /** Streak / milestone email. Absent = on. */
   emailEngagement?: boolean
+  /** NP-205: a native (ios/android) device is registered for this member. */
+  nativeAppActive?: boolean
 }
 
 interface ConsentResponse {
@@ -221,6 +224,9 @@ function SettingsPageInner() {
   // once, not that we still hold a working subscription for them.
   const [deviceRegistered, setDeviceRegistered] = useState<boolean | null>(null)
   const [repairing, setRepairing] = useState(false)
+  // NP-205: a native (ios/android) device is registered for this member —
+  // reminders come from there now, not this browser.
+  const [nativeAppActive, setNativeAppActive] = useState(false)
   // Master switch, separate from browser permission — a browser never lets a
   // site revoke permission it already granted, so "off" has to live here.
   const [notificationsEnabled, setNotificationsEnabled] = useState(true)
@@ -328,6 +334,7 @@ function SettingsPageInner() {
       const data: PreferencesResponse = await res.json()
       setNotificationsEnabled(data.notificationsEnabled !== false)
       setEmailEngagement(data.emailEngagement !== false)
+      setNativeAppActive(shouldShowNativeAppSettingsNotice(data.nativeAppActive))
       const p = data.preferences ?? {}
       setNotifPrefs({
         mindReminder: p.mindReminder ?? true,
@@ -1113,6 +1120,14 @@ function SettingsPageInner() {
           {/* Notifications */}
           <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
             <h2 className="mb-4 text-base font-semibold text-zinc-900 dark:text-white">Notifications</h2>
+            {nativeAppActive && (
+              <p
+                data-testid="native-app-settings-notice"
+                className="mb-4 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:bg-blue-950/40 dark:text-blue-300"
+              >
+                {NATIVE_APP_SETTINGS_NOTICE}
+              </p>
+            )}
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">

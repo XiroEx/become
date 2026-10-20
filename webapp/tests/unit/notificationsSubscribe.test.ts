@@ -117,6 +117,9 @@ test('(id: 9d6d2b57) POST /api/notifications/subscribe initializes per-type defa
   })
 
   const findOneAndUpdateSubMock = mock.method(PushSubscription, 'findOneAndUpdate', async () => ({ acknowledged: true }))
+  // platform: 'ios' — the subscribe route now also mutes matching web rows
+  // (NP-205); without this mock it hits the real (absent) database.
+  const updateManySubMock = mock.method(PushSubscription, 'updateMany', async () => ({ acknowledged: true }))
 
   try {
     const res = await subscribePost(req)
@@ -142,6 +145,7 @@ test('(id: 9d6d2b57) POST /api/notifications/subscribe initializes per-type defa
     findOneMock.mock.restore()
     updateOneMock.mock.restore()
     findOneAndUpdateSubMock.mock.restore()
+    updateManySubMock.mock.restore()
   }
 })
 
@@ -204,6 +208,9 @@ test('(id: 9d6d2b59) POST /api/notifications/subscribe preserves existing explic
   })
 
   const findOneAndUpdateSubMock = mock.method(PushSubscription, 'findOneAndUpdate', async () => ({ acknowledged: true }))
+  // platform: 'ios' — the subscribe route now also mutes matching web rows
+  // (NP-205); without this mock it hits the real (absent) database.
+  const updateManySubMock = mock.method(PushSubscription, 'updateMany', async () => ({ acknowledged: true }))
 
   try {
     const res = await subscribePost(req)
@@ -226,6 +233,7 @@ test('(id: 9d6d2b59) POST /api/notifications/subscribe preserves existing explic
     findOneMock.mock.restore()
     updateOneMock.mock.restore()
     findOneAndUpdateSubMock.mock.restore()
+    updateManySubMock.mock.restore()
   }
 })
 
@@ -239,4 +247,157 @@ test('(id: 9d6d2b59) mergeWithNotificationDefaults preserves explicit false and 
   assert.equal(merged.dailyGlance, true, 'explicit true must be preserved')
   assert.equal(merged.streakAtRisk, true, 'missing key defaults ON')
   assert.equal(merged.checkInReminder, true, 'missing key defaults ON')
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// (id: e015cb2f) A native registration mutes the matching web subscription,
+// never deletes it — and classifies webOS at web-subscribe time.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const IPHONE_UA =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1'
+
+function mockPrefsUnblocked() {
+  return [
+    mock.method(UserProgress, 'findOne', () => ({
+      select: () => ({ lean: async () => null }),
+    })),
+    mock.method(UserProgress, 'updateOne', async () => ({ acknowledged: true })),
+  ]
+}
+
+test('(id: e015cb2f) a web subscribe stamps webOS from the User-Agent', async () => {
+  const token = await signToken({ userId: new mongoose.Types.ObjectId().toString(), email: 'member@example.com' })
+  const headers = new Headers()
+  headers.set('Authorization', `Bearer ${token}`)
+  headers.set('Content-Type', 'application/json')
+  headers.set('User-Agent', IPHONE_UA)
+  const req = new NextRequest('http://localhost/api/notifications/subscribe', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ endpoint: 'https://push.example/sub/web-1', platform: 'web', keys: { p256dh: 'p', auth: 'a' } }),
+  })
+
+  const prefMocks = mockPrefsUnblocked()
+  let capturedFilter: unknown = null
+  let capturedUpdate: unknown = null
+  const findOneAndUpdateMock = mock.method(PushSubscription, 'findOneAndUpdate', async (filter: unknown, update: unknown) => {
+    capturedFilter = filter
+    capturedUpdate = update
+    return { acknowledged: true }
+  })
+  const updateManyMock = mock.method(PushSubscription, 'updateMany', async () => ({ acknowledged: true }))
+
+  try {
+    const res = await subscribePost(req)
+    assert.equal(res.status, 200)
+    assert.deepEqual(capturedFilter, { endpoint: 'https://push.example/sub/web-1' })
+    const set = (capturedUpdate as { $set: Record<string, unknown> }).$set
+    assert.equal(set.webOS, 'ios')
+    // A plain web subscribe is not itself a native registration: no muting.
+    assert.equal(updateManyMock.mock.calls.length, 0)
+  } finally {
+    for (const m of prefMocks) m.mock.restore()
+    findOneAndUpdateMock.mock.restore()
+    updateManyMock.mock.restore()
+  }
+})
+
+test('(id: e015cb2f) a native (ios) registration mutes this member\'s ios-classified web subscriptions, never android or "other"', async () => {
+  const rawToken = 'ff'.repeat(32)
+  const { req, userId } = await authedRequest(
+    'http://localhost/api/notifications/subscribe',
+    'POST',
+    { endpoint: rawToken, platform: 'ios' },
+  )
+
+  const prefMocks = mockPrefsUnblocked()
+  const findOneAndUpdateMock = mock.method(PushSubscription, 'findOneAndUpdate', async () => ({ acknowledged: true }))
+  let capturedFilter: unknown = null
+  let capturedUpdate: unknown = null
+  const updateManyMock = mock.method(PushSubscription, 'updateMany', async (filter: unknown, update: unknown) => {
+    capturedFilter = filter
+    capturedUpdate = update
+    return { acknowledged: true }
+  })
+
+  try {
+    const res = await subscribePost(req)
+    assert.equal(res.status, 200)
+
+    assert.equal(updateManyMock.mock.calls.length, 1)
+    const filter = capturedFilter as Record<string, unknown>
+    assert.equal(filter.userId, userId)
+    assert.equal(filter.platform, 'web')
+    assert.equal(filter.webOS, 'ios') // never 'android', never 'other' (iPad/undefined)
+    assert.deepEqual(filter.mutedAt, { $exists: false }) // idempotent — doesn't reset an existing mute's timestamp
+
+    const update = capturedUpdate as { $set: { mutedAt: unknown; mutedReason: string } }
+    assert.ok(update.$set.mutedAt instanceof Date)
+    assert.equal(update.$set.mutedReason, 'native_registered')
+  } finally {
+    for (const m of prefMocks) m.mock.restore()
+    findOneAndUpdateMock.mock.restore()
+    updateManyMock.mock.restore()
+  }
+})
+
+test('(id: e015cb2f) an android registration never mutes ios-classified web rows (mute matches webOS exactly)', async () => {
+  const rawToken = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA:android-token-0123456789'
+  const { req } = await authedRequest(
+    'http://localhost/api/notifications/subscribe',
+    'POST',
+    { endpoint: rawToken, platform: 'android' },
+  )
+
+  const prefMocks = mockPrefsUnblocked()
+  const findOneAndUpdateMock = mock.method(PushSubscription, 'findOneAndUpdate', async () => ({ acknowledged: true }))
+  let capturedFilter: unknown = null
+  const updateManyMock = mock.method(PushSubscription, 'updateMany', async (filter: unknown) => {
+    capturedFilter = filter
+    return { acknowledged: true }
+  })
+
+  try {
+    const res = await subscribePost(req)
+    assert.equal(res.status, 200)
+    assert.equal((capturedFilter as Record<string, unknown>).webOS, 'android')
+  } finally {
+    for (const m of prefMocks) m.mock.restore()
+    findOneAndUpdateMock.mock.restore()
+    updateManyMock.mock.restore()
+  }
+})
+
+test('(id: e015cb2f) reenable:true on a web subscribe is the only way to clear a mute', async () => {
+  const rawToken = 'https://push.example/sub/web-reenable'
+  const { req } = await authedRequest(
+    'http://localhost/api/notifications/subscribe',
+    'POST',
+    { endpoint: rawToken, platform: 'web', keys: { p256dh: 'p', auth: 'a' }, reenable: true },
+  )
+
+  const findOneMock = mock.method(UserProgress, 'findOne', () => ({
+    select: () => ({ lean: async () => null }),
+  }))
+  const updateOneMock = mock.method(UserProgress, 'updateOne', async () => ({ acknowledged: true }))
+  let capturedUpdate: unknown = null
+  const findOneAndUpdateMock = mock.method(PushSubscription, 'findOneAndUpdate', async (_filter: unknown, update: unknown) => {
+    capturedUpdate = update
+    return { acknowledged: true }
+  })
+  const updateManyMock = mock.method(PushSubscription, 'updateMany', async () => ({ acknowledged: true }))
+
+  try {
+    const res = await subscribePost(req)
+    assert.equal(res.status, 200)
+    const body = capturedUpdate as { $set: Record<string, unknown>; $unset: Record<string, unknown> }
+    assert.equal('mutedAt' in body.$unset, true)
+    assert.equal('mutedReason' in body.$unset, true)
+  } finally {
+    findOneMock.mock.restore()
+    updateOneMock.mock.restore()
+    findOneAndUpdateMock.mock.restore()
+    updateManyMock.mock.restore()
+  }
 })
