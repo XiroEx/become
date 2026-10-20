@@ -1,7 +1,7 @@
 /**
  * Onboarding Audit — End-to-End
  *
- * Walks the 5-step wizard as a brand-new member and proves the four things the
+ * Walks the 6-step wizard as a brand-new member and proves the four things the
  * redesign promised:
  *
  *   1. Goals are multi-select and ORDERED — first pick is the primary.
@@ -118,7 +118,7 @@ async function startOnboarding(page: Page, context: import('@playwright/test').B
   await page.goto(`${BASE_URL}/login`)
   await page.evaluate((t) => localStorage.setItem('token', t), e2eToken)
   await page.goto(`${BASE_URL}/onboarding`)
-  await expect(page.getByTestId('onboarding-step-counter')).toContainText('Step 1 of 5')
+  await expect(page.getByTestId('onboarding-step-counter')).toContainText('Step 1 of 6')
 }
 
 /** Read the current nutrition goals straight from the API. */
@@ -185,7 +185,7 @@ test.describe('Onboarding audit', () => {
     await page.getByTestId('onboarding-next').click()
 
     // ── Step 2 — background ─────────────────────────────────────────────
-    await expect(page.getByTestId('onboarding-step-counter')).toContainText('Step 2 of 5')
+    await expect(page.getByTestId('onboarding-step-counter')).toContainText('Step 2 of 6')
     await page.getByTestId('onboarding-name').fill('E2E Tester')
     await page.getByTestId('experience-intermediate').click()
     // Stepper starts at 3 — click up to reach the reference 4 days.
@@ -196,19 +196,21 @@ test.describe('Onboarding audit', () => {
     await page.getByTestId('onboarding-next').click()
 
     // ── Step 3 — body stats ─────────────────────────────────────────────
-    await expect(page.getByTestId('onboarding-step-counter')).toContainText('Step 3 of 5')
-
-    // Before stats are entered we must say what's missing, not show a number.
-    await expect(page.getByTestId('tdee-incomplete')).toBeVisible()
-
-    // Direction is pre-selected from the PRIMARY goal (lose_weight → deficit).
-    await expect(page.getByTestId('direction-lose')).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByTestId('onboarding-step-counter')).toContainText('Step 3 of 6')
 
     await page.getByTestId('stat-age').fill(String(MEMBER.age))
     await page.getByTestId('stat-height-ft').fill(String(MEMBER.heightFt))
     await page.getByTestId('stat-height-in').fill(String(MEMBER.heightIn))
     await page.getByTestId('sex-male').click()
     await page.getByTestId('stat-current-weight').fill(String(MEMBER.weightLbs))
+    await page.getByTestId('stat-target-weight').fill('170')
+    await page.getByTestId('onboarding-next').click()
+
+    // ── Step 4 — nutrition ───────────────────────────────────────────────
+    await expect(page.getByTestId('onboarding-step-counter')).toContainText('Step 4 of 6')
+
+    // Direction is pre-selected from the PRIMARY goal (lose_weight → deficit).
+    await expect(page.getByTestId('direction-lose')).toHaveAttribute('aria-pressed', 'true')
 
     // THE core assertion: correct macros from body stats alone — no visit to
     // the nutrition goals page, no Save press.
@@ -228,23 +230,20 @@ test.describe('Onboarding audit', () => {
 
     await page.getByTestId('direction-maintain').click()
     await expect(page.getByTestId('preview-calories')).toHaveText(EXPECTED.maintain.calories.toLocaleString())
-    // Maintenance has no target weight to hit, so that field goes away.
-    await expect(page.getByTestId('stat-target-weight')).toHaveCount(0)
 
-    // Back to the deficit this member actually wants.
+    // Back to the deficit this member actually wants, and give it a target
+    // weight (that field lives on the Body step now, not here).
     await page.getByTestId('direction-lose').click()
-    await expect(page.getByTestId('stat-target-weight')).toBeVisible()
-    await page.getByTestId('stat-target-weight').fill('170')
     await page.getByTestId('onboarding-next').click()
 
-    // ── Step 4 — equipment ──────────────────────────────────────────────
-    await expect(page.getByTestId('onboarding-step-counter')).toContainText('Step 4 of 5')
+    // ── Step 5 — equipment ──────────────────────────────────────────────
+    await expect(page.getByTestId('onboarding-step-counter')).toContainText('Step 5 of 6')
     await page.getByTestId('equipment-none').click()
     await page.getByTestId('injury-notes').fill('Left shoulder — avoid overhead press')
     await page.getByTestId('onboarding-next').click()
 
-    // ── Step 5 — review ─────────────────────────────────────────────────
-    await expect(page.getByTestId('onboarding-step-counter')).toContainText('Step 5 of 5')
+    // ── Step 6 — review ─────────────────────────────────────────────────
+    await expect(page.getByTestId('onboarding-step-counter')).toContainText('Step 6 of 6')
     const review = page.getByTestId('review-step')
 
     // Every answer is played back.
@@ -269,13 +268,14 @@ test.describe('Onboarding audit', () => {
 
     // Edit jumps back to the right step, and the edit sticks.
     await page.getByTestId('review-edit-2').click()
-    await expect(page.getByTestId('onboarding-step-counter')).toContainText('Step 2 of 5')
+    await expect(page.getByTestId('onboarding-step-counter')).toContainText('Step 2 of 6')
     await page.getByRole('button', { name: 'Increase days' }).click()
     await expect(page.getByTestId('weekly-availability')).toHaveText('5')
     await page.getByRole('button', { name: 'Decrease days' }).click()
     await page.getByTestId('onboarding-next').click() // 3
     await page.getByTestId('onboarding-next').click() // 4
     await page.getByTestId('onboarding-next').click() // 5
+    await page.getByTestId('onboarding-next').click() // 6
     await expect(page.getByTestId('review-step')).toBeVisible()
 
     // ── Finish ──────────────────────────────────────────────────────────
@@ -348,7 +348,7 @@ test.describe('Onboarding audit', () => {
     await page.getByTestId('goal-lose_weight').click()
     await page.getByTestId('onboarding-next').click()
 
-    await expect(page.getByTestId('onboarding-step-counter')).toContainText('Step 2 of 5')
+    await expect(page.getByTestId('onboarding-step-counter')).toContainText('Step 2 of 6')
     await page.getByTestId('onboarding-name').fill('E2E Tester')
     await page.getByTestId('experience-intermediate').click()
     const days = page.getByTestId('weekly-availability')
@@ -358,13 +358,15 @@ test.describe('Onboarding audit', () => {
     await expect(days).toHaveText(String(PARITY_MEMBER.days))
     await page.getByTestId('onboarding-next').click()
 
-    await expect(page.getByTestId('onboarding-step-counter')).toContainText('Step 3 of 5')
+    await expect(page.getByTestId('onboarding-step-counter')).toContainText('Step 3 of 6')
     await page.getByTestId('stat-age').fill(String(PARITY_MEMBER.age))
     await page.getByTestId('stat-height-ft').fill(String(PARITY_MEMBER.heightFt))
     await page.getByTestId('stat-height-in').fill(String(PARITY_MEMBER.heightIn))
     await page.getByTestId('sex-male').click()
     await page.getByTestId('stat-current-weight').fill(String(PARITY_MEMBER.weightLbs))
+    await page.getByTestId('onboarding-next').click()
 
+    await expect(page.getByTestId('onboarding-step-counter')).toContainText('Step 4 of 6')
     await expect(page.getByTestId('direction-lose')).toHaveAttribute('aria-pressed', 'true')
     await expect(page.getByTestId('tdee-preview')).toContainText(PARITY_TDEE.toLocaleString())
     await expect(page.getByTestId('preview-calories')).toHaveText(PARITY_CALORIES.toLocaleString())
