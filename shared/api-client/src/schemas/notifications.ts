@@ -68,6 +68,10 @@ export const NotificationPreferencesResponseSchema = z
     notificationsEnabled: z.boolean().optional(),
     /** Engagement email opt-in, stored on the user. Absent means ON. */
     emailEngagement: z.boolean().optional(),
+    /** NP-205: true once this member has at least one registered native
+     *  (ios/android) device, regardless of which browser is asking — the
+     *  Settings screen uses it to say reminders now come from the app. */
+    nativeAppActive: z.boolean().optional(),
   })
   .passthrough();
 
