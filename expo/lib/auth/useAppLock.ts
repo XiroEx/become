@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AppState, type AppStateStatus } from "react-native";
 import {
   coldOpenFlow,
@@ -34,6 +34,16 @@ import {
  * failure reason (including `no-hardware` from a module that vanished
  * mid-session) is treated the same way: the member asked to be asked, and the
  * ask did not succeed.
+ *
+ * Follow-up card (native-parity, after NP-187): `locked` below is the
+ * overlay signal `app/_layout.tsx` renders `AppLockOverlay` from. It goes
+ * true the INSTANT the app leaves the foreground — before any store read
+ * could resolve, since iOS can snapshot the app for the switcher the moment
+ * `background`/`inactive` lands, and a check that raced it would already
+ * have lost. It comes back down either immediately on return (inside the
+ * grace period, or opted out) or once the re-verification settles — success
+ * or failure alike; a failed unlock's sign-out already hides the screen
+ * behind it (`AuthGuard`), so there is nothing left for the overlay to guard.
  */
 export const APP_LOCK_GRACE_PERIOD_MS = 5 * 60 * 1000;
 
@@ -75,7 +85,17 @@ interface AppLockDeps {
   onLocked: (() => void) | undefined;
 }
 
-export function useAppLock(options: UseAppLockOptions): null {
+export interface UseAppLockResult {
+  /**
+   * True while the dashboard must stay hidden behind the lock overlay:
+   * backgrounded (any length — the switcher snapshot does not know about
+   * grace periods) through any re-verification after returning, until the
+   * verdict is known.
+   */
+  locked: boolean;
+}
+
+export function useAppLock(options: UseAppLockOptions): UseAppLockResult {
   const {
     tokenStore = sessionStore,
     optInStore = biometricsOptInSecureStore,
@@ -85,6 +105,7 @@ export function useAppLock(options: UseAppLockOptions): null {
     now = Date.now,
     subscribeToAppState = defaultSubscribeToAppState,
   } = options;
+  const [locked, setLocked] = useState<boolean>(false);
 
   // Latest options, readable from the single subscription below. A ref (not
   // state) because nothing here is rendered; it is synced in an effect — the
@@ -124,13 +145,23 @@ export function useAppLock(options: UseAppLockOptions): null {
         if (backgroundedAtRef.current === null) {
           backgroundedAtRef.current = current.now();
         }
+        // Covered THE INSTANT it leaves the foreground — no await, no store
+        // read, nothing that could still be in flight when the OS freezes
+        // the switcher snapshot a moment later.
+        setLocked(true);
         return;
       }
       if (status !== "active") return;
       const backgroundedAt = backgroundedAtRef.current;
       backgroundedAtRef.current = null;
-      if (backgroundedAt === null) return;
-      if (current.now() - backgroundedAt < current.gracePeriodMs) return;
+      if (backgroundedAt === null) {
+        setLocked(false);
+        return;
+      }
+      if (current.now() - backgroundedAt < current.gracePeriodMs) {
+        setLocked(false);
+        return;
+      }
       if (inFlightRef.current) return;
       inFlightRef.current = true;
       void (async () => {
@@ -149,11 +180,14 @@ export function useAppLock(options: UseAppLockOptions): null {
           }
         } finally {
           inFlightRef.current = false;
+          // Success reveals the dashboard; a failed unlock's sign-out has
+          // already hidden it behind AuthGuard, so this is safe either way.
+          setLocked(false);
         }
       })();
     });
     return unsubscribe;
   }, []);
 
-  return null;
+  return { locked };
 }

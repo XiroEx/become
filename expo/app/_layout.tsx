@@ -15,6 +15,7 @@ import {
   sessionStore,
 } from "@/lib/auth/secureStoreToken";
 import type { ColdOpenResult } from "@/lib/auth/biometrics";
+import { AppLockOverlay } from "@/components/auth/AppLockOverlay";
 import { TimezoneReporter } from "@/components/TimezoneReporter";
 import { AppBadgeSync } from "@/components/widgets/AppBadgeSync";
 import { ConnectivityBanner } from "@/components/offline/ConnectivityBanner";
@@ -102,6 +103,16 @@ function raiseUpgradeSheet(error: PlanGateError): void {
  *
  * The warm case — backgrounded past the grace period, then foregrounded — is
  * `useAppLock` below: same flow, same consequence.
+ *
+ * WHAT IT NOW ALSO DOES IS COVER (native-parity follow-up to NP-187,
+ * 6abb1268): George found on a real iPhone that the dashboard sat visible
+ * behind the Face ID sheet, during the scan and in the app-switcher
+ * snapshot. `resolving` (cold open) and `locked` (warm re-lock,
+ * `useAppLock`'s own return value — true from the instant the app leaves the
+ * foreground) are OR'd into one `AppLockOverlay`, which a `Modal` keeps above
+ * literally everything and in the switcher's capture of the window. Neither
+ * flow navigates; the dashboard underneath is simply not visible until
+ * whichever of the two is in play clears.
  */
 function ColdOpenUnlock() {
   const { signOut } = useAuth();
@@ -115,7 +126,7 @@ function ColdOpenUnlock() {
     [signOut],
   );
 
-  useColdOpenRedirect({
+  const { resolving } = useColdOpenRedirect({
     tokenStore: sessionStore,
     optInStore: biometricsOptInSecureStore,
     biometrics: realBiometricsCapability,
@@ -128,13 +139,14 @@ function ColdOpenUnlock() {
   const onLocked = useCallback(() => {
     void signOut("biometric-fail");
   }, [signOut]);
-  useAppLock({
+  const { locked } = useAppLock({
     tokenStore: sessionStore,
     optInStore: biometricsOptInSecureStore,
     biometrics: realBiometricsCapability,
     onLocked,
   });
-  return null;
+
+  return <AppLockOverlay visible={resolving || locked} />;
 }
 
 /**

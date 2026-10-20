@@ -12,7 +12,13 @@
  * acceptance ids below are attested through these unit tests — a real iPhone
  * pass waits on NP-008.
  */
-import { fireEvent, render, waitFor, renderHook } from "@testing-library/react-native";
+import {
+  act,
+  fireEvent,
+  render,
+  waitFor,
+  renderHook,
+} from "@testing-library/react-native";
 import type { AppStateStatus } from "react-native";
 import {
   createRealBiometricsCapability,
@@ -215,13 +221,19 @@ describe("useAppLock — re-ask after a set time in the background", () => {
     );
     return {
       subscribeToAppState,
+      // Wrapped in `act`: `useAppLock` now flips `locked` synchronously on
+      // the background/inactive transition itself (the overlay signal for
+      // the app-switcher snapshot, native-parity follow-up to NP-187), so
+      // the listener call is a real state update, not just a ref write.
       emit: (status: AppStateStatus) => {
-        for (const l of [...listeners]) l(status);
+        act(() => {
+          for (const l of [...listeners]) l(status);
+        });
       },
     };
   }
 
-  /** Emit outside `act` and flush: the prompt is async, so assertions wait. */
+  /** The prompt itself is still async, so assertions after `emit` wait. */
   async function backgroundAndForeground(
     appState: ReturnType<typeof makeAppState>,
     advanceMs: number,
