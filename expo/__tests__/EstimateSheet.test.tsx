@@ -522,6 +522,36 @@ describe("EstimateSheet describe sheet matches web (NP-263)", () => {
     expect(src).toMatch(/keyboardShouldPersistTaps="handled"/);
   });
 
+  it("CARD: after taking a photo the sheet grows near-full-screen and can shrink for the keyboard, instead of being capped at a fixed 520px body", () => {
+    // Regression for the photo flow leaving the sheet parked over the
+    // bottom half of the screen with the note field hidden behind the
+    // keyboard and unable to scroll into view. Same shape as Quick Add's
+    // NP-316 fix: bound the BottomSheet itself near full screen via
+    // `sheetStyle`, and let the KeyboardAvoidingView + ScrollView fill it
+    // with `flex: 1` rather than a fixed height.
+    const fs = jest.requireActual("fs");
+    const path = jest.requireActual("path");
+    const src = fs.readFileSync(
+      path.resolve(__dirname, "..", "components/nutrition/EstimateSheet.tsx"),
+      "utf8",
+    );
+    expect(src).toMatch(/sheetStyle=\{\{\s*maxHeight:\s*["']90%["']\s*\}\}/);
+    expect(src).not.toMatch(/maxHeight:\s*520/);
+    // The KeyboardAvoidingView and the ScrollView it wraps both need to be
+    // allowed to fill/shrink (flex: 1) — a fixed height on either defeats
+    // the sheetStyle cap above.
+    const kavBlock = src.slice(
+      src.indexOf("<KeyboardAvoidingView"),
+      src.indexOf("<ScrollView"),
+    );
+    expect(kavBlock).toMatch(/style=\{\{\s*flex:\s*1\s*\}\}/);
+    const scrollViewBlock = src.slice(
+      src.indexOf("<ScrollView"),
+      src.indexOf("<ScrollView") + 400,
+    );
+    expect(scrollViewBlock).toMatch(/style=\{\{\s*flex:\s*1\s*\}\}/);
+  });
+
   it("shows a pencil-icon header with the web's title/subtitle and a close button that closes the sheet", () => {
     const onClose = jest.fn();
     const { getByTestId, getByText } = renderSheet({
