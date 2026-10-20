@@ -37,6 +37,12 @@ if (Platform.OS === "ios") {
   // `IOS_WIDGETS`. Side-effect import — registration, not a value.
   require("./lib/widgets/ios/widgets");
 
+  // The live workout's Lock Screen companion (NP-188): one
+  // `createLiveActivity` registration, so the layout exists before any live
+  // workout calls `startWorkoutLiveActivity`. Side-effect import, same shape
+  // as the widgets registration above.
+  require("./lib/live/liveActivity/ios/registerWorkoutLiveActivity");
+
   // The background refresh (NP-218): re-read the feed and push the timelines
   // while the app is closed. `defineTask` must run in the bundle's global
   // scope — the OS wakes the bundle with no UI, exactly like Android's

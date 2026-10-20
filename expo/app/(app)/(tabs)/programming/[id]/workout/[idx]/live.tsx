@@ -47,6 +47,10 @@ import {
 import type { LiveSetState } from "@/components/live/LiveSetRow";
 import { useLiveBackGuard } from "@/lib/live/useLiveBackGuard";
 import { NativeShareButton } from "@/components/share/NativeShareButton";
+import {
+  loadWorkoutLiveActivityFactory,
+  type WorkoutLiveActivityFactory,
+} from "@/lib/live/liveActivity/workoutLiveActivity";
 
 export interface LiveWorkoutRouteProps {
   /** DI for tests — defaults to the SecureStore-backed cache. */
@@ -75,6 +79,13 @@ export interface LiveWorkoutRouteProps {
   navigation?: import("@/lib/live/useLiveBackGuard").BackGuardNavigator | null;
   /** BackHandler override for tests. */
   backHandler?: import("@/lib/android/backHandler").BackHandlerLike | null;
+  /**
+   * DI for tests: the Lock Screen Live Activity factory (NP-188). Omitted,
+   * the route loads the real `expo-widgets` factory itself — deliberately
+   * NOT the default inside `LiveWorkoutClient`, which dozens of unrelated
+   * tests render with no Live Activity DI at all.
+   */
+  workoutLiveActivityFactory?: WorkoutLiveActivityFactory | null;
 }
 
 /**
@@ -111,6 +122,7 @@ export default function LiveWorkoutRoute({
   summaryDataForTests,
   navigation,
   backHandler,
+  workoutLiveActivityFactory: workoutLiveActivityFactoryProp,
 }: LiveWorkoutRouteProps = {}) {
   const router = useRouter();
   const { colors } = useThemeTokens();
@@ -123,6 +135,26 @@ export default function LiveWorkoutRoute({
   // The screen must not dim mid-set (NP-082): keep the display awake while
   // the live view is open. Released automatically on unmount.
   useKeepAwake("live-workout");
+
+  // The Lock Screen Live Activity's factory (NP-188). Loaded HERE, once per
+  // mount, in an effect — never inside `LiveWorkoutClient` itself, which is
+  // the component dozens of unrelated tests render with no Live Activity
+  // DI at all; loading it there by default once broke one of those tests
+  // (`@expo/ui/swift-ui`, pulled in by the layout registration, raced that
+  // test's own render). Null until the effect resolves, or forever on
+  // Android / Expo Go / iOS < 16.2 — `useWorkoutLiveActivity` treats a null
+  // factory as "no Lock Screen surface" and simply does not start one.
+  const [workoutLiveActivityFactory, setWorkoutLiveActivityFactory] =
+    useState<WorkoutLiveActivityFactory | null>(
+      workoutLiveActivityFactoryProp ?? null,
+    );
+  useEffect(() => {
+    if (workoutLiveActivityFactoryProp !== undefined) return;
+    /* eslint-disable-next-line react-hooks/set-state-in-effect -- loading a
+       native module is exactly the "something outside React" case the rule
+       carves out; it cannot be derived during render. */
+    setWorkoutLiveActivityFactory(loadWorkoutLiveActivityFactory());
+  }, [workoutLiveActivityFactoryProp]);
   const params = useLocalSearchParams<{
     id?: string;
     programId?: string;
@@ -558,6 +590,7 @@ export default function LiveWorkoutRoute({
         exerciseHints={exerciseHints}
         onDismissHint={(slug) => void dismissHint(slug)}
         onExit={() => router.back()}
+        workoutLiveActivityFactory={workoutLiveActivityFactory}
         manageExercises={
           workout
             ? {
