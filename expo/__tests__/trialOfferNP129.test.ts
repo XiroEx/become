@@ -1,5 +1,5 @@
 /**
- * ─── THE 10-DAY PLUS TRIAL AFTER ONBOARDING (NP-129) ─────────────────────────
+ * ─── THE 7-DAY PLUS TRIAL AFTER ONBOARDING (NP-129) ──────────────────────────
  *
  * Native counterpart of `webapp/tests/unit/billing/trialOfferGate.test.ts` and
  * `webapp/tests/unit/billing/trialOfferCard.test.tsx`.
@@ -50,12 +50,14 @@ const newMember = (over: Partial<TrialOfferSnapshot> = {}): TrialOfferSnapshot =
   ...over,
 });
 
-describe("NP-129 — Offer 10-day Plus trial after onboarding", () => {
+describe("NP-129 — Offer 7-day Plus trial after onboarding", () => {
   describe("(id: e015c997) A new member sees the same trial choice natively as on the web, with the same effect", () => {
     it("offers the trial to a brand-new free member on a billing-configured install", () => {
       expect(trialOfferDue(newMember())).toBe(true);
       expect(trialOfferDue(newMember({ subscription: { status: "none" } }))).toBe(true);
-      expect(TRIAL_DAYS).toBe(10);
+      // George shrank it from 10 to 7 days on 2026-10-19 (webapp/lib/billing/trial.ts);
+      // this pins native to the same number so the two cannot drift again.
+      expect(TRIAL_DAYS).toBe(7);
     });
 
     it("does not suppress the trial offer on enforced === false (billing control, not tier surface)", () => {
@@ -81,14 +83,14 @@ describe("NP-129 — Offer 10-day Plus trial after onboarding", () => {
       expect(webCopySrc).toContain("CONTINUE_FREE_LABEL");
       expect(webCopySrc).toContain("TERMS_REFUND_HREF");
 
-      expect(TRIAL_OFFER_HEADING).toBe("Try Plus free for 10 days");
+      expect(TRIAL_OFFER_HEADING).toBe("Try Plus free for 7 days");
       expect(TRIAL_OFFER_SUBHEADING).toBe(
         "Start your trial now, or keep using Become for free — your choice either way.",
       );
-      expect(TRIAL_CTA_LABEL).toBe("Start my 10-day free trial");
+      expect(TRIAL_CTA_LABEL).toBe("Start my 7-day free trial");
       expect(CONTINUE_FREE_LABEL).toBe("Continue free");
       expect(TERMS_REFUND_HREF).toBe("/terms#cancelling");
-      expect(TRIAL_AGREEMENT_TEXT).toContain("10-day free trial of Plus");
+      expect(TRIAL_AGREEMENT_TEXT).toContain("7-day free trial of Plus");
       expect(TRIAL_AGREEMENT_TEXT).toContain("14 days of being charged");
     });
 
