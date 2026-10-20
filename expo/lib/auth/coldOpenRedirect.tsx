@@ -36,9 +36,18 @@ export function useColdOpenRedirect(
       };
       const result = await coldOpenFlow(flowInput);
       if (cancelled) return;
+      // `onResolve` BEFORE `setResolving(false)`, on purpose (card "Face ID
+      // lock must obscure dashboard during scan"): a `login`/`biometric-fail`
+      // verdict's `onResolve` calls `signOut`, which commits synchronously.
+      // Calling it first means that commit — if it lands as its own render,
+      // which an update from outside an explicit `act()` can — happens while
+      // `resolving` is STILL true and the overlay is still up, so the screen
+      // that becomes visible once `resolving` flips false next is already
+      // `/login`, never a frame of dashboard sitting on a session that is
+      // about to be torn down.
+      input.onResolve(result);
       setVerdict(result);
       setResolving(false);
-      input.onResolve(result);
     })();
     return () => {
       cancelled = true;
