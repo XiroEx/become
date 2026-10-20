@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { render, fireEvent } from "@testing-library/react-native";
 import { LiveSetRow } from "@/components/live/LiveSetRow";
 
@@ -91,6 +92,83 @@ describe("LiveSetRow", () => {
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({ reps: 8 }),
     );
+  });
+
+  // Card: "Can't put decimal points when tracking in a workout" — typing
+  // "72." parses to the number 72, and a naive `value={String(weight)}`
+  // reformatted to "72" on the very next render, stripping the "." the
+  // member had just typed before they could type a digit after it. A
+  // wrapping component owns `state` here exactly like the Live view does
+  // (one row reused across steps, `onChange` writes back into `state`), so
+  // the fix has to survive a real state round-trip, not just a bare
+  // `fireEvent.changeText` against a static prop.
+  function ControlledWeightHarness({
+    onCommit,
+  }: {
+    onCommit: (weight: number | null) => void;
+  }) {
+    const [state, setState] = useState({
+      weight: null as number | null,
+      reps: null as number | null,
+      completed: false,
+    });
+    return (
+      <LiveSetRow
+        setIndex={0}
+        bell={{ style: null, showTotal: false }}
+        state={state}
+        onChange={(next) => {
+          setState(next);
+          onCommit(next.weight);
+        }}
+      />
+    );
+  }
+
+  it("keeps a trailing decimal point on screen through a state round-trip", () => {
+    const onCommit = jest.fn();
+    const { getByTestId } = render(
+      <ControlledWeightHarness onCommit={onCommit} />,
+    );
+    const field = getByTestId("live-set-0-weight");
+
+    fireEvent.changeText(field, "7");
+    fireEvent.changeText(field, "72");
+    fireEvent.changeText(field, "72.");
+    // The committed numeric value is unchanged (the "." alone is not a
+    // digit), but the box must still show what was typed.
+    expect(onCommit).toHaveBeenLastCalledWith(72);
+    expect(getByTestId("live-set-0-weight").props.value).toBe("72.");
+
+    fireEvent.changeText(field, "72.5");
+    expect(onCommit).toHaveBeenLastCalledWith(72.5);
+    expect(getByTestId("live-set-0-weight").props.value).toBe("72.5");
+  });
+
+  it("resets the weight draft when a quick-pick overwrites the typed value", () => {
+    const onChange = jest.fn();
+    const { getByTestId, rerender } = render(
+      <LiveSetRow
+        setIndex={0}
+        bell={{ style: null, showTotal: false }}
+        state={{ weight: null, reps: null, completed: false }}
+        onChange={onChange}
+      />,
+    );
+    fireEvent.changeText(getByTestId("live-set-0-weight"), "72.");
+    expect(getByTestId("live-set-0-weight").props.value).toBe("72.");
+
+    // A quick-pick tap (or moving to the next set) overwrites `state.weight`
+    // from OUTSIDE this input's own typing — the draft must follow it.
+    rerender(
+      <LiveSetRow
+        setIndex={0}
+        bell={{ style: null, showTotal: false }}
+        state={{ weight: 95, reps: null, completed: false }}
+        onChange={onChange}
+      />,
+    );
+    expect(getByTestId("live-set-0-weight").props.value).toBe("95");
   });
 
   it("toggles the completed state when the check is pressed", () => {

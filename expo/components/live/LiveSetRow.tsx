@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { View, Pressable, ScrollView } from "react-native";
 import { Text } from "@/components/Text";
 import { Check, ChevronsRight } from "lucide-react-native";
@@ -158,6 +158,49 @@ function parseNum(text: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function formatNumOrNull(n: number | null | undefined): string {
+  return n !== null && n !== undefined ? String(n) : "";
+}
+
+/**
+ * Keeps the TextInput's displayed text exactly as typed while a decimal is
+ * mid-entry (NP decimal-point bug: "72." parses to the number 72, and a
+ * naive `value={String(state.weight)}` reformats to "72" on every keystroke,
+ * so the "." the member just typed is stripped the instant they type it —
+ * they can never get past the decimal point).
+ *
+ * The draft string is the source of truth for what is ON SCREEN; the parsed
+ * number is the source of truth for what is STORED (`state`). The two are
+ * only reconciled when the stored value changes for a reason OTHER than this
+ * input's own typing — e.g. a quick-pick tap, or the Live view swapping in a
+ * different set/exercise's state — tracked via `sentRef`, the last numeric
+ * value this hook itself committed.
+ */
+function useNumberDraft(
+  value: number | null | undefined,
+  commit: (n: number | null) => void,
+): [string, (text: string) => void] {
+  const normalized = value ?? null;
+  const [draft, setDraft] = useState<string>(() => formatNumOrNull(normalized));
+  const sentRef = useRef<number | null>(normalized);
+
+  useEffect(() => {
+    if (normalized !== sentRef.current) {
+      sentRef.current = normalized;
+      setDraft(formatNumOrNull(normalized));
+    }
+  }, [normalized]);
+
+  const onChangeText = (text: string) => {
+    setDraft(text);
+    const parsed = parseNum(text);
+    sentRef.current = parsed;
+    commit(parsed);
+  };
+
+  return [draft, onChangeText];
+}
+
 /**
  * The weight box's label, in the member's unit (NP-209). Compact rows get the
  * short form (`kg/DB`) because the full "Weight per DB (kg)" does not fit a
@@ -238,6 +281,47 @@ export function LiveSetRow({
   // member gets kg equipment numbers, not the pound ladder relabelled.
   const quickPicks = showQuickPicks ? weightQuickPicks(bell.style, weightUnit) : [];
 
+  // See `useNumberDraft` above: each of these keeps the decimal point the
+  // member just typed on screen instead of letting the next render's
+  // `String(number)` erase it.
+  const [weightDraft, onWeightChangeText] = useNumberDraft(state.weight, (weight) =>
+    onChange({ ...state, weight }),
+  );
+  const [distanceDraft, onDistanceChangeText] = useNumberDraft(state.distance, (distance) =>
+    onChange({ ...state, distance }),
+  );
+  const [speedDraft, onSpeedChangeText] = useNumberDraft(state.speed, (speed) =>
+    onChange({ ...state, speed }),
+  );
+  // Duration has its own flavour: the stored value is always seconds but the
+  // member types in whichever unit the sec/min toggle is showing, so the
+  // "did this change come from outside?" check has to compare BOTH the
+  // seconds and the unit, not just the seconds.
+  const durationNormalized = state.durationSec ?? null;
+  const [durationDraft, setDurationDraft] = useState<string>(() =>
+    secondsToUnitDisplay(durationNormalized, durationUnit),
+  );
+  const durationSentRef = useRef<{ seconds: number | null; unit: DurationUnit }>({
+    seconds: durationNormalized,
+    unit: durationUnit,
+  });
+  useEffect(() => {
+    if (
+      durationNormalized !== durationSentRef.current.seconds ||
+      durationUnit !== durationSentRef.current.unit
+    ) {
+      durationSentRef.current = { seconds: durationNormalized, unit: durationUnit };
+      setDurationDraft(secondsToUnitDisplay(durationNormalized, durationUnit));
+    }
+  }, [durationNormalized, durationUnit]);
+  const onDurationChangeText = (text: string) => {
+    setDurationDraft(text);
+    const seconds = unitDisplayToSeconds(text, durationUnit);
+    const parsedSeconds = seconds === "" ? null : Number(seconds);
+    durationSentRef.current = { seconds: parsedSeconds, unit: durationUnit };
+    onChange({ ...state, durationSec: parsedSeconds });
+  };
+
   return (
     <View
       testID={tid}
@@ -275,10 +359,8 @@ export function LiveSetRow({
             testID={`${tid}-weight`}
             label={getWeightLabel(bell.style, compact, weightUnit)}
             keyboardType="decimal-pad"
-            value={state.weight !== null ? String(state.weight) : ""}
-            onChangeText={(text) =>
-              onChange({ ...state, weight: parseNum(text) })
-            }
+            value={weightDraft}
+            onChangeText={onWeightChangeText}
             placeholder={
               prefill?.weight !== null && prefill?.weight !== undefined
                 ? String(prefill.weight)
@@ -396,14 +478,8 @@ export function LiveSetRow({
           <Input
             testID={`${tid}-duration`}
             keyboardType="decimal-pad"
-            value={secondsToUnitDisplay(state.durationSec, durationUnit)}
-            onChangeText={(text) => {
-              const seconds = unitDisplayToSeconds(text, durationUnit);
-              onChange({
-                ...state,
-                durationSec: seconds === "" ? null : Number(seconds),
-              });
-            }}
+            value={durationDraft}
+            onChangeText={onDurationChangeText}
             placeholder={
               prefill?.durationSec != null
                 ? secondsToUnitDisplay(prefill.durationSec, durationUnit)
@@ -420,14 +496,8 @@ export function LiveSetRow({
             testID={`${tid}-distance`}
             label={isFloorsExercise(exerciseName) ? "Floors" : "Dist (m)"}
             keyboardType="decimal-pad"
-            value={
-              state.distance !== null && state.distance !== undefined
-                ? String(state.distance)
-                : ""
-            }
-            onChangeText={(text) =>
-              onChange({ ...state, distance: parseNum(text) })
-            }
+            value={distanceDraft}
+            onChangeText={onDistanceChangeText}
             placeholder={
               prefill?.distance != null ? String(prefill.distance) : "0"
             }
@@ -440,14 +510,8 @@ export function LiveSetRow({
             testID={`${tid}-speed`}
             label="Speed (mph)"
             keyboardType="decimal-pad"
-            value={
-              state.speed !== null && state.speed !== undefined
-                ? String(state.speed)
-                : ""
-            }
-            onChangeText={(text) =>
-              onChange({ ...state, speed: parseNum(text) })
-            }
+            value={speedDraft}
+            onChangeText={onSpeedChangeText}
             placeholder={
               prefill?.speed != null ? String(prefill.speed) : "0.0"
             }
