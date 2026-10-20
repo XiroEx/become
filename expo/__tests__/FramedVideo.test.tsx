@@ -159,6 +159,72 @@ describe("FramedVideo", () => {
     expect(player.muted).toBe(true);
   });
 
+  // (id: 9d6d32f2 / 9d6d32f3) Demo clips are always silent — muted AND set to
+  // mix with other audio, so a member's music never pauses when Live mounts
+  // a clip, swaps to the next exercise, or the clip loops.
+  it("(id: 9d6d32f2) every demo clip mixes with other audio instead of taking the session", () => {
+    const { getByTestId } = render(
+      <FramedVideo
+        src="https://cdn.example.com/exercises/squat.mov"
+        surface="live"
+        testID="mix-video"
+      />,
+    );
+
+    const player = getByTestId("mix-video-player").props.player;
+    expect(player.muted).toBe(true);
+    expect(player.audioMixingMode).toBe("mixWithOthers");
+  });
+
+  it("(id: 9d6d32f3) every new player the exercise change creates (expo-video's own useVideoPlayer recreates one per distinct source) is muted and mixing, not just the first", () => {
+    // Live keeps ONE `FramedVideo`, but `expo-video`'s real `useVideoPlayer`
+    // keys the underlying player on `JSON.stringify(source)` — a different
+    // exercise's clip is a genuinely new native player, with `setup` rerun
+    // from scratch, which is exactly what each of these two mounts stands
+    // in for.
+    const { getByTestId: squat } = render(
+      <FramedVideo
+        src="https://cdn.example.com/exercises/squat.mov"
+        surface="live"
+        testID="squat-video"
+      />,
+    );
+    const { getByTestId: lunge } = render(
+      <FramedVideo
+        src="https://cdn.example.com/exercises/lunge.mov"
+        surface="live"
+        testID="lunge-video"
+      />,
+    );
+
+    const squatPlayer = squat("squat-video-player").props.player;
+    const lungePlayer = lunge("lunge-video-player").props.player;
+    expect(squatPlayer.muted).toBe(true);
+    expect(squatPlayer.audioMixingMode).toBe("mixWithOthers");
+    expect(lungePlayer.muted).toBe(true);
+    expect(lungePlayer.audioMixingMode).toBe("mixWithOthers");
+  });
+
+  it("(id: 9d6d32f3) looping back to the start (playToEnd) never touches audioMixingMode", () => {
+    const { getByTestId } = render(
+      <FramedVideo
+        src="https://cdn.example.com/exercises/deadlift.mp4"
+        surface="live"
+        videoTrim={null}
+        testID="loop-video"
+      />,
+    );
+
+    const player = getByTestId("loop-video-player").props.player;
+    expect(player.audioMixingMode).toBe("mixWithOthers");
+
+    act(() => {
+      player._emit("playToEnd");
+    });
+
+    expect(player.audioMixingMode).toBe("mixWithOthers");
+  });
+
   it("shows legacy YouTube demos as a thumbnail that opens YouTube", () => {
     const { getByTestId } = render(
       <FramedVideo
