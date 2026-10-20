@@ -917,6 +917,21 @@ export default function LoginScreen({
               {authCopy.welcome}
             </Text>
 
+            {mode === "login" ? (
+              // NP-205: the web session can't move into the app's secure
+              // store, so this is the one new thing a member who already
+              // used the web needs told — sign in with the SAME email and
+              // every bit of their history (streaks, programs, chat) is
+              // right there, because it's the same account.
+              <Text
+                testID="login-same-email-hint"
+                className="text-muted-foreground text-xs mb-4"
+              >
+                Use the same email you use on the web — your streaks and
+                history come with you.
+              </Text>
+            ) : null}
+
             {sessionMessage ? (
               <Text
                 testID="login-session-ended"

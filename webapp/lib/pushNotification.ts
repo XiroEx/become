@@ -56,6 +56,17 @@ export interface PushSendResult {
   byPlatform?: { web: PlatformCounts; ios: PlatformCounts; android: PlatformCounts }
 }
 
+/**
+ * A web row is eligible to be sent to: it has keys, and NP-205 hasn't muted
+ * it (a native token registered for the same OS, so this phone gets the
+ * reminder from there instead — see models/PushSubscription.ts). Pure, so the
+ * one rule that keeps a member from getting a reminder twice is testable
+ * without a database or a VAPID key.
+ */
+export function isSendableWebSubscription(sub: { keys?: unknown; mutedAt?: Date | null | undefined }): boolean {
+  return Boolean(sub.keys) && !sub.mutedAt
+}
+
 export async function sendPushToUser(userId: string, payload: PushPayload): Promise<PushSendResult> {
   const result: PushSendResult = { attempted: 0, delivered: 0, pruned: 0, failed: 0 }
   await dbConnect()
@@ -67,7 +78,7 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
   const staleIds: string[] = []
 
   // ── Web Push ───────────────────────────────────────────────────────────────
-  const webSubs = subs.filter((sub) => sub.platform === 'web' && sub.keys)
+  const webSubs = subs.filter((sub) => sub.platform === 'web' && isSendableWebSubscription(sub))
   if (webSubs.length > 0) {
     let vapidReady = true
     try {

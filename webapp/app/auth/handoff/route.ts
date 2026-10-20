@@ -5,6 +5,7 @@ import { signToken, authCookie } from '@/lib/auth'
 import { publicOrigin } from '@/lib/authBridge'
 import { decideRedemption, type HandoffRefusal } from '@/lib/authHandoff'
 import { claimHandoffCode } from '@/models/HandoffCode'
+import { nativeBrowserCookie } from '@/lib/nativeBrowserMarker'
 
 export const dynamic = 'force-dynamic'
 
@@ -70,6 +71,11 @@ export async function GET(req: NextRequest) {
 
     const res = NextResponse.redirect(finishUrl)
     res.headers.append('Set-Cookie', authCookie(token))
+    // This path is reached ONLY by the native app opening a member signed in
+    // (NP-205) — mark the tab so the web never shows this member the "Get
+    // the app" prompt or Safari's apple-itunes-app banner inside the app
+    // they already have. See lib/nativeBrowserMarker.ts.
+    res.headers.append('Set-Cookie', nativeBrowserCookie())
     res.headers.set('Cache-Control', 'no-store')
     return res
   } catch (err) {

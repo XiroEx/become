@@ -1,4 +1,9 @@
-"use client"
+// NOT 'use client': this layout needs generateMetadata (server-only) for the
+// NP-205 apple-itunes-app tag below, and everything it renders is already
+// its own client component — a server layout composing client children
+// works exactly like a client one did, with no hooks of its own to lose.
+import type { Metadata } from 'next'
+import { cookies } from 'next/headers'
 import React from 'react'
 import BottomNav from '../../components/BottomNav'
 import TopNav from '../../components/TopNav'
@@ -11,6 +16,34 @@ import TimezoneSync from '../../components/TimezoneSync'
 import ConsentGate from '../../components/ConsentGate'
 import AiConsentPrompt from '../../components/AiConsentPrompt'
 import WeightUnitGate from '../../components/WeightUnitGate'
+import GetAppBanner from '../../components/GetAppBanner'
+import { getRuntimeConfig } from '../../lib/runtimeConfig'
+import { appleItunesAppContent } from '../../lib/appleAppId'
+import { NATIVE_BROWSER_COOKIE } from '../../lib/nativeBrowserMarker'
+
+/**
+ * Safari's `apple-itunes-app` smart banner (NP-205) — never drawn to a
+ * member already inside the native app's own in-app browser (see
+ * lib/nativeBrowserMarker.ts; that cookie originates ONLY at
+ * app/auth/handoff/route.ts, the one URL exclusively opened by the app).
+ * Scoped to /dashboard rather than the root layout: this is the one segment
+ * Tier-3's in-app browser actually reaches, and every /dashboard page is
+ * already behind AuthGuard and personalized — unlike the marketing pages,
+ * it costs nothing extra to make dynamic. Fails to no tag on any error: a
+ * missing banner costs nothing, a layout that throws takes the page down.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  try {
+    const store = await cookies()
+    if (store.get(NATIVE_BROWSER_COOKIE)?.value === '1') return {}
+    const { app } = await getRuntimeConfig()
+    const base = process.env.NEXT_PUBLIC_WEBAPP_BASE_URL || ''
+    const content = appleItunesAppContent(app.ios.storeUrl, `${base}/dashboard`)
+    return content ? { other: { 'apple-itunes-app': content } } : {}
+  } catch {
+    return {}
+  }
+}
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -42,6 +75,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           persists the choice. Here so it covers every protected route, same
           as ConsentGate above. */}
       <WeightUnitGate />
+      {/* NP-205: dismissible "Get the app" prompt, Android mobile web only —
+          iOS gets Safari's own apple-itunes-app banner (app/layout.tsx).
+          Never rendered inside the native app itself (GetAppBanner checks
+          the in-app-browser marker before showing anything). */}
+      <GetAppBanner />
       {/* Shell: full viewport height, flex column, no page-level scroll */}
       <div
         className="flex flex-col overflow-hidden bg-zinc-50 dark:bg-zinc-950"
