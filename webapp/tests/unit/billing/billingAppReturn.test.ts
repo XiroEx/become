@@ -104,8 +104,16 @@ test('the three public pages exist at exactly those paths', () => {
 
 test('middleware guards /dashboard only, so the public pages load signed out', () => {
   const src = read('middleware.ts')
-  assert.match(src, /matcher: \['\/dashboard\/:path\*'\]/, 'the matcher moved')
+  // NP-205 added '/auth/handoff' to the matcher too, but only to turn the
+  // app's `?app=1` marker into a cookie (see lib/nativeBrowserMarker.ts) — the
+  // auth_token check below is still scoped to pathname.startsWith('/dashboard').
+  assert.match(src, /matcher: \[[^\]]*'\/dashboard\/:path\*'[^\]]*\]/, 'the matcher moved')
   assert.doesNotMatch(src, /\/billing/, 'a matcher over /billing would bounce a paid buyer to /login')
+  assert.match(
+    src,
+    /pathname\.startsWith\('\/dashboard'\)/,
+    'the auth_token check must stay scoped to /dashboard, even if the matcher grows',
+  )
 })
 
 // ─── 2. the web did not move ─────────────────────────────────────────────────

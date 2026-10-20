@@ -92,7 +92,9 @@ describe("(NP-251) the card's title and welcome copy, per mode", () => {
     const { getByTestId, getByText } = render(<LoginScreen />);
     expect(getByTestId("login-heading")).toHaveTextContent("Sign in");
     expect(
-      getByText("Welcome back. Sign in to pick up where you left off."),
+      getByText(
+        "Welcome back. Sign in with the same email you use on the web to pick up where you left off.",
+      ),
     ).toBeTruthy();
   });
 

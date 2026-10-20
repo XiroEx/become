@@ -117,6 +117,7 @@ test('(id: 9d6d2b57) POST /api/notifications/subscribe initializes per-type defa
   })
 
   const findOneAndUpdateSubMock = mock.method(PushSubscription, 'findOneAndUpdate', async () => ({ acknowledged: true }))
+  const updateManySubMock = mock.method(PushSubscription, 'updateMany', async () => ({ acknowledged: true }))
 
   try {
     const res = await subscribePost(req)
@@ -138,10 +139,22 @@ test('(id: 9d6d2b57) POST /api/notifications/subscribe initializes per-type defa
     assert.equal(updateSet['notificationPrefs.goalNudge'], true)
     assert.equal(updateSet['notificationPrefs.superStreakAtRisk'], true)
     assert.equal(updateSet['notificationPrefs.checkInReminder'], true)
+
+    // (id: e015cb2f) NP-205: a native token registering must retire this
+    // member's matching-OS web push subscriptions, so the same reminder never
+    // lands twice on the same phone.
+    assert.equal(updateManySubMock.mock.calls.length, 1)
+    const [muteFilter, muteUpdate] = updateManySubMock.mock.calls[0].arguments as [
+      Record<string, unknown>,
+      Record<string, unknown>,
+    ]
+    assert.deepEqual(muteFilter, { userId, platform: 'web', webOS: 'ios', mutedAt: null })
+    assert.equal((muteUpdate.$set as { mutedReason?: string })?.mutedReason, 'native_app_registered')
   } finally {
     findOneMock.mock.restore()
     updateOneMock.mock.restore()
     findOneAndUpdateSubMock.mock.restore()
+    updateManySubMock.mock.restore()
   }
 })
 
@@ -204,6 +217,7 @@ test('(id: 9d6d2b59) POST /api/notifications/subscribe preserves existing explic
   })
 
   const findOneAndUpdateSubMock = mock.method(PushSubscription, 'findOneAndUpdate', async () => ({ acknowledged: true }))
+  const updateManySubMock = mock.method(PushSubscription, 'updateMany', async () => ({ acknowledged: true }))
 
   try {
     const res = await subscribePost(req)
@@ -222,6 +236,134 @@ test('(id: 9d6d2b59) POST /api/notifications/subscribe preserves existing explic
     assert.equal(updateSet['notificationPrefs.streakAtRisk'], true)
     assert.equal(updateSet['notificationPrefs.mealReminder'], true)
     assert.equal(updateSet['notificationPrefs.reEngagement'], true)
+  } finally {
+    findOneMock.mock.restore()
+    updateOneMock.mock.restore()
+    findOneAndUpdateSubMock.mock.restore()
+    updateManySubMock.mock.restore()
+  }
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NP-205: one sign-in, each reminder once, a store banner
+// ─────────────────────────────────────────────────────────────────────────────
+
+test('(id: e015cb2f) an android token registering mutes only this member\'s android-classified web subscriptions', async () => {
+  const fcmToken = 'dGVzdA:APA91bH' + 'abc_DEF-123.'.repeat(12)
+  const { req, userId } = await authedRequest(
+    'http://localhost/api/notifications/subscribe',
+    'POST',
+    { endpoint: fcmToken, platform: 'android' },
+  )
+
+  const findOneMock = mock.method(UserProgress, 'findOne', () => ({
+    select: () => ({ lean: async () => ({ notificationsEnabled: true, notificationPrefs: {} }) }),
+  }))
+  const updateOneMock = mock.method(UserProgress, 'updateOne', async () => ({ acknowledged: true }))
+  const findOneAndUpdateSubMock = mock.method(PushSubscription, 'findOneAndUpdate', async () => ({ acknowledged: true }))
+  const updateManySubMock = mock.method(PushSubscription, 'updateMany', async () => ({ acknowledged: true }))
+
+  try {
+    const res = await subscribePost(req)
+    assert.equal(res.status, 200)
+    assert.equal(updateManySubMock.mock.calls.length, 1)
+    const [filter] = updateManySubMock.mock.calls[0].arguments as [Record<string, unknown>]
+    assert.deepEqual(filter, { userId, platform: 'web', webOS: 'android', mutedAt: null })
+  } finally {
+    findOneMock.mock.restore()
+    updateOneMock.mock.restore()
+    findOneAndUpdateSubMock.mock.restore()
+    updateManySubMock.mock.restore()
+  }
+})
+
+test('(id: e015cb2f) a web subscribe classifies and stores the browser\'s OS family', async () => {
+  const { req } = await authedRequest(
+    'http://localhost/api/notifications/subscribe',
+    'POST',
+    { endpoint: 'https://fcm.googleapis.com/fcm/send/x', keys: { p256dh: 'p', auth: 'a' } },
+  )
+  req.headers.set(
+    'user-agent',
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1',
+  )
+
+  const findOneMock = mock.method(UserProgress, 'findOne', () => ({
+    select: () => ({ lean: async () => ({ notificationsEnabled: true, notificationPrefs: {} }) }),
+  }))
+  const updateOneMock = mock.method(UserProgress, 'updateOne', async () => ({ acknowledged: true }))
+  let capturedUpdate: Record<string, unknown> | null = null
+  const findOneAndUpdateSubMock = mock.method(PushSubscription, 'findOneAndUpdate', async (_filter: unknown, update: unknown) => {
+    capturedUpdate = update as Record<string, unknown>
+    return { acknowledged: true }
+  })
+
+  try {
+    const res = await subscribePost(req)
+    assert.equal(res.status, 200)
+    const set = (capturedUpdate?.$set ?? capturedUpdate) as Record<string, unknown>
+    assert.equal(set.webOS, 'ios')
+  } finally {
+    findOneMock.mock.restore()
+    updateOneMock.mock.restore()
+    findOneAndUpdateSubMock.mock.restore()
+  }
+})
+
+test('GET /api/notifications/preferences reports nativeAppActive from PushSubscription (drives the Settings notice)', async () => {
+  const { req, userId } = await authedRequest('http://localhost/api/notifications/preferences', 'GET')
+
+  const findOneMock = mock.method(UserProgress, 'findOne', () => ({
+    select: () => ({ lean: async () => null }),
+  }))
+  const findByIdMock = mock.method(
+    (await import('../../models/User')).default,
+    'findById',
+    () => ({ select: () => ({ lean: async () => null }) }),
+  )
+  let capturedFilter: unknown = null
+  const countMock = mock.method(PushSubscription, 'countDocuments', async (filter: unknown) => {
+    capturedFilter = filter
+    return 1
+  })
+
+  try {
+    const res = await preferencesGet(req)
+    const body = (await res.json()) as { nativeAppActive?: boolean }
+    assert.equal(res.status, 200)
+    assert.equal(body.nativeAppActive, true)
+    assert.deepEqual(capturedFilter, { userId, platform: { $in: ['ios', 'android'] } })
+  } finally {
+    findOneMock.mock.restore()
+    findByIdMock.mock.restore()
+    countMock.mock.restore()
+  }
+})
+
+test('(id: e015cb2f) reenable:true is the only path that unmutes a web subscription', async () => {
+  const { req } = await authedRequest(
+    'http://localhost/api/notifications/subscribe',
+    'POST',
+    { endpoint: 'https://fcm.googleapis.com/fcm/send/y', keys: { p256dh: 'p', auth: 'a' }, reenable: true },
+  )
+
+  const findOneMock = mock.method(UserProgress, 'findOne', () => ({
+    select: () => ({ lean: async () => ({ notificationsEnabled: false, notificationPrefs: {} }) }),
+  }))
+  const updateOneMock = mock.method(UserProgress, 'updateOne', async () => ({ acknowledged: true }))
+  let capturedFilter: unknown = null
+  let capturedUpdate: Record<string, unknown> | null = null
+  const findOneAndUpdateSubMock = mock.method(PushSubscription, 'findOneAndUpdate', async (filter: unknown, update: unknown) => {
+    capturedFilter = filter
+    capturedUpdate = update as Record<string, unknown>
+    return { acknowledged: true }
+  })
+
+  try {
+    const res = await subscribePost(req)
+    assert.equal(res.status, 200)
+    assert.deepEqual(capturedFilter, { endpoint: 'https://fcm.googleapis.com/fcm/send/y' })
+    assert.deepEqual(capturedUpdate?.$unset, { mutedAt: '', mutedReason: '' })
   } finally {
     findOneMock.mock.restore()
     updateOneMock.mock.restore()
