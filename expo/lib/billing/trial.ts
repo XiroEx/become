@@ -1,4 +1,6 @@
-// The 10-day Plus trial — onboarding's one-time offer, never the paywall (NP-129).
+// The 7-day Plus trial — onboarding's one-time offer, never the paywall (NP-129).
+// Shrunk from 10 days to match webapp/lib/billing/trial.ts (George, 2026-10-19);
+// this constant drifted out of parity until now — see the card this ships under.
 //
 // ZERO imports on purpose, same discipline as webapp/lib/billing/trial.ts:
 // this file is read by the native client bundle as well as shared billing logic.
@@ -10,7 +12,7 @@
 // (AGENTS.md). The trial is a client/server decision layered on top of the
 // same Stripe prices, not a change to what Plus costs.
 
-export const TRIAL_DAYS = 10;
+export const TRIAL_DAYS = 7;
 
 export interface TrialSubscriptionRef {
   status?: string | null;
