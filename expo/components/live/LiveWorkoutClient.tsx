@@ -25,6 +25,7 @@ import {
 import type { VideoFramingOverride } from "@/lib/videoFraming";
 import type { VideoTrimOverride } from "@/lib/videoTrim";
 import { useRestTimer } from "@/lib/live/useRestTimer";
+import { useWorkoutLiveActivity } from "@/lib/live/liveActivity/useWorkoutLiveActivity";
 import {
   getRestDuration,
   restAfterStep,
@@ -186,6 +187,14 @@ export interface LiveWorkoutClientProps {
   restEndAlertDeps?: import("@/lib/live/restEndAlert").RestEndAlertDeps;
   /** Fired when a rest countdown reaches zero. */
   onRestEnd?: () => void;
+  /** DI for tests: the Lock Screen Live Activity handle (NP-188). */
+  workoutLiveActivityHandle?: import(
+    "@/lib/live/liveActivity/workoutLiveActivity"
+  ).WorkoutLiveActivityHandle;
+  /** DI for tests: the Lock Screen Live Activity factory (NP-188). */
+  workoutLiveActivityFactory?: import(
+    "@/lib/live/liveActivity/workoutLiveActivity"
+  ).WorkoutLiveActivityFactory | null;
   /**
    * PR ids the save just reported (all-time records). Fires the PR haptic
    * once per new record — the celebration half of NP-082's haptics.
@@ -542,6 +551,8 @@ export function LiveWorkoutClient({
   restAlertDeps,
   restEndAlertDeps,
   onRestEnd,
+  workoutLiveActivityHandle,
+  workoutLiveActivityFactory,
   celebratedPrIds,
   exerciseHistory,
   exercisePRs,
@@ -655,6 +666,16 @@ export function LiveWorkoutClient({
   // other view opens and written on every move.
   const positionRef = useRef<WorkoutPosition | null>(null);
   const [liveStepIndex, setLiveStepIndex] = useState<number>(0);
+  // The same position, mirrored into STATE for the Lock Screen Live Activity
+  // (NP-188): `positionRef` is deliberately a ref (nothing renders from it),
+  // but the activity has to be told, so `rememberPosition` below — the one
+  // choke point every set-complete, skip and jump path already runs through,
+  // Track's checkbox included — sets this too. Null until the member's first
+  // move, which is exactly when the activity still shows step zero.
+  const [activityPosition, setActivityPosition] = useState<{
+    exerciseIndex: number;
+    setIndex: number;
+  } | null>(null);
 
   // Single rest countdown, (re)started whenever a set is completed, and shared
   // by the two views for the same reason the grid is. The timer stores
@@ -725,6 +746,7 @@ export function LiveWorkoutClient({
         at: Date.now(),
       };
       positionRef.current = next;
+      setActivityPosition({ exerciseIndex, setIndex });
       if (positionScope && positionStore) {
         void writeWorkoutPosition(
           positionScope,
@@ -1215,6 +1237,41 @@ export function LiveWorkoutClient({
     : undefined;
   const liveCurrent: LiveSetState | undefined = liveRow;
   const liveTracking = normalizeTracking(liveExercise?.trackingType ?? null);
+
+  // THE LOCK SCREEN LIVE ACTIVITY (NP-188). Tracks `activityPosition` —
+  // `rememberPosition`'s own state mirror — rather than `liveStepIndex`,
+  // which only moves on the LIVE tab's own navigation: Track's checkbox
+  // (`handleSetChange` → `rememberAfterEdit` → `rememberPosition`) must
+  // move the Lock Screen too, since both views share one position. Falls
+  // back to the flow's first step before the member's first move. `rest.active`
+  // (not `rest.running`) gates the phase: a PAUSED rest is still a rest, not
+  // back to lifting. `rest.endsAt` travels straight through — the rule that
+  // must hold is the Lock Screen and the in-app timer naming the exact same
+  // instant.
+  const activityExerciseIndex =
+    activityPosition?.exerciseIndex ?? liveStep?.exerciseIndex ?? 0;
+  const activitySetIndex = activityPosition?.setIndex ?? liveStep?.setIndex ?? 0;
+  const activityExercise = workout.exercises[activityExerciseIndex];
+  const activityTotalSets = activityExercise
+    ? grid[activityExercise.slug]?.length ?? activityExercise.sets ?? 1
+    : 1;
+  useWorkoutLiveActivity({
+    active: workout.exercises.length > 0,
+    workoutTitle: workout.workoutTitle,
+    exerciseName: activityExercise?.name ?? "",
+    setLabel: activityExercise
+      ? `Set ${activitySetIndex + 1} of ${activityTotalSets}`
+      : "",
+    phase: rest.active ? "rest" : "exercise",
+    restEndsAtMs: rest.active ? rest.endsAt : null,
+    restTotalSec: rest.active ? rest.totalSec : null,
+    ...(workoutLiveActivityHandle !== undefined
+      ? { handle: workoutLiveActivityHandle }
+      : {}),
+    ...(workoutLiveActivityFactory !== undefined
+      ? { factory: workoutLiveActivityFactory }
+      : {}),
+  });
   // The web's `isSkipping`, read off the step's inputs: blank means the
   // primary button offers to skip rather than complete. Intervals never
   // skip - there is nothing required to be blank - and a finished step
