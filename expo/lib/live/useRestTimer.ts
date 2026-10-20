@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AppState, type AppStateStatus } from "react-native";
+import { AppState, Keyboard, type AppStateStatus } from "react-native";
 import { createRestTimer, type RestTimer } from "@/lib/live/restTimer";
 import {
   cancelRestAlert,
@@ -118,6 +118,15 @@ export function useRestTimer(
   }, []);
 
   const start = useCallback((durationSec: number) => {
+    // Rest starting means a set's weight/reps box just lost its reason to be
+    // focused — the member tapped Done or the TRACK row ticked itself
+    // complete. Without this, the on-screen keyboard from that input stays
+    // up over the full-screen REST overlay (or the inline RestTimerBar) until
+    // the member taps away themselves, which reads as "the keyboard won't
+    // leave me alone at rest". Both Live and Track start a rest through this
+    // one hook (NP-082), so dismissing here — rather than at each call site —
+    // covers every place a set can be completed.
+    Keyboard.dismiss();
     timerRef.current?.pause();
     const timer = createRestTimer({
       durationSec,
