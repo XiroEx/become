@@ -2,8 +2,9 @@ import { useState } from "react";
 import { Pressable, View } from "react-native";
 import { Text } from "@/components/Text";
 import { Input } from "@/components/Input";
-import { ChevronDown } from "lucide-react-native";
+import { ChevronDown, Layers, Unlink } from "lucide-react-native";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import {
   LiveSetRow,
   setInputsFor,
@@ -25,6 +26,7 @@ import { FramedVideo } from "@/components/FramedVideo";
 import {
   canRemoveExercise,
   getBellWeightInfo,
+  groupIndexes,
   moveExercise,
   removeExercise,
   tracksTime,
@@ -244,6 +246,23 @@ export function TrackWorkoutView({
   const handleUngroup = (idx: number) => {
     emitChange(ungroupAt(exercises, idx));
   };
+  /**
+   * Superset it with the next exercise, or break the group — the web's
+   * header `toggleGroupAt` (NP-287 parity): ungroup when the exercise is
+   * already grouped, otherwise group it with the one right after it. Same
+   * rule `WorkoutExerciseList`'s manage sheet uses, now reachable from the
+   * Track card itself so a member never has to leave it to build a superset.
+   */
+  const handleToggleGroup = (idx: number) => {
+    const ex = exercises[idx];
+    if (!ex) return;
+    if (ex.groupId) {
+      emitChange(ungroupAt(exercises, idx));
+      return;
+    }
+    if (idx + 1 >= exercises.length) return;
+    emitChange(groupIndexes(exercises, [idx, idx + 1], "superset"));
+  };
 
   /** `roundLabel` for one grouped member's set — the shared interleaved flow. */
   const roundLabelFor = (exIdx: number, setIdx: number): string | undefined => {
@@ -369,21 +388,45 @@ export function TrackWorkoutView({
               </View>
             ) : null}
           </View>
-          <View style={{ alignItems: "flex-end", gap: 4 }}>
-            <View
-              testID={`${testID}-exercise-${ex.slug}-progress`}
-              className="h-1.5 w-14 overflow-hidden rounded-full bg-muted"
-            >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            {onExerciseChange && (ex.groupId || exIdx + 1 < exercises.length) ? (
+              <Pressable
+                testID={`${testID}-exercise-${ex.slug}-group-toggle`}
+                onPress={(e) => {
+                  e?.stopPropagation?.();
+                  handleToggleGroup(exIdx);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  ex.groupId
+                    ? `Ungroup ${ex.name}`
+                    : `Superset ${ex.name} with the next exercise`
+                }
+                style={[minTouchTarget, { alignItems: "center", justifyContent: "center" }]}
+              >
+                {ex.groupId ? (
+                  <Unlink size={16} color={colors.primary} />
+                ) : (
+                  <Layers size={16} color={colors["muted-foreground"]} />
+                )}
+              </Pressable>
+            ) : null}
+            <View style={{ alignItems: "flex-end", gap: 4 }}>
               <View
-                style={{ width: `${pct}%` }}
-                className="h-full rounded-full bg-green-500"
+                testID={`${testID}-exercise-${ex.slug}-progress`}
+                className="h-1.5 w-14 overflow-hidden rounded-full bg-muted"
+              >
+                <View
+                  style={{ width: `${pct}%` }}
+                  className="h-full rounded-full bg-green-500"
+                />
+              </View>
+              <ChevronDown
+                size={18}
+                color={colors["muted-foreground"]}
+                style={{ transform: [{ rotate: isCollapsed ? "-90deg" : "0deg" }] }}
               />
             </View>
-            <ChevronDown
-              size={18}
-              color={colors["muted-foreground"]}
-              style={{ transform: [{ rotate: isCollapsed ? "-90deg" : "0deg" }] }}
-            />
           </View>
         </Pressable>
 
