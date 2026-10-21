@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Animated, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from "react-native";
+import { Animated, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   ChevronDown,
@@ -106,6 +107,23 @@ export const LIVE_PANEL_SPACING = {
 const PANEL_SCRIM_HEIGHT = 64;
 /** How tall the fade behind the floating top bar is (the web's `from-black/60`). */
 const TOP_SCRIM_HEIGHT = 128;
+
+/**
+ * THE PANEL IS NEVER OPAQUE (card f598c983).
+ *
+ * The web's bottom overlay is `absolute bottom-0 left-0 right-0 z-10
+ * bg-linear-to-t from-black/80 via-black/40 to-transparent` — a gradient
+ * that peaks at 80% black and never reaches fully opaque, so the clip stays
+ * visible behind the whole panel. Native painted `backgroundColor:
+ * colors.background` (fully opaque, zinc-50/white in light mode) over up to
+ * 72% of the screen — the solid white sheet in the bug report. The panel is
+ * now a `BlurView` (the web's `backdrop-blur`, same material as
+ * `GlassTabBar`) over a translucent theme wash capped here — never 1.0 — so
+ * the clip shows through everywhere, in both modes, while type stays
+ * readable. NP-288's rule still holds: the wash is a theme tint, never the
+ * web's literal white-on-black.
+ */
+export const PANEL_WASH_ALPHA = 0.8;
 
 /**
  * `useSafeAreaInsets` throws without a `SafeAreaProvider` above it in the
@@ -307,7 +325,7 @@ export function LiveStepView({
   keyboardDoneVisible,
   testID,
 }: LiveStepViewProps) {
-  const { colors, tint } = useThemeTokens();
+  const { colors, tint, isDark } = useThemeTokens();
   // THE REAL DEVICE INSET (NP-365): `LiveWorkoutClient` no longer wraps Live
   // in a `SafeAreaView`, so the status-bar and home-indicator strips are
   // exactly where the clip now shows through. This view pads its own chrome
@@ -756,13 +774,15 @@ export function LiveStepView({
 
         {/* The web fades its panel into the clip (`bg-linear-to-t
             from-black/80 via-black/40 to-transparent`). Native fades into the
-            PAGE colour instead and then goes solid under the text, because
-            this screen is light on a light phone (NP-288) and 4px type over a
-            moving clip is not readable in either mode. */}
+            PAGE colour instead and then holds a translucent blur under the
+            text (card f598c983), because this screen is light on a light
+            phone (NP-288) and 4px type over a moving clip is not readable in
+            either mode. The scrim peaks at PANEL_WASH_ALPHA — the web's own
+            0.8 ceiling — never fully opaque. */}
         <LinearGradient
           testID={`${testID}-live-panel-scrim`}
           pointerEvents="none"
-          colors={[tint("background", 0), tint("background", 0.92)]}
+          colors={[tint("background", 0), tint("background", PANEL_WASH_ALPHA)]}
           style={{ height: PANEL_SCRIM_HEIGHT, marginBottom: -1 }}
         />
 
@@ -771,13 +791,32 @@ export function LiveStepView({
           style={{
             flexShrink: 1,
             maxHeight: LIVE_PANEL_SPACING.panelMaxHeight,
-            backgroundColor: colors.background,
             // No SafeAreaView above this screen in Live (NP-365), so the
             // panel's own bottom padding carries the home-indicator inset on
             // top of its ordinary spacing.
             paddingBottom: LIVE_PANEL_SPACING.panelPaddingBottom + insets.bottom,
+            // Translucent wash, never opaque (card f598c983): the clip stays
+            // visible behind the whole panel, the way the web's
+            // `from-black/80` gradient never reaches fully opaque. The
+            // BlurView below adds the web's `backdrop-blur` on top.
+            backgroundColor: tint("background", PANEL_WASH_ALPHA),
           }}
         >
+          {/* The web's `backdrop-blur-sm` on the bottom overlay: a real blur
+              of the clip behind the panel (same material as GlassTabBar —
+              system chrome on iOS, dimezis on Android), so the panel reads
+              as frosted video rather than a painted sheet. Absolute-fill and
+              inert: it never steals taps from the inputs above it. */}
+          <BlurView
+            testID={`${testID}-live-panel-blur`}
+            tint={Platform.OS === "ios" ? "systemChromeMaterial" : isDark ? "dark" : "light"}
+            intensity={Platform.OS === "ios" ? 60 : 24}
+            experimentalBlurMethod={
+              Platform.OS === "android" ? "dimezisBlurView" : "none"
+            }
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
+          />
           <ScrollView
             testID={`${testID}-live-panel-scroll`}
             style={{ flexGrow: 0, flexShrink: 1 }}
