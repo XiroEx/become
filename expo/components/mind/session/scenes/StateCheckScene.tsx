@@ -44,8 +44,7 @@ import { announce } from "@/lib/a11y/announce";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { useAuth } from "@/lib/auth/useAuth";
 import { WEBAPP_BASE_URL } from "@/lib/config";
-import type { TokenName } from "@/lib/theme/tokens";
-import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { resolveToken } from "@/lib/theme/tokens";
 
 /**
  * The state check — the opening move, ported from
@@ -65,30 +64,48 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
  * It reports the state up through `onState` BEFORE the POST resolves, because
  * that is what re-opens the session (`SessionPlayer`'s `realignOpening`) and the
  * member should not wait on the network to see the session respond.
+ *
+ * ALWAYS BLACK, LIKE THE WEB (card: "mind set daily session ... white
+ * background needs to turn back to black"). The web's scene has no surface of
+ * its own — it renders straight onto the player's fixed `bg-black text-white`
+ * stage (see that file's own header comment) and never reads
+ * `prefers-color-scheme`. This is the FIRST move of every session, so it is
+ * what the member sees the instant a session opens; the native port used to
+ * draw it from `useThemeTokens()` (the system light/dark setting) like every
+ * other screen in the app, which is correct everywhere else but is exactly
+ * what put a white card grid under the player's black top bar on a light-mode
+ * phone. Every colour below is pinned to the DARK palette via `resolveToken`
+ * — not the hook, and not a literal (`noHexColorLiterals.test.ts`) — so this
+ * one scene stays the web's black-and-white regardless of the system setting,
+ * the same way the player's own chrome already does (NP-297).
  */
 
 /** Within this window of your last check-in, a new session skips the full grid. */
 const RECENT_WINDOW_MS = 4 * 60 * 60 * 1000;
 
-/**
- * The per-state tint, as TOKENS rather than the web's `text-red-300` /
- * `text-blue-300` (NP-123: a colour here follows the system light/dark setting).
- * `low_energy` is the one the palette cannot say — there is no blue token, and
- * zinc/red/amber/green is deliberately the whole set — so it takes the muted
- * foreground, which reads as the "flat" end of the spectrum in both modes.
- */
-const TINT: Record<MindState, TokenName> = {
-  stressed: "destructive",
-  distracted: "accent",
-  low_energy: "muted-foreground",
-  locked_in: "success",
+/** Every colour this scene uses, pinned to the dark palette (see header comment). */
+const C = {
+  foreground: resolveToken("foreground", "dark"), // white
+  "muted-foreground": resolveToken("muted-foreground", "dark"), // zinc-400
+  "primary-foreground": resolveToken("primary-foreground", "dark"), // zinc-900, on the white CTA
+  destructive: resolveToken("destructive", "dark"), // red-400
+  accent: resolveToken("accent", "dark"), // amber-400
+  success: resolveToken("success", "dark"), // green-400
+} as const;
+
+/** The per-state tint, pinned dark like the rest of this scene (see `C`). */
+const TINT_COLOR: Record<MindState, string> = {
+  stressed: C.destructive,
+  distracted: C.accent,
+  low_energy: C["muted-foreground"],
+  locked_in: C.success,
 };
 
 const TINT_CLASS: Record<MindState, string> = {
-  stressed: "text-destructive",
-  distracted: "text-accent",
-  low_energy: "text-muted-foreground",
-  locked_in: "text-success",
+  stressed: "text-red-400",
+  distracted: "text-amber-400",
+  low_energy: "text-zinc-400",
+  locked_in: "text-green-400",
 };
 
 /** Canonical per-state meta for the "welcome back" opener. */
@@ -161,7 +178,6 @@ export function StateCheckScene({
   preview = false,
   testID = "mind-state-check",
 }: MindSceneProps) {
-  const { colors } = useThemeTokens();
   const { token } = useAuth();
 
   const [chosen, setChosen] = useState<MindState | null>(null);
@@ -297,9 +313,9 @@ export function StateCheckScene({
     return (
       <View
         testID={`${testID}-loading`}
-        className="flex-1 items-center justify-center"
+        className="flex-1 items-center justify-center bg-black"
       >
-        <ActivityIndicator color={colors["muted-foreground"]} />
+        <ActivityIndicator color={C["muted-foreground"]} />
       </View>
     );
   }
@@ -310,24 +326,24 @@ export function StateCheckScene({
     return (
       <View
         testID={`${testID}-opener`}
-        className="flex-1 items-center justify-center px-6"
+        className="flex-1 items-center justify-center bg-black px-6"
       >
-        <View className="mb-5 h-16 w-16 items-center justify-center rounded-2xl border border-border bg-card">
+        <View className="mb-5 h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-white/5">
           {/* `createElement` and not `<OpenerIcon />`: which lucide icon this is
               is decided by the feeling they tapped, and the React compiler reads
               a JSX tag resolved at render time as a component defined during
               render (it would remount on every keystroke if it were one). */}
           {createElement(OpenerIcon, {
             size: 32,
-            color: colors[TINT[recent]],
+            color: TINT_COLOR[recent],
           })}
         </View>
-        <Text className="text-2xl font-extrabold text-foreground">
+        <Text className="text-2xl font-extrabold text-white">
           Welcome back
         </Text>
-        <Text className="mt-2 max-w-xs text-center text-muted-foreground">
+        <Text className="mt-2 max-w-xs text-center text-white/50">
           Last check-in:{" "}
-          <Text className="font-semibold text-foreground">
+          <Text className="font-semibold text-white">
             {recentFeelingLabel(recent, recentFeeling)}
           </Text>
           . Pick up where you left off?
@@ -338,12 +354,12 @@ export function StateCheckScene({
           accessibilityLabel="Let's go"
           onPress={resumeRecent}
           style={minTouchTarget}
-          className="mt-9 w-full max-w-xs flex-row items-center justify-center gap-2 rounded-2xl bg-primary py-4"
+          className="mt-9 w-full max-w-xs flex-row items-center justify-center gap-2 rounded-2xl bg-white py-4"
         >
-          <Text className="text-base font-bold text-primary-foreground">
+          <Text className="text-base font-bold text-black">
             Let&apos;s go
           </Text>
-          <ArrowRight size={20} color={colors["primary-foreground"]} />
+          <ArrowRight size={20} color={C["primary-foreground"]} />
         </Pressable>
         <Pressable
           testID={`${testID}-recheck`}
@@ -353,8 +369,8 @@ export function StateCheckScene({
           style={minTouchTarget}
           className="mt-3 flex-row items-center justify-center gap-1.5"
         >
-          <RotateCcw size={16} color={colors["muted-foreground"]} />
-          <Text className="text-sm font-medium text-muted-foreground">
+          <RotateCcw size={16} color={C["muted-foreground"]} />
+          <Text className="text-sm font-medium text-white/50">
             I&apos;m feeling different
           </Text>
         </Pressable>
@@ -367,6 +383,7 @@ export function StateCheckScene({
     return (
       <ScrollView
         testID={`${testID}-note`}
+        className="flex-1 bg-black"
         contentContainerStyle={{
           flexGrow: 1,
           alignItems: "center",
@@ -379,14 +396,14 @@ export function StateCheckScene({
         {/* Both ends named by the feeling actually chosen — "Scattered →
             Drained" is the shift they made; "distracted → low energy" is not
             something either of them said. */}
-        <Text className="text-xs uppercase tracking-widest text-muted-foreground">
+        <Text className="text-xs uppercase tracking-widest text-white/50">
           {recent ? `${recentFeelingLabel(recent, recentFeeling)} → ` : ""}
           {pendingFeeling || STATE_META[pendingState].label}
         </Text>
-        <Text className="mt-3 text-2xl font-extrabold text-foreground">
+        <Text className="mt-3 text-2xl font-extrabold text-white">
           What changed?
         </Text>
-        <Text className="mt-2 max-w-xs text-center text-muted-foreground">
+        <Text className="mt-2 max-w-xs text-center text-white/50">
           A quick note on what shifted since earlier.
         </Text>
         <TextInput
@@ -396,8 +413,8 @@ export function StateCheckScene({
           onChangeText={setNote}
           multiline
           placeholder="e.g. wrapped a hard call, hit the gym, bad news…"
-          placeholderTextColor={colors["muted-foreground"]}
-          className="mt-6 w-full max-w-sm rounded-2xl border border-border bg-card p-4 text-center text-base text-foreground"
+          placeholderTextColor={C["muted-foreground"]}
+          className="mt-6 w-full max-w-sm rounded-2xl border border-white/10 bg-white/5 p-4 text-center text-base text-white"
           style={{ minHeight: 96 }}
         />
         <Pressable
@@ -406,12 +423,12 @@ export function StateCheckScene({
           accessibilityLabel="Continue"
           onPress={submitNote}
           style={minTouchTarget}
-          className="mt-6 w-full max-w-xs flex-row items-center justify-center gap-2 rounded-2xl bg-primary py-4"
+          className="mt-6 w-full max-w-xs flex-row items-center justify-center gap-2 rounded-2xl bg-white py-4"
         >
-          <Text className="text-base font-bold text-primary-foreground">
+          <Text className="text-base font-bold text-black">
             Continue
           </Text>
-          <ArrowRight size={20} color={colors["primary-foreground"]} />
+          <ArrowRight size={20} color={C["primary-foreground"]} />
         </Pressable>
         <Pressable
           testID={`${testID}-note-skip`}
@@ -425,7 +442,7 @@ export function StateCheckScene({
           style={minTouchTarget}
           className="mt-3 items-center justify-center"
         >
-          <Text className="text-sm font-medium text-muted-foreground">Skip</Text>
+          <Text className="text-sm font-medium text-white/50">Skip</Text>
         </Pressable>
       </ScrollView>
     );
@@ -436,6 +453,7 @@ export function StateCheckScene({
     return (
       <ScrollView
         testID={`${testID}-grid`}
+        className="flex-1 bg-black"
         contentContainerStyle={{
           flexGrow: 1,
           justifyContent: "center",
@@ -444,19 +462,19 @@ export function StateCheckScene({
         }}
       >
         <View className="mx-auto w-full max-w-sm">
-          <Text className="text-center text-2xl font-extrabold text-foreground">
+          <Text className="text-center text-2xl font-extrabold text-white">
             {move.title}
           </Text>
           {todayMood && !recheck ? (
             <Text
               testID={`${testID}-mood-opener`}
-              className="mt-2 text-center text-muted-foreground"
+              className="mt-2 text-center text-white/50"
             >
               {moodOpenerLine(todayMood)}{" "}
-              <Text className="text-foreground">Which of these is closest?</Text>
+              <Text className="text-white">Which of these is closest?</Text>
             </Text>
           ) : move.subtitle ? (
-            <Text className="mt-2 text-center text-muted-foreground">
+            <Text className="mt-2 text-center text-white/50">
               {move.subtitle}
             </Text>
           ) : null}
@@ -468,10 +486,10 @@ export function StateCheckScene({
                 accessibilityRole="button"
                 accessibilityLabel={label}
                 onPress={() => pick(value, label)}
-                className="mb-2.5 items-center justify-center gap-2 rounded-2xl border border-border bg-card py-4"
+                className="mb-2.5 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 py-4"
                 style={{ width: "48.5%", ...minTouchTarget }}
               >
-                <Icon size={24} color={colors[TINT[value]]} />
+                <Icon size={24} color={TINT_COLOR[value]} />
                 <Text className={`text-xs font-semibold ${TINT_CLASS[value]}`}>
                   {label}
                 </Text>
@@ -486,7 +504,7 @@ export function StateCheckScene({
             style={minTouchTarget}
             className="mt-4 items-center justify-center"
           >
-            <Text className="text-sm font-medium text-muted-foreground">
+            <Text className="text-sm font-medium text-white/50">
               Something else / not sure
             </Text>
           </Pressable>
@@ -500,14 +518,14 @@ export function StateCheckScene({
     <View
       testID={`${testID}-reveal`}
       accessibilityLiveRegion="polite"
-      className="flex-1 items-center justify-center px-6"
+      className="flex-1 items-center justify-center bg-black px-6"
     >
-      <Text className="text-xs uppercase tracking-widest text-muted-foreground">
+      <Text className="text-xs uppercase tracking-widest text-white/50">
         Noted
       </Text>
       <Text
         testID={`${testID}-message`}
-        className="mt-4 max-w-sm text-center text-xl font-semibold leading-relaxed text-foreground"
+        className="mt-4 max-w-sm text-center text-xl font-semibold leading-relaxed text-white"
       >
         {message}
       </Text>
@@ -517,12 +535,12 @@ export function StateCheckScene({
         accessibilityLabel="Continue"
         onPress={() => onDone()}
         style={minTouchTarget}
-        className="mt-10 w-full max-w-xs flex-row items-center justify-center gap-2 rounded-2xl bg-primary py-4"
+        className="mt-10 w-full max-w-xs flex-row items-center justify-center gap-2 rounded-2xl bg-white py-4"
       >
-        <Text className="text-base font-bold text-primary-foreground">
+        <Text className="text-base font-bold text-black">
           Continue
         </Text>
-        <ArrowRight size={20} color={colors["primary-foreground"]} />
+        <ArrowRight size={20} color={C["primary-foreground"]} />
       </Pressable>
     </View>
   );
