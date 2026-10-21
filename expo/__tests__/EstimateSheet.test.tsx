@@ -527,8 +527,8 @@ describe("EstimateSheet describe sheet matches web (NP-263)", () => {
     // bottom half of the screen with the note field hidden behind the
     // keyboard and unable to scroll into view. Same shape as Quick Add's
     // NP-316 fix: bound the BottomSheet itself near full screen via
-    // `sheetStyle`, and let the KeyboardAvoidingView + ScrollView fill it
-    // with `flex: 1` rather than a fixed height.
+    // `sheetStyle`, and let the KeyboardAvoidingView fill it with
+    // `flex: 1` rather than a fixed height.
     const fs = jest.requireActual("fs");
     const path = jest.requireActual("path");
     const src = fs.readFileSync(
@@ -537,19 +537,45 @@ describe("EstimateSheet describe sheet matches web (NP-263)", () => {
     );
     expect(src).toMatch(/sheetStyle=\{\{\s*maxHeight:\s*["']90%["']\s*\}\}/);
     expect(src).not.toMatch(/maxHeight:\s*520/);
-    // The KeyboardAvoidingView and the ScrollView it wraps both need to be
-    // allowed to fill/shrink (flex: 1) — a fixed height on either defeats
-    // the sheetStyle cap above.
+    // The KeyboardAvoidingView needs to be allowed to fill/shrink
+    // (flex: 1) — a fixed height defeats the sheetStyle cap above.
     const kavBlock = src.slice(
       src.indexOf("<KeyboardAvoidingView"),
       src.indexOf("<ScrollView"),
     );
     expect(kavBlock).toMatch(/style=\{\{\s*flex:\s*1\s*\}\}/);
-    const scrollViewBlock = src.slice(
-      src.indexOf("<ScrollView"),
-      src.indexOf("<ScrollView") + 400,
+  });
+
+  it("CARD: the ScrollView itself does NOT get its own flex: 1 — matching QuickAddSheet's working NP-316 pattern, not re-adding it", () => {
+    // A follow-up regression: EstimateSheet's own `style={{ flex: 1 }}` on
+    // the ScrollView (nested inside a BottomSheet whose sheet only *hugs*
+    // its content up to the 90% cap, with no definite height of its own)
+    // left Yoga nothing concrete for the ScrollView to grow into on a real
+    // device — the sheet rendered collapsed to almost nothing (just the
+    // grab handle), worse than the original fixed-520px bug it replaced.
+    // QuickAddSheet (the sibling this was supposed to copy) never puts
+    // `flex: 1` on its own ScrollView — only on the KeyboardAvoidingView —
+    // and that pattern is the one that actually works on-device.
+    const fs = jest.requireActual("fs");
+    const path = jest.requireActual("path");
+    const estimateSheetSrc = fs.readFileSync(
+      path.resolve(__dirname, "..", "components/nutrition/EstimateSheet.tsx"),
+      "utf8",
     );
-    expect(scrollViewBlock).toMatch(/style=\{\{\s*flex:\s*1\s*\}\}/);
+    const quickAddSrc = fs.readFileSync(
+      path.resolve(__dirname, "..", "components/nutrition/QuickAddSheet.tsx"),
+      "utf8",
+    );
+    const scrollViewBlock = estimateSheetSrc.slice(
+      estimateSheetSrc.indexOf("<ScrollView"),
+      estimateSheetSrc.indexOf("<ScrollView") + 400,
+    );
+    expect(scrollViewBlock).not.toMatch(/style=\{\{\s*flex:\s*1\s*\}\}/);
+    const quickAddScrollViewBlock = quickAddSrc.slice(
+      quickAddSrc.indexOf("<ScrollView"),
+      quickAddSrc.indexOf("<ScrollView") + 400,
+    );
+    expect(quickAddScrollViewBlock).not.toMatch(/style=\{\{\s*flex:\s*1\s*\}\}/);
   });
 
   it("shows a pencil-icon header with the web's title/subtitle and a close button that closes the sheet", () => {

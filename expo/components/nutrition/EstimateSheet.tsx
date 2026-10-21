@@ -728,6 +728,19 @@ export function EstimateSheet({
         // fix as Quick Add's (NP-316): bound the sheet itself near full
         // screen so the ScrollView below can actually grow and then shrink
         // for the keyboard.
+        //
+        // A follow-up (this card, reverted-looking regression) found that
+        // the 90% cap alone wasn't the whole story: unlike QuickAddSheet,
+        // this ScrollView also had its own `style={{ flex: 1 }}`. Nested
+        // inside a BottomSheet that only *hugs* its content up to the 90%
+        // cap (it has no definite height of its own), a `flex: 1`
+        // (flexBasis: 0) ScrollView gives Yoga nothing concrete to grow
+        // into, so on-device it rendered collapsed to almost nothing — the
+        // sheet looked parked at the very bottom showing just the grab
+        // handle, worse than the original fixed-520px bug. QuickAddSheet
+        // only puts `flex: 1` on the KeyboardAvoidingView and leaves the
+        // ScrollView's own style alone, which is the pattern that actually
+        // works; EstimateSheet now matches it exactly.
         sheetStyle={{ maxHeight: "90%" }}
       >
         {/* NP-319: "undefined" on Android did nothing — a real Android
@@ -742,7 +755,6 @@ export function EstimateSheet({
           <ScrollView
             testID={`${testID}-body`}
             keyboardShouldPersistTaps="handled"
-            style={{ flex: 1 }}
             contentContainerStyle={{ paddingBottom: 8 }}
           >
           <View
