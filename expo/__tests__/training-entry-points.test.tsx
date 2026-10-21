@@ -2,9 +2,11 @@
 // THE WAY IN, RENDERED — every training screen reached the way a member
 // reaches it, from the tab bar.
 //
-// What this pins: `programming/search`, `programming/saved` and the hidden
-// `calendar` tab were finished screens that nothing pushed, and the two Start
-// buttons were wired to `?? (() => {})` defaults their routes never filled in.
+// What this pins: the hidden `calendar` tab was a finished screen that
+// nothing pushed, and the two Start buttons were wired to `?? (() => {})`
+// defaults their routes never filled in. `programming/search` and
+// `programming/saved` still exist as routes but their Workout tab header
+// icons were removed for now, so they are no longer asserted here.
 // Every one of those bugs compiles, renders, and passes a component test —
 // they are facts about the ROUTE TREE, so they need the route tree.
 //
@@ -98,10 +100,8 @@ function tabButton(label: string) {
   return screen.getAllByLabelText(new RegExp(`^${label}, tab,`))[0]!;
 }
 
-describe("Search, Saved and the calendar are two taps from the tab bar", () => {
+describe("The calendar is two taps from the tab bar", () => {
   it.each([
-    ["programming-open-search", "(app)/(tabs)/programming/search", "/programming/search"],
-    ["programming-open-saved", "(app)/(tabs)/programming/saved", "/programming/saved"],
     ["programming-open-calendar", "(app)/(tabs)/calendar/index", "/calendar"],
   ])(
     "tap 1 = the Workout tab, tap 2 = %s",
@@ -130,13 +130,13 @@ describe("Search, Saved and the calendar are two taps from the tab bar", () => {
     15000,
   );
 
-  it("pushes them, so Back returns to the programs list", async () => {
+  it("pushes calendar, so Back returns to the programs list", async () => {
     const rendered = await renderShell("/(tabs)/programming");
     expect(await screen.findByTestId("programming-index-route")).toBeTruthy();
 
-    fireEvent.press(screen.getByTestId("programming-open-saved"));
+    fireEvent.press(screen.getByTestId("programming-open-calendar"));
     expect(
-      await screen.findByTestId(screenId("(app)/(tabs)/programming/saved")),
+      await screen.findByTestId(screenId("(app)/(tabs)/calendar/index")),
     ).toBeTruthy();
 
     act(() => {

@@ -6,10 +6,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import {
   CalendarDays,
   Dumbbell,
-  Heart,
   HelpCircle,
   History,
-  Search,
   Sparkles,
   Wand2,
 } from "lucide-react-native";
@@ -126,32 +124,9 @@ export default function ProgrammingIndexRoute() {
                 History
               </Text>
             </Pressable>
-            <Pressable
-              testID="programming-open-search"
-              accessibilityRole="button"
-              accessibilityLabel="Search programs"
-              onPress={() => router.push("/(tabs)/programming/search")}
-              className="rounded-xl border border-border p-2"
-            >
-              <Search
-                color={colors["muted-foreground"]}
-                size={20}
-                strokeWidth={1.5}
-              />
-            </Pressable>
-            <Pressable
-              testID="programming-open-saved"
-              accessibilityRole="button"
-              accessibilityLabel="Saved programs"
-              onPress={() => router.push("/(tabs)/programming/saved")}
-              className="rounded-xl border border-border p-2"
-            >
-              <Heart
-                color={colors["muted-foreground"]}
-                size={20}
-                strokeWidth={1.5}
-              />
-            </Pressable>
+            {/* Search and Saved (favorite) icons removed for now — they
+                still have their own routes/screens and remain reachable
+                from Browse Programs, but are hidden from this header. */}
             <Pressable
               testID="programming-open-calendar"
               accessibilityRole="button"
