@@ -1,6 +1,15 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Animated, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from "react-native";
+import {
+  Animated,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   ChevronDown,
@@ -106,6 +115,30 @@ export const LIVE_PANEL_SPACING = {
 const PANEL_SCRIM_HEIGHT = 64;
 /** How tall the fade behind the floating top bar is (the web's `from-black/60`). */
 const TOP_SCRIM_HEIGHT = 128;
+
+/**
+ * THE PANEL IS A WASH, NEVER A SHEET (this card).
+ *
+ * The web's bottom overlay is `bg-linear-to-t from-black/80 via-black/40
+ * to-transparent` — at its most opaque point it is still 80% alpha, so the
+ * clip always shows through. NP-381 already made the native clip a correct
+ * full-screen `position:absolute` layer underneath, but this panel painted
+ * `backgroundColor: colors.background` — FULLY opaque (alpha 1.0) — over up
+ * to `panelMaxHeight` of the screen. In light mode that token is zinc-50: a
+ * literal white sheet sitting on top of the video, which is exactly the bug
+ * ("clip boxed on top, solid white sheet below"). No layout/position Jest
+ * assertion catches this, because position says nothing about what is
+ * painted on top of it.
+ *
+ * The fix keeps the same 0.8 ceiling the top-bar scrim already uses two
+ * screens up (`tint("background", 0.8)` above) — one number, named once, so
+ * it cannot drift back towards 1.0 — plus a real blur of the clip behind the
+ * panel (`expo-blur`, already a dependency, already mocked for Jest via
+ * `GlassTabBar`'s precedent) so the panel reads as frosted glass over the
+ * video rather than a flat tint. Still a theme token, never the web's
+ * literal black/white (NP-288's rule, pinned by `liveWebParity.test.tsx`).
+ */
+const PANEL_WASH_ALPHA = 0.8;
 
 /**
  * `useSafeAreaInsets` throws without a `SafeAreaProvider` above it in the
@@ -307,7 +340,7 @@ export function LiveStepView({
   keyboardDoneVisible,
   testID,
 }: LiveStepViewProps) {
-  const { colors, tint } = useThemeTokens();
+  const { colors, tint, isDark } = useThemeTokens();
   // THE REAL DEVICE INSET (NP-365): `LiveWorkoutClient` no longer wraps Live
   // in a `SafeAreaView`, so the status-bar and home-indicator strips are
   // exactly where the clip now shows through. This view pads its own chrome
@@ -755,14 +788,14 @@ export function LiveStepView({
         <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 0 }} pointerEvents="none" />
 
         {/* The web fades its panel into the clip (`bg-linear-to-t
-            from-black/80 via-black/40 to-transparent`). Native fades into the
-            PAGE colour instead and then goes solid under the text, because
-            this screen is light on a light phone (NP-288) and 4px type over a
-            moving clip is not readable in either mode. */}
+            from-black/80 via-black/40 to-transparent`) — PAGE colour
+            instead of the web's literal black (NP-288), capped at the same
+            0.8 ceiling as the top bar's scrim above so this never reaches
+            the fully opaque sheet the panel itself used to paint. */}
         <LinearGradient
           testID={`${testID}-live-panel-scrim`}
           pointerEvents="none"
-          colors={[tint("background", 0), tint("background", 0.92)]}
+          colors={[tint("background", 0), tint("background", PANEL_WASH_ALPHA)]}
           style={{ height: PANEL_SCRIM_HEIGHT, marginBottom: -1 }}
         />
 
@@ -771,13 +804,43 @@ export function LiveStepView({
           style={{
             flexShrink: 1,
             maxHeight: LIVE_PANEL_SPACING.panelMaxHeight,
-            backgroundColor: colors.background,
+            // Clips the blur to the panel's own bounds — without this the
+            // BlurView below would sample/paint past the rounded edge of
+            // nothing in particular and cost more than it needs to.
+            overflow: "hidden",
             // No SafeAreaView above this screen in Live (NP-365), so the
             // panel's own bottom padding carries the home-indicator inset on
             // top of its ordinary spacing.
             paddingBottom: LIVE_PANEL_SPACING.panelPaddingBottom + insets.bottom,
           }}
         >
+          {/* THE CLIP, FROSTED — not replaced. The panel is translucent glass
+              over the still-playing video (the fix for this card), not a
+              solid colour painted over it. Mocked under Jest the same way
+              `GlassTabBar`'s does (`__mocks__/expo-blur.js`), so this is
+              asserted on its props rather than a real blur. */}
+          <BlurView
+            testID={`${testID}-live-panel-blur`}
+            pointerEvents="none"
+            tint={isDark ? "dark" : "light"}
+            intensity={Platform.OS === "ios" ? 40 : 30}
+            experimentalBlurMethod={
+              Platform.OS === "android" ? "dimezisBlurView" : "none"
+            }
+            style={StyleSheet.absoluteFill}
+          />
+          {/* The wash on top of the blur — a theme tint, never the web's
+              literal black/white, and never past PANEL_WASH_ALPHA (0.8) so
+              the clip always still shows through, exactly like the web's
+              own gradient never reaching fully opaque either. */}
+          <View
+            testID={`${testID}-live-panel-wash`}
+            pointerEvents="none"
+            style={[
+              StyleSheet.absoluteFill,
+              { backgroundColor: tint("background", PANEL_WASH_ALPHA) },
+            ]}
+          />
           <ScrollView
             testID={`${testID}-live-panel-scroll`}
             style={{ flexGrow: 0, flexShrink: 1 }}
