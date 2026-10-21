@@ -233,6 +233,7 @@ export default function GuidedFlow({
                 >
                   <View
                     testID={`guided-flow-progress-${i}-fill`}
+                    className="h-full rounded-full"
                     style={
                       i < idx || done
                         ? { width: "100%", backgroundColor: accent }
