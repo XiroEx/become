@@ -244,7 +244,7 @@ manifest and Play's declaration are held equal to it by
 
 They are read ONCE per process, at launch (`lib/health/switches.ts`), and the
 sync consults that snapshot — so **turning a direction off stops it at the next
-launch**, which is what Settings says and what iOS will do for the same reason.
+launch**, which is what Settings says and what iOS does too (NP-185).
 It is also the honest description of the platform: Health Connect's own
 `revokeAllPermissions()` does not take effect until the process restarts, and its
 docs say not to hang an in-app disconnect toggle on it — track the state

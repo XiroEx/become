@@ -20,7 +20,9 @@
         "NSCameraUsageDescription": "Become uses the camera to photograph a meal for its estimate, scan a food barcode, photograph a food label you report, and mirror you in a Mind session.",
         "NSPhotoLibraryUsageDescription": "Become opens your photo library only when you pick a photo — a meal, a food label, an avatar or a feedback screenshot — and reads nothing else from it.",
         "NSMicrophoneUsageDescription": "Become uses the microphone only to follow along as you speak your affirmation out loud.",
-        "NSSpeechRecognitionUsageDescription": "Become uses speech recognition only to follow along as you speak your affirmation out loud."
+        "NSSpeechRecognitionUsageDescription": "Become uses speech recognition only to follow along as you speak your affirmation out loud.",
+        "NSHealthShareUsageDescription": "Become reads weigh-ins already recorded in Apple Health, if you turn that on in Settings.",
+        "NSHealthUpdateUsageDescription": "Become writes a weigh-in you log here back to Apple Health, if you turn that on in Settings."
       },
       "privacyManifests": {
         "NSPrivacyTracking": false,
@@ -62,6 +64,14 @@
           },
           {
             "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeDeviceID",
+            "NSPrivacyCollectedDataTypeLinked": true,
+            "NSPrivacyCollectedDataTypeTracking": false,
+            "NSPrivacyCollectedDataTypePurposes": [
+              "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+            ]
+          },
+          {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeHealth",
             "NSPrivacyCollectedDataTypeLinked": true,
             "NSPrivacyCollectedDataTypeTracking": false,
             "NSPrivacyCollectedDataTypePurposes": [
@@ -126,6 +136,7 @@
       "expo-local-authentication",
       "expo-video",
       "react-native-health-connect",
+      "react-native-health",
       [
         "expo-camera",
         {

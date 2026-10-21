@@ -54,6 +54,16 @@ export function Toggle({
       // points tall is not a switch any more. The TOUCHABLE area grows
       // instead: 8 points of slop top and bottom make it 48 x 44.
       hitSlop={hitSlopToMinTarget(TRACK_WIDTH, TRACK_HEIGHT)}
+      // `className`'s `w-12 h-7` is what actually paints the track (and is
+      // what NativeWind resolves on device); this literal `style` repeats the
+      // same two numbers so a test that reads `style` — which, unlike a real
+      // device, never resolves a className — can see the size the hitSlop
+      // above was computed against. `__tests__/accessibility.test.tsx`'s own
+      // "44 by 44 minimum targets" sweep is exactly that: it is documented to
+      // not resolve NativeWind, and a switch with no numeric style of its own
+      // measured as a 0 x 16 target the first time this component landed on
+      // a screen that sweep covers (NP-185, `HealthSyncSection`'s toggles).
+      style={{ width: TRACK_WIDTH, height: TRACK_HEIGHT }}
       className={`w-12 h-7 rounded-full justify-center px-1 ${
         value ? (color === "info" ? "bg-info" : "bg-primary") : "bg-muted"
       } ${disabled ? "opacity-50" : ""}`}

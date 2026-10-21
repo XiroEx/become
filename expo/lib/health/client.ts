@@ -4,8 +4,9 @@
  * `createHealthAdapter` (lib/health/adapter.ts) takes injected platform impls so
  * jest can drive it with fakes; this file is the other end of that — it builds
  * the impls from whatever native module the phone actually has, once per
- * process, and answers null when there is none (iOS until NP-185, Expo Go,
- * web, and a phone with no Health Connect).
+ * process, and answers null when there is none (Expo Go, web, a phone with no
+ * Health Connect, or an iOS build whose `react-native-health` native side
+ * failed to link).
  */
 import { Platform } from "react-native";
 import { createHealthAdapter } from "./adapter";
@@ -14,6 +15,7 @@ import {
   createHealthConnectImpl,
   loadHealthConnectModule,
 } from "./healthConnect";
+import { createHealthKitImpl, loadHealthKitModule } from "./healthKit";
 import type { HealthClient } from "./types";
 
 let cached: HealthClient | null | undefined;
@@ -41,8 +43,14 @@ function buildHealthClient(): HealthClient | null {
       android: createHealthConnectImpl(module),
     });
   }
-  // iOS lands with NP-185 / NP-186: install `react-native-health`, build its
-  // impl here, flip `HEALTH_SYNC_ENABLED_IOS`.
+  if (Platform.OS === "ios") {
+    const module = loadHealthKitModule();
+    if (!module) return null;
+    return createHealthAdapter({
+      platform: "ios",
+      ios: createHealthKitImpl(module),
+    });
+  }
   return null;
 }
 

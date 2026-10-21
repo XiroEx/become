@@ -77,15 +77,74 @@ of that (it names Become, it is long enough to be a sentence, it is not a
 placeholder) and the unused half of the rule too: a usage string with no module
 behind it is a question from App Review, so it fails as well.
 
-The v1 set is five keys (NP-206 audit): camera (meal photo, barcode scan,
-food-label evidence, Mind mirror preview), photo library (meal, food label,
-avatar, feedback screenshot — picked, never scanned), microphone + speech
-recognition (speaking the affirmation out loud), and Face ID (unlock instead
-of a fresh sign-in link). Push needs no key on iOS; HealthKit ships no key
-until NP-185 installs its module; nothing is saved to the library so there is
-no `NSPhotoLibraryAddUsageDescription`. `__tests__/releaseCandidatePermissions.test.ts`
+The v1 set is seven keys (NP-206 audit, extended by NP-185): camera (meal
+photo, barcode scan, food-label evidence, Mind mirror preview), photo library
+(meal, food label, avatar, feedback screenshot — picked, never scanned),
+microphone + speech recognition (speaking the affirmation out loud), Face ID
+(unlock instead of a fresh sign-in link), and the two HealthKit keys — share
+(import weigh-ins) and update (write a weigh-in back), both gated on the
+member turning that direction on in Settings, never asked at launch. Push
+needs no key on iOS; nothing is saved to the library so there is no
+`NSPhotoLibraryAddUsageDescription`. `__tests__/releaseCandidatePermissions.test.ts`
 pins the whole set — add a key with the module that needs it, or the suite
 fails.
+
+## HealthKit (NP-185)
+
+Weight both ways through `react-native-health` (the maintained module; it
+ships its own Expo config plugin, bare-named in `app.json` → `plugins`, so
+there is no hand-written plugin for the entitlement). The plugin writes
+`com.apple.developer.healthkit = true` into the entitlements and falls back to
+whatever `ios.infoPlist` already has for the two usage-string keys — which is
+where the real sentences live, same rule as every other permission
+(`lib/config/permissions.ts`).
+
+**Everything above the platform boundary is shared with Android's Health
+Connect (NP-199) — one sync (`lib/health/sync.ts`), one set of switches
+(`lib/health/switches.ts`), one route.** `lib/health/healthKit.ts` is the only
+iOS-specific file: it wraps `react-native-health`'s callback API as the
+`IosClientImpl` `lib/health/ios.ts` expects, lazily required behind
+`Platform.OS === "ios"` so Expo Go and jest never touch the native module.
+
+**The read-permission blind spot is real, not a bug.** Apple's own docs say
+`authorizationStatusForType` "doesn't reflect whether the user has granted
+permission to read data" — HealthKit will not tell this app whether a member
+allowed or refused reading weight, only whether the request was made. So a
+read the member turned on is treated as granted the moment the sheet has been
+shown; a real refusal shows up downstream as an empty sample list, which
+`importWeightFromHealth` already treats as nothing to import, not an error.
+WRITE authorisation IS inspectable, so the write half asserts the real grant
+first, same as Android.
+
+**No per-sample timezone.** A Health Connect record carries its own
+`zoneOffset`; a HealthKit sample through this library carries none, so a
+weigh-in's day is built from the device's CURRENT offset instead — the same
+fallback a Health Connect record with no zone of its own already gets
+(`buildWeightImport`, `lib/health/sync.ts`).
+
+**No client-id upsert.** Health Connect's `clientRecordId` makes a retried
+write replace, not duplicate; HealthKit (through this library) has nothing
+equivalent, so a retried `saveWeight` can leave two samples in Apple Health for
+the one weigh-in. `clientId` still travels on `WeightWrite` for shape parity
+with Android; it is simply not acted on here. Documented on
+`writeWeightKg` in `lib/health/ios.ts` rather than hidden.
+
+**The loop guard** is `sourceId`, not `metadata.dataOrigin`: every sample this
+library returns carries the bundle id of whoever wrote it (confirmed against
+`RCTAppleHealthKit+Queries.m`, which stamps it from
+`[[sample sourceRevision] source] bundleIdentifier`), and a read drops
+Become's own (`io.redbtn.become`) exactly like Android drops its own package.
+
+**Workouts are NP-186, not this ticket.** `HealthWriteClient.writeWorkout` is
+OPTIONAL for exactly this reason (`lib/health/types.ts`) — iOS's `write` object
+only has `writeWeight` until NP-186 lands, and `exportWorkoutToHealth` answers
+`no-writer` rather than throwing when it is missing.
+
+Files: `lib/health/healthKit.ts` (the module), `lib/health/ios.ts` (the
+adapter), `lib/health/sync.ts` (both directions, one server route),
+`lib/health/switches.ts` (the switches + snapshot),
+`components/health/HealthSyncBridge.tsx` (launch AND foreground import),
+`components/settings/HealthSyncSection.tsx` (the switches in Settings).
 
 ## Safe area
 

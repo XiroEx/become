@@ -298,6 +298,8 @@ modules' own platform sources:
 | iOS | `NSMicrophoneUsageDescription` | Follow along as the member speaks their affirmation |
 | iOS | `NSSpeechRecognitionUsageDescription` | Turn that speech into lit-up words |
 | iOS | `NSFaceIDUsageDescription` | Unlock on reopen instead of a fresh sign-in link |
+| iOS | `NSHealthShareUsageDescription` | Import weigh-ins already recorded in Apple Health |
+| iOS | `NSHealthUpdateUsageDescription` | Write a Become weigh-in back to Apple Health |
 | Android | `CAMERA` | Same camera uses as iOS |
 | Android | `RECORD_AUDIO` | Same affirmation uses as iOS |
 | Android | `health.READ_WEIGHT` | Import weigh-ins the scale or another app recorded |
@@ -308,8 +310,9 @@ modules' own platform sources:
 Rules that travel: no permission is a condition of using the app (every
 refusal degrades — manual barcode entry, black-stage mirror, hold-to-affirm,
 Settings nudges); notifications fire only from the explicit Turn on or the
-end-of-onboarding hand-off, never at launch; HealthKit ships no strings until
-NP-185 installs its module; nothing is saved to the photo library so there
+end-of-onboarding hand-off, never at launch; HealthKit's own sheet (asked only
+once the member turns a direction on in Settings) is the gate for the two
+Health usage strings; nothing is saved to the photo library so there
 is no `NSPhotoLibraryAddUsageDescription`.
 
 The gate is `npx jest __tests__/releaseCandidatePermissions.test.ts` — it
@@ -336,11 +339,14 @@ Become collects these data types (declare in App Store Connect):
 | **Email address** | Yes | Account, magic-link login | No |
 | **User ID (JWT)** | Yes | App functionality (auth) | No |
 | **Push notification token** | Yes | Notifications (workout reminders, streak alerts) | No |
+| **Health & Fitness (Weight)** | Yes | Weigh-ins imported from Apple Health (opt-in, per direction) and logged in Become written back (opt-in, per direction) | No |
 
-We do NOT collect: name, phone, contacts, location, fitness raw data (HealthKit
-read is opt-in + on-device only), photos, browsing history, financial data,
-advertising data. The privacy nutrition label should select "Data Linked to You"
-for the three types above and "Tracking: No".
+We do NOT collect: name, phone, contacts, location, photos, browsing history,
+financial data, advertising data. Health data moves only when the member turns
+a direction on in Settings, and only weight — steps and workouts read from
+Apple Health are not collected (nothing asks for that permission yet; see
+`lib/health/healthKit.ts`). The privacy nutrition label should select "Data
+Linked to You" for the four types above and "Tracking: No".
 
 ## Google Data Safety form
 

@@ -21,7 +21,7 @@ import {
  * Play review.
  *
  * What it pins:
- *   1. iOS ships exactly the five v1 usage strings, each specific and honest.
+ *   1. iOS ships exactly the seven v1 usage strings, each specific and honest.
  *   2. Android declares exactly the six v1 runtime permissions, plus only the
  *      install-time normal permissions — nothing v1 does not use.
  *   3. Every Android runtime permission has its reason in the member's
@@ -122,9 +122,17 @@ describe("iOS ships exactly the v1 usage strings (NP-206)", () => {
     expect(infoPlist.ITSAppUsesNonExemptEncryption).toBe(false);
   });
 
-  it("no HealthKit strings ship before NP-185 installs its module", () => {
-    expect(infoPlist.NSHealthShareUsageDescription).toBeUndefined();
-    expect(infoPlist.NSHealthUpdateUsageDescription).toBeUndefined();
+  it("ships both HealthKit strings, installed by NP-185", () => {
+    expect(String(infoPlist.NSHealthShareUsageDescription)).toMatch(/\bBecome\b/);
+    expect(String(infoPlist.NSHealthShareUsageDescription)).toMatch(
+      /weigh-in|weight/i,
+    );
+    expect(String(infoPlist.NSHealthUpdateUsageDescription)).toMatch(
+      /\bBecome\b/,
+    );
+    expect(String(infoPlist.NSHealthUpdateUsageDescription)).toMatch(
+      /weigh-in|weight/i,
+    );
   });
 
   it("no photo-library ADD string ships — v1 never saves to the library", () => {

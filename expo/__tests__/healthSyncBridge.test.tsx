@@ -21,6 +21,7 @@ jest.mock("@/lib/auth/useAuth", () => ({
 }));
 
 import { render, waitFor } from "@testing-library/react-native";
+import type { AppStateStatus } from "react-native";
 import { HealthSyncBridge } from "@/components/health/HealthSyncBridge";
 
 beforeEach(() => {
@@ -60,5 +61,65 @@ describe("HealthSyncBridge", () => {
     await waitFor(() => {
       expect(run).toHaveBeenCalled();
     });
+  });
+});
+
+// NP-185: the same import also runs on every return to the foreground, not
+// only at launch — a member who weighs in mid-day should see it without
+// force-quitting first.
+describe("HealthSyncBridge — foreground re-sync (NP-185)", () => {
+  function fakeAppState(): {
+    subscribeToAppState: (
+      listener: (status: AppStateStatus) => void,
+    ) => () => void;
+    fire: (status: AppStateStatus) => void;
+  } {
+    let listener: ((status: AppStateStatus) => void) | null = null;
+    return {
+      subscribeToAppState: (fn) => {
+        listener = fn;
+        return () => {
+          listener = null;
+        };
+      },
+      fire: (status) => listener?.(status),
+    };
+  }
+
+  it("runs again when the app returns to the foreground", async () => {
+    mockToken.current = "jwt";
+    const run = jest.fn(async () => null);
+    const { subscribeToAppState, fire } = fakeAppState();
+    render(<HealthSyncBridge run={run} subscribeToAppState={subscribeToAppState} />);
+    await waitFor(() => {
+      expect(run).toHaveBeenCalledTimes(1);
+    });
+
+    fire("active");
+    await waitFor(() => {
+      expect(run).toHaveBeenCalledTimes(2);
+    });
+    expect(run).toHaveBeenCalledWith("jwt");
+  });
+
+  it("does nothing on foreground without a session", async () => {
+    const run = jest.fn(async () => null);
+    const { subscribeToAppState, fire } = fakeAppState();
+    render(<HealthSyncBridge run={run} subscribeToAppState={subscribeToAppState} />);
+    fire("active");
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it("a background transition does not trigger a re-import", async () => {
+    mockToken.current = "jwt";
+    const run = jest.fn(async () => null);
+    const { subscribeToAppState, fire } = fakeAppState();
+    render(<HealthSyncBridge run={run} subscribeToAppState={subscribeToAppState} />);
+    await waitFor(() => {
+      expect(run).toHaveBeenCalledTimes(1);
+    });
+
+    fire("background");
+    expect(run).toHaveBeenCalledTimes(1);
   });
 });

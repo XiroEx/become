@@ -8,25 +8,25 @@ import { Platform } from "react-native";
  * as a switch that only wrote a flag, and for a while that flag landed on the
  * session key and signed the member out).
  *
- * It is per-platform now because the two halves land in different tickets:
+ * Both platforms are on now — they landed in different tickets:
  *
- *  - **Android: on.** NP-199 installs `react-native-health-connect`, declares
- *    the four Health Connect permissions in `app.json` and wires read and write
- *    for weight and workouts (`lib/health/healthConnect.ts`, `lib/health/sync.ts`).
- *  - **iOS: off.** No HealthKit module is installed yet — `lib/health/ios.ts`
- *    is still the adapter shell with no `write` half. NP-185 (weight, both
- *    directions) and NP-186 (workouts) install `react-native-health`, add the
- *    two `NSHealth*UsageDescription` strings and flip this to true.
+ *  - **Android: on (NP-199).** `react-native-health-connect`, the four Health
+ *    Connect permissions in `app.json`, read and write for weight and workouts
+ *    (`lib/health/healthConnect.ts`, `lib/health/sync.ts`).
+ *  - **iOS: on (NP-185).** `react-native-health`, the HealthKit entitlement and
+ *    the two `NSHealth*UsageDescription` strings, read and write for WEIGHT
+ *    only — workouts follow with NP-186 (`lib/health/healthKit.ts`,
+ *    `lib/health/ios.ts`).
  *
  * Everything else about the feature is platform-neutral on purpose: the
- * switches, the launch snapshot, the sync and the server route are shared, so
- * iOS turns on by implementing `HealthClient.write` and changing the line below.
+ * switches, the launch snapshot, the sync and the server route are shared
+ * (`lib/health/switches.ts`, `lib/health/sync.ts`).
  *
  * NP-199: https://board.redbtn.io/b/6a70c4ea2fff468f8e253a89?card=6abb12692379586ae015cb0e
  * NP-185: https://board.redbtn.io/b/6a70c4ea2fff468f8e253a89?card=6abb12672379586ae015cac4
  */
 export const HEALTH_SYNC_ENABLED_ANDROID = true;
-export const HEALTH_SYNC_ENABLED_IOS = false;
+export const HEALTH_SYNC_ENABLED_IOS = true;
 
 /**
  * `platform` defaults to the device's. It is a parameter so a test can ask

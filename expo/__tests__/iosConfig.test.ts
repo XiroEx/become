@@ -123,13 +123,15 @@ describe("iOS submission — privacy manifest", () => {
     expect(manifest?.NSPrivacyTrackingDomains).toEqual([]);
   });
 
-  // Same three types as the App Privacy answers drafted in RELEASE.md: email,
-  // user ID, push token. Linked to the account, never used for tracking.
+  // Same four types as the App Privacy answers drafted in RELEASE.md: email,
+  // user ID, device ID, health (weight — NP-185, opt-in). Linked to the
+  // account, never used for tracking.
   it("declares the collected data types, all linked and none tracking", () => {
     const types = manifest?.NSPrivacyCollectedDataTypes ?? [];
     expect(types.map((t) => t.NSPrivacyCollectedDataType).sort()).toEqual([
       "NSPrivacyCollectedDataTypeDeviceID",
       "NSPrivacyCollectedDataTypeEmailAddress",
+      "NSPrivacyCollectedDataTypeHealth",
       "NSPrivacyCollectedDataTypeUserID",
     ]);
     for (const type of types) {

@@ -67,10 +67,10 @@ export default function AppGroupLayout() {
           loading={loading}
           onNeedsOnboarding={onNeedsOnboarding}
         >
-          {/* Imports Health-recorded weigh-ins once per launch, if the member
-              left that direction on. Renders nothing, and does nothing at all on
-              a platform with no health module (iOS until NP-185) — see
-              components/health/HealthSyncBridge.tsx. */}
+          {/* Imports Health-recorded weigh-ins at launch and on every return to
+              the foreground, if the member left that direction on. Renders
+              nothing, and does nothing at all on a platform with no health
+              module — see components/health/HealthSyncBridge.tsx. */}
           <HealthSyncBridge />
           {/* Pre-composes the AI Mind session in the background on app open
               and when returning to the foreground (NP-102). Silent and non-blocking. */}

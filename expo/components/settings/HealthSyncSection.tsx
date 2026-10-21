@@ -59,8 +59,8 @@ export interface HealthSyncSectionProps {
  *
  * The gate is the OUTER component, which holds no hooks, so nothing about the
  * toggles (including their read of SecureStore on mount) runs on a platform with
- * no health module. That is Android-on / iOS-off today
- * (`lib/health/enabled.ts`): NP-199 wired Health Connect, NP-185 wires HealthKit.
+ * no health module. Both platforms are on now (`lib/health/enabled.ts`):
+ * NP-199 wired Health Connect, NP-185 wires HealthKit.
  *
  * Each direction is a separate answer because each is a separate permission and
  * a separate risk: importing a weigh-in a scale recorded is not the same

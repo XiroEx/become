@@ -427,7 +427,7 @@ describe("export (Become → Health)", () => {
     expect(workoutWrites).toHaveLength(0);
   });
 
-  it("says so, quietly, when the platform has no writer (iOS until NP-185)", async () => {
+  it("says so, quietly, when the platform has no writer at all", async () => {
     const { client } = fakeClient({ writer: false });
     expect(await exportWeighInToHealth({ client, session: ALL_ON }, weighIn)).toEqual(
       { written: false, reason: "no-writer" },
@@ -435,6 +435,30 @@ describe("export (Become → Health)", () => {
     expect(
       await exportWeighInToHealth({ client: null, session: ALL_ON }, weighIn),
     ).toEqual({ written: false, reason: "no-writer" });
+  });
+
+  // NP-185: iOS writes weight before it writes workouts (NP-186) —
+  // `HealthWriteClient.writeWorkout` is optional for exactly this.
+  it("a weight-only writer (iOS before NP-186) writes the weigh-in and reports no-writer for the workout", async () => {
+    const weightWrites: WeightWrite[] = [];
+    const client: HealthClient = {
+      platform: "ios",
+      readWeight: async () => [],
+      readSteps: async () => [],
+      write: {
+        writeWeight: async (sample) => {
+          weightWrites.push(sample);
+        },
+        // No writeWorkout — iOS's shape until NP-186.
+      },
+    };
+    expect(await exportWeighInToHealth({ client, session: ALL_ON }, weighIn)).toEqual(
+      { written: true },
+    );
+    expect(weightWrites).toEqual([weighIn]);
+    expect(await exportWorkoutToHealth({ client, session: ALL_ON }, workout)).toEqual(
+      { written: false, reason: "no-writer" },
+    );
   });
 
   it("refuses a workout that does not end after it starts", async () => {

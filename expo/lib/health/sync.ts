@@ -354,7 +354,11 @@ export async function exportWorkoutToHealth(
     return { written: false, reason: "switch-off" };
   }
   const write = deps.client?.write;
-  if (!write) return { written: false, reason: "no-writer" };
+  // `writeWorkout` is optional on `HealthWriteClient` — iOS writes weight
+  // (NP-185) before it writes workouts (NP-186), so a platform with no
+  // workout writer answers the same "no-writer" a platform with no writer at
+  // all does, rather than throwing.
+  if (!write?.writeWorkout) return { written: false, reason: "no-writer" };
   if (Date.parse(workout.endISO) <= Date.parse(workout.startISO)) {
     // Health Connect refuses a session that ends before it starts, and a
     // zero-length workout is not worth a record.
@@ -424,7 +428,12 @@ export async function runHealthLaunchSync(
   deps: LaunchSyncDeps,
 ): Promise<ImportWeightResult> {
   const session = deps.session ?? currentHealthSyncSession();
-  const client = deps.client ?? getHealthClient();
+  // `client` is explicitly nullable on `LaunchSyncDeps` so a caller (a test,
+  // or a future "no client on this platform" branch) can SAY "there is no
+  // client" — `??` would treat that `null` the same as an omitted key and
+  // fall through to the real `getHealthClient()` anyway, which is not what
+  // an explicit null means.
+  const client = "client" in deps ? deps.client : getHealthClient();
   if (!client) {
     return { ...emptyResult(), reason: "unavailable" };
   }

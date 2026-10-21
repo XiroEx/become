@@ -818,8 +818,8 @@ export function ProfileSettingsScreen({
             </Button>
           </View>
 
-          {/* Health sync: on for Health Connect (NP-199), still hidden on iOS
-              until NP-185 installs HealthKit — see lib/health/enabled.ts. */}
+          {/* Health sync: on for both Health Connect (NP-199) and HealthKit
+              (NP-185) — see lib/health/enabled.ts. */}
           <HealthSyncSection />
 
           {/* THE DANGER ZONE, LAST AND ALWAYS VISIBLE — only this screen's

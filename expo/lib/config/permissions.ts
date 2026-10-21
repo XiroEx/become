@@ -149,10 +149,10 @@ export const PERMISSION_BEARING_MODULES: readonly PermissionBearingModule[] = [
     what: "unlock the app with Face ID instead of a magic link",
     card: "NP-187",
   },
-  // The iOS health bridge `lib/health/adapter.ts` is written against
-  // `react-native-health`; `@kingstinct/react-native-healthkit` is the other
-  // candidate and asks for the same two strings, so both rows are here and
-  // whichever gets installed is the one that fires.
+  // NP-185 installed `react-native-health` — see `lib/health/healthKit.ts`.
+  // `@kingstinct/react-native-healthkit` was the other candidate and asks
+  // for the same two strings, so its rows stay here too: if it ever replaces
+  // `react-native-health`, the usage-string rule keeps passing with no edit.
   {
     module: "react-native-health",
     infoPlistKey: "NSHealthShareUsageDescription",
@@ -317,12 +317,11 @@ export const V1_ANDROID_INSTALL_TIME_PERMISSIONS: readonly string[] = [
 ];
 
 /**
- * Every iOS usage-string key the v1 release candidate ships (NP-206 audit).
- * Push needs no key on iOS; HealthKit ships no key until NP-185 installs its
- * module; nothing is saved back to the photo library so there is no
- * `NSPhotoLibraryAddUsageDescription`; no location, contacts, calendar,
- * tracking or background-mode keys exist because no v1 module touches those
- * resources.
+ * Every iOS usage-string key the v1 release candidate ships (NP-206 audit,
+ * updated by NP-185). Push needs no key on iOS; nothing is saved back to the
+ * photo library so there is no `NSPhotoLibraryAddUsageDescription`; no
+ * location, contacts, calendar, tracking or background-mode keys exist
+ * because no v1 module touches those resources.
  */
 export const V1_IOS_USAGE_STRING_KEYS: readonly string[] = [
   "NSCameraUsageDescription",
@@ -330,6 +329,8 @@ export const V1_IOS_USAGE_STRING_KEYS: readonly string[] = [
   "NSMicrophoneUsageDescription",
   "NSSpeechRecognitionUsageDescription",
   "NSFaceIDUsageDescription",
+  "NSHealthShareUsageDescription",
+  "NSHealthUpdateUsageDescription",
 ];
 
 /** A plugin entry in `expo.plugins`: a name, or a name with props. */

@@ -91,7 +91,13 @@ export interface WorkoutWrite {
  */
 export interface HealthWriteClient {
   writeWeight: (sample: WeightWrite) => Promise<void>;
-  writeWorkout: (workout: WorkoutWrite) => Promise<void>;
+  /**
+   * Present once this platform writes workouts too. Android has had it since
+   * NP-199; iOS gets it with NP-186 — NP-185 only brings the weight half of
+   * `write`, so `exportWorkoutToHealth` has to check for this rather than
+   * assume every writer does both.
+   */
+  writeWorkout?: (workout: WorkoutWrite) => Promise<void>;
 }
 
 export interface HealthClient {
