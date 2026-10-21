@@ -59,7 +59,7 @@ function readSource(relativePath: string): string {
 }
 
 describe("iOS ships exactly the v1 usage strings (NP-206)", () => {
-  it("declares the five v1 keys and no other *UsageDescription", () => {
+  it("declares the seven v1 keys and no other *UsageDescription", () => {
     const declared = Object.keys(infoPlist).filter((k) =>
       k.endsWith("UsageDescription"),
     );
@@ -122,9 +122,17 @@ describe("iOS ships exactly the v1 usage strings (NP-206)", () => {
     expect(infoPlist.ITSAppUsesNonExemptEncryption).toBe(false);
   });
 
-  it("no HealthKit strings ship before NP-185 installs its module", () => {
-    expect(infoPlist.NSHealthShareUsageDescription).toBeUndefined();
-    expect(infoPlist.NSHealthUpdateUsageDescription).toBeUndefined();
+  it("the HealthKit strings ship with NP-185 and say what each direction does", () => {
+    expect(String(infoPlist.NSHealthShareUsageDescription)).toMatch(
+      /Apple Health/i,
+    );
+    expect(String(infoPlist.NSHealthUpdateUsageDescription)).toMatch(
+      /Apple Health/i,
+    );
+    expect(String(infoPlist.NSHealthShareUsageDescription)).toMatch(/read/i);
+    expect(String(infoPlist.NSHealthUpdateUsageDescription)).toMatch(
+      /writes?/i,
+    );
   });
 
   it("no photo-library ADD string ships — v1 never saves to the library", () => {

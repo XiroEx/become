@@ -35,10 +35,11 @@ import {
 import type { HealthClient, HealthPermission } from "@/lib/health/types";
 
 /**
- * The Health sync section is per-platform now: Health Connect is wired
- * (NP-199), HealthKit is not (NP-185). jest runs on the `ios` platform, so the
- * route below renders the iOS answer — nothing — and the section's own tests ask
- * for a platform explicitly rather than mocking `Platform`.
+ * The Health sync section is per-platform: Health Connect is wired (NP-199)
+ * and so is HealthKit (NP-185). jest runs on the `ios` platform, so the route
+ * below renders the iOS answer — the same section Android gets, naming Apple
+ * Health — and the section's own tests ask for a platform explicitly rather
+ * than mocking `Platform`.
  */
 /** The screen reads the session from the one provider, so mount it. */
 function renderRoute() {
@@ -58,35 +59,38 @@ describe("HealthSettingsRoute", () => {
     });
   });
 
-  it("shows no Health sync section on iOS, where no module is installed (NP-185)", async () => {
-    const { queryByTestId, queryByText } = renderRoute();
+  it("shows the Health sync section on iOS now that NP-185 wires HealthKit", async () => {
+    const { queryByTestId, getByTestId, getByText } = renderRoute();
     await waitFor(() => {
-      expect(queryByTestId("danger-zone")).toBeTruthy();
+      expect(getByTestId("danger-zone")).toBeTruthy();
     });
-    expect(queryByTestId("health-sync-section")).toBeNull();
-    expect(queryByTestId("health-toggle-row")).toBeNull();
-    expect(queryByTestId("health-toggle")).toBeNull();
-    expect(queryByText("Health sync")).toBeNull();
-    expect(queryByText("Sync from Health")).toBeNull();
+    expect(queryByTestId("health-sync-section")).toBeTruthy();
+    expect(queryByTestId("health-toggle-row")).toBeTruthy();
+    expect(queryByTestId("health-toggle")).toBeTruthy();
+    expect(getByText("Health sync")).toBeTruthy();
+    expect(getByText("Sync from Health")).toBeTruthy();
   });
 });
 
 describe("HealthSyncSection — the gate", () => {
-  it("is off for iOS and on for Android", () => {
-    expect(isHealthSyncEnabled("ios")).toBe(false);
+  it("is on for both iOS and Android", () => {
+    expect(isHealthSyncEnabled("ios")).toBe(true);
     expect(isHealthSyncEnabled("android")).toBe(true);
   });
 
-  it("renders nothing on iOS, even with stores injected", () => {
-    const { queryByTestId } = render(
+  it("renders the section on iOS, naming Apple Health", async () => {
+    const { getByTestId, getAllByText } = render(
       <HealthSyncSection
         platform="ios"
         store={createMemoryHealthOptInStore(true)}
         switches={createMemoryHealthSwitchStore({ read: true, write: true })}
       />,
     );
-    expect(queryByTestId("health-sync-section")).toBeNull();
-    expect(queryByTestId("health-toggle")).toBeNull();
+    await waitFor(() => {
+      expect(getByTestId("health-sync-section")).toBeTruthy();
+    });
+    expect(getByTestId("health-toggle")).toBeTruthy();
+    expect(getAllByText(/Apple Health/).length).toBeGreaterThan(0);
   });
 });
 
@@ -302,5 +306,107 @@ describe("HealthSyncSection on Android", () => {
     });
     expect(asked).toHaveLength(0);
     expect(queryByTestId("health-read-denied")).toBeNull();
+  });
+});
+
+/** A fake HealthKit client that answers exactly `granted` for any ask. */
+function fakeIosHealthClient(granted: HealthPermission[] = []): {
+  client: HealthClient;
+  asked: HealthPermission[][];
+} {
+  const asked: HealthPermission[][] = [];
+  return {
+    asked,
+    client: {
+      platform: "ios",
+      readWeight: async () => [],
+      readSteps: async () => [],
+      ensurePermissions: async (wanted) => {
+        asked.push([...wanted]);
+        return granted;
+      },
+    },
+  };
+}
+
+describe("HealthSyncSection on iOS (NP-185)", () => {
+  function renderIosSection(
+    options: {
+      optedIn?: boolean;
+      switches?: HealthSwitchStore;
+      client?: HealthClient | null;
+    } = {},
+  ) {
+    const switches =
+      options.switches ?? createMemoryHealthSwitchStore({ read: false, write: false });
+    const utils = render(
+      <HealthSyncSection
+        platform="ios"
+        store={createMemoryHealthOptInStore(options.optedIn ?? false)}
+        switches={switches}
+        client={options.client}
+      />,
+    );
+    return { ...utils, switches };
+  }
+
+  it("names Apple Health, not Health Connect", async () => {
+    const { getByTestId, getByText } = renderIosSection();
+    await waitFor(() => {
+      expect(getByTestId("health-toggle")).toBeTruthy();
+    });
+    expect(getByText(/Apple Health/)).toBeTruthy();
+  });
+
+  it.each(["read", "write"] as const)(
+    "turning %s off writes through immediately on iOS too",
+    async (direction) => {
+      const switches = createMemoryHealthSwitchStore({ read: true, write: true });
+      const { getByTestId } = renderIosSection({ optedIn: true, switches });
+      await waitFor(() => {
+        expect(getByTestId(`health-${direction}-toggle`)).toBeTruthy();
+      });
+
+      fireEvent.press(getByTestId(`health-${direction}-toggle`));
+      await waitFor(async () => {
+        expect(await switches.get(direction)).toBe(false);
+      });
+      const other = direction === "read" ? "write" : "read";
+      expect(await switches.get(other)).toBe(true);
+    },
+  );
+
+  it("turning read ON asks the HealthKit client right away", async () => {
+    const { client, asked } = fakeIosHealthClient([
+      { metric: "weight", direction: "read" },
+    ]);
+    const { getByTestId } = renderIosSection({ optedIn: true, client });
+    await waitFor(() => {
+      expect(getByTestId("health-read-toggle")).toBeTruthy();
+    });
+
+    fireEvent.press(getByTestId("health-read-toggle"));
+
+    await waitFor(() => {
+      expect(asked.length).toBeGreaterThan(0);
+    });
+    expect(asked[0]).toEqual([{ metric: "weight", direction: "read" }]);
+  });
+
+  it("shows the denied state when HealthKit grants nothing for write", async () => {
+    const { client } = fakeIosHealthClient([]);
+    const { getByTestId } = renderIosSection({ optedIn: true, client });
+    await waitFor(() => {
+      expect(getByTestId("health-write-toggle")).toBeTruthy();
+    });
+
+    fireEvent.press(getByTestId("health-write-toggle"));
+
+    await waitFor(() => {
+      expect(getByTestId("health-write-denied")).toBeTruthy();
+    });
+    // HealthKit has no settings deep link (lib/health/ios.ts) — no Open
+    // action, unlike Health Connect's.
+    expect(() => getByTestId("health-write-denied-open-settings")).toThrow();
   });
 });
