@@ -1,6 +1,15 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Animated, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from "react-native";
+import {
+  Animated,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   ChevronDown,
@@ -104,6 +113,12 @@ export const LIVE_PANEL_SPACING = {
 
 /** How tall the fade from the clip into the panel is (the web's gradient). */
 const PANEL_SCRIM_HEIGHT = 64;
+/**
+ * How dark the panel's glass gets, at most — never 1 (that is the old solid
+ * sheet). The web's own panel tops out at `black/80`; this keeps the clip
+ * faintly legible through the blur at the same ceiling.
+ */
+export const PANEL_WASH_ALPHA = 0.8;
 /** How tall the fade behind the floating top bar is (the web's `from-black/60`). */
 const TOP_SCRIM_HEIGHT = 128;
 
@@ -307,7 +322,7 @@ export function LiveStepView({
   keyboardDoneVisible,
   testID,
 }: LiveStepViewProps) {
-  const { colors, tint } = useThemeTokens();
+  const { colors, tint, isDark } = useThemeTokens();
   // THE REAL DEVICE INSET (NP-365): `LiveWorkoutClient` no longer wraps Live
   // in a `SafeAreaView`, so the status-bar and home-indicator strips are
   // exactly where the clip now shows through. This view pads its own chrome
@@ -755,14 +770,24 @@ export function LiveStepView({
         <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 0 }} pointerEvents="none" />
 
         {/* The web fades its panel into the clip (`bg-linear-to-t
-            from-black/80 via-black/40 to-transparent`). Native fades into the
-            PAGE colour instead and then goes solid under the text, because
-            this screen is light on a light phone (NP-288) and 4px type over a
-            moving clip is not readable in either mode. */}
+            from-black/80 via-black/40 to-transparent`) and NEVER goes fully
+            opaque — the clip keeps showing through right to the bottom edge.
+            Native used to fade into the page colour and then go SOLID under
+            the text (`backgroundColor: colors.background`, no alpha): on a
+            light phone that is a flat white sheet across up to 72% of the
+            screen, which is the exact "boxed clip over a solid sheet" bug a
+            real device caught that Jest's `absolute inset-0` assertion never
+            could (`position` is unaffected by what paints behind it). The fix
+            keeps the theme tint (NP-288: never a literal white/black, so this
+            still reads right in light AND dark mode) but makes it a WASH, not
+            a floor — a short gradient bridges the transparent clip into the
+            panel, and the panel itself is glass (`BlurView` + the same
+            translucent tint) the entire way down, so the member can always
+            tell there is a moving clip under the inputs. */}
         <LinearGradient
           testID={`${testID}-live-panel-scrim`}
           pointerEvents="none"
-          colors={[tint("background", 0), tint("background", 0.92)]}
+          colors={[tint("background", 0), tint("background", PANEL_WASH_ALPHA)]}
           style={{ height: PANEL_SCRIM_HEIGHT, marginBottom: -1 }}
         />
 
@@ -771,13 +796,36 @@ export function LiveStepView({
           style={{
             flexShrink: 1,
             maxHeight: LIVE_PANEL_SPACING.panelMaxHeight,
-            backgroundColor: colors.background,
             // No SafeAreaView above this screen in Live (NP-365), so the
             // panel's own bottom padding carries the home-indicator inset on
             // top of its ordinary spacing.
             paddingBottom: LIVE_PANEL_SPACING.panelPaddingBottom + insets.bottom,
           }}
         >
+          {/* The glass itself — blurs the clip rather than hiding it, so
+              "scrims/blur" (the web's gradient, native's frosted panel) is
+              true the whole height of the panel, not just its top edge. */}
+          <BlurView
+            testID={`${testID}-live-panel-blur`}
+            pointerEvents="none"
+            tint={isDark ? "dark" : "light"}
+            intensity={Platform.OS === "ios" ? 50 : 30}
+            experimentalBlurMethod={
+              Platform.OS === "android" ? "dimezisBlurView" : "none"
+            }
+            style={StyleSheet.absoluteFill}
+          />
+          {/* The wash on top of the blur — the same alpha the bridging
+              gradient ends on, so the seam between them is invisible. Still
+              translucent at the panel's own bottom edge, unlike the old
+              opaque fill. */}
+          <View
+            pointerEvents="none"
+            style={[
+              StyleSheet.absoluteFill,
+              { backgroundColor: tint("background", PANEL_WASH_ALPHA) },
+            ]}
+          />
           <ScrollView
             testID={`${testID}-live-panel-scroll`}
             style={{ flexGrow: 0, flexShrink: 1 }}
