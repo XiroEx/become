@@ -341,7 +341,7 @@ describe("Workout tab: acceptance criteria tests", () => {
 
   // Acceptance Criterion 3
   describe("(id: e015c835) Continue Training shows each active program with the web's progress % and paused state", () => {
-    it("renders active programs with progress %, paused state badge, and tap opens Track for next day", async () => {
+    it("card opens program preview; play button starts the workout for the next day", async () => {
       const activePrograms = [
         {
           programId: "p1",
@@ -380,9 +380,17 @@ describe("Workout tab: acceptance criteria tests", () => {
       // screen with Live on the toggle. Day 3 -> workoutIndex 2, Phase 2 ->
       // phaseIndex 1.
       fireEvent.press(getByTestId("continue-program-card-p1"));
+      expect(mockPush).toHaveBeenCalledWith("/(tabs)/programming/p1");
+
+      mockPush.mockClear();
+
+      // The round play button is the only path that starts the workout.
+      fireEvent.press(getByTestId("continue-program-play-p1"));
       expect(mockPush).toHaveBeenCalledWith(
         "/(tabs)/programming/p1/workout/2/live?phase=1&day=Day%203",
       );
+      // Card was not fired by the inner press (nested Pressables: inner wins).
+      expect(mockPush).toHaveBeenCalledTimes(1);
 
       // Program 2: Strength 5x5 (paused, 25%)
       expect(getByText("Strength 5x5")).toBeTruthy();
@@ -394,6 +402,13 @@ describe("Workout tab: acceptance criteria tests", () => {
       // Tap paused program opens program detail
       fireEvent.press(getByTestId("continue-program-card-p2"));
       expect(mockPush).toHaveBeenCalledWith("/(tabs)/programming/p2");
+
+      mockPush.mockClear();
+
+      // Paused play button opens the program page too — inner press only.
+      fireEvent.press(getByTestId("continue-program-play-p2"));
+      expect(mockPush).toHaveBeenCalledWith("/(tabs)/programming/p2");
+      expect(mockPush).toHaveBeenCalledTimes(1);
 
       // Workout Now button is present
       expect(getByTestId("workout-now-button")).toBeTruthy();
