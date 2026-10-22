@@ -6,7 +6,19 @@ import { Text } from "@/components/Text";
 import type { MindSceneProps } from "@/components/mind/session/scenes/types";
 import { useReducedMotion } from "@/lib/a11y/reducedMotion";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
-import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { resolveToken } from "@/lib/theme/tokens";
+
+/**
+ * ALWAYS BLACK, LIKE THE WEB. See `WinScene.tsx` — this scene renders
+ * straight onto the player's fixed `bg-black` stage, so every colour is
+ * pinned to the DARK palette, never the `useThemeTokens()` hook.
+ */
+const C = {
+  "primary-foreground": resolveToken("primary-foreground", "dark"),
+  destructive: resolveToken("destructive", "dark"),
+  info: resolveToken("info", "dark"),
+  success: resolveToken("success", "dark"),
+} as const;
 
 interface Tile {
   id: number;
@@ -40,7 +52,6 @@ export function AssembleScene({
   onDone,
   testID = "mind-assemble-scene",
 }: MindSceneProps): React.JSX.Element {
-  const { colors } = useThemeTokens();
   const reduced = useReducedMotion();
 
   const target = useMemo(
@@ -85,6 +96,7 @@ export function AssembleScene({
   return (
     <ScrollView
       testID={testID}
+      className="flex-1 bg-black"
       contentContainerStyle={{
         flexGrow: 1,
         alignItems: "center",
@@ -94,8 +106,8 @@ export function AssembleScene({
       }}
       keyboardShouldPersistTaps="handled"
     >
-      <View className="mb-5 h-12 w-12 items-center justify-center rounded-2xl bg-primary/10">
-        <Blocks size={24} color={colors.primary} />
+      <View className="mb-5 h-12 w-12 items-center justify-center rounded-2xl bg-white/10">
+        <Blocks size={24} color={C.info} />
       </View>
 
       {locked ? (
@@ -104,13 +116,13 @@ export function AssembleScene({
           entering={reduced ? undefined : FadeIn.duration(250)}
           className="w-full max-w-sm items-center"
         >
-          <View className="h-16 w-16 items-center justify-center rounded-full bg-success/20">
-            <Check size={32} color={colors.success} strokeWidth={3} />
+          <View className="h-16 w-16 items-center justify-center rounded-full bg-green-500/20">
+            <Check size={32} color={C.success} strokeWidth={3} />
           </View>
-          <Text className="mt-4 max-w-sm text-center text-xl font-bold leading-snug text-foreground">
+          <Text className="mt-4 max-w-sm text-center text-xl font-bold leading-snug text-white">
             &ldquo;{move.statement}&rdquo;
           </Text>
-          <Text className="mt-2 text-center text-sm text-muted-foreground">
+          <Text className="mt-2 text-center text-sm text-white/50">
             Built it. Now live it.
           </Text>
         </Animated.View>
@@ -120,17 +132,17 @@ export function AssembleScene({
           entering={reduced ? undefined : FadeInUp.duration(300)}
           className="w-full max-w-sm items-center"
         >
-          <Text className="text-center text-xs uppercase tracking-widest text-muted-foreground">
+          <Text className="text-center text-xs uppercase tracking-widest text-white/40">
             {move.title}
           </Text>
-          <Text className="mt-2 text-center text-sm text-muted-foreground">
+          <Text className="mt-2 text-center text-sm text-white/50">
             {move.subtitle ?? "Tap the words in order."}
           </Text>
 
           {/* Placed area */}
-          <View className="mt-6 min-h-[72px] w-full flex-row flex-wrap content-start items-start justify-center gap-2 rounded-2xl border border-dashed border-border bg-card/50 p-3">
+          <View className="mt-6 min-h-[72px] w-full flex-row flex-wrap content-start items-start justify-center gap-2 rounded-2xl border border-dashed border-white/15 bg-white/5 p-3">
             {placed.length === 0 ? (
-              <Text className="self-center py-2 text-sm text-muted-foreground">
+              <Text className="self-center py-2 text-sm text-white/25">
                 Tap words below…
               </Text>
             ) : null}
@@ -144,15 +156,15 @@ export function AssembleScene({
                 style={minTouchTarget}
                 className={`rounded-xl px-3 py-2 ${
                   firstWrong !== -1 && i >= firstWrong
-                    ? "border border-destructive bg-destructive/20"
-                    : "border border-border bg-muted"
+                    ? "border border-red-400/50 bg-red-500/20"
+                    : "border border-white/10 bg-white/15"
                 }`}
               >
                 <Text
                   className={`text-sm font-semibold ${
                     firstWrong !== -1 && i >= firstWrong
-                      ? "text-destructive"
-                      : "text-foreground"
+                      ? "text-red-200"
+                      : "text-white"
                   }`}
                 >
                   {t.word}
@@ -171,9 +183,9 @@ export function AssembleScene({
                 accessibilityLabel={t.word}
                 onPress={() => place(t)}
                 style={minTouchTarget}
-                className="rounded-xl border border-border bg-card px-3 py-2"
+                className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
               >
-                <Text className="text-sm font-semibold text-foreground">
+                <Text className="text-sm font-semibold text-white/90">
                   {t.word}
                 </Text>
               </Pressable>

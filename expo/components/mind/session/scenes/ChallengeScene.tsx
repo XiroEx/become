@@ -12,7 +12,18 @@ import { useReducedMotion } from "@/lib/a11y/reducedMotion";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { useAuth } from "@/lib/auth/useAuth";
 import { WEBAPP_BASE_URL } from "@/lib/config";
-import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { resolveToken } from "@/lib/theme/tokens";
+
+/**
+ * ALWAYS BLACK, LIKE THE WEB. See `WinScene.tsx` — this scene renders
+ * straight onto the player's fixed `bg-black` stage, so every colour is
+ * pinned to the DARK palette, never the `useThemeTokens()` hook.
+ */
+const C = {
+  "primary-foreground": resolveToken("primary-foreground", "dark"),
+  destructive: resolveToken("destructive", "dark"),
+  success: resolveToken("success", "dark"),
+} as const;
 
 export function ChallengeScene({
   move,
@@ -20,7 +31,6 @@ export function ChallengeScene({
   preview,
   testID = "mind-challenge-scene",
 }: MindSceneProps): React.JSX.Element {
-  const { colors } = useThemeTokens();
   const reduced = useReducedMotion();
   const { token } = useAuth();
 
@@ -95,6 +105,7 @@ export function ChallengeScene({
   return (
     <ScrollView
       testID={testID}
+      className="flex-1 bg-black"
       contentContainerStyle={{
         flexGrow: 1,
         alignItems: "center",
@@ -104,13 +115,13 @@ export function ChallengeScene({
       }}
       keyboardShouldPersistTaps="handled"
     >
-      <View className="mb-5 h-12 w-12 items-center justify-center rounded-2xl bg-destructive/15">
-        <Sword size={24} color={colors.destructive} />
+      <View className="mb-5 h-12 w-12 items-center justify-center rounded-2xl bg-red-500/15">
+        <Sword size={24} color={C.destructive} />
       </View>
 
       <Text
         testID={`${testID}-title`}
-        className="text-center text-xs uppercase tracking-widest text-muted-foreground"
+        className="text-center text-xs uppercase tracking-widest text-white/40"
       >
         {move.title}
       </Text>
@@ -120,7 +131,7 @@ export function ChallengeScene({
           testID={`${testID}-loading`}
           className="mt-8 items-center justify-center"
         >
-          <ActivityIndicator size="small" color={colors.destructive} />
+          <ActivityIndicator size="small" color={C.destructive} />
         </View>
       ) : justDone ? (
         <Animated.View
@@ -128,13 +139,13 @@ export function ChallengeScene({
           entering={reduced ? undefined : FadeIn.duration(250)}
           className="mt-6 w-full max-w-sm items-center"
         >
-          <View className="h-16 w-16 items-center justify-center rounded-full bg-success/20">
-            <Check size={32} color={colors.success} strokeWidth={3} />
+          <View className="h-16 w-16 items-center justify-center rounded-full bg-green-500/20">
+            <Check size={32} color={C.success} strokeWidth={3} />
           </View>
-          <Text className="mt-4 text-center text-lg font-bold text-foreground">
+          <Text className="mt-4 text-center text-lg font-bold text-white">
             That&apos;s a rep.
           </Text>
-          <Text className="mt-1 text-center text-sm font-semibold text-success">
+          <Text className="mt-1 text-center text-sm font-semibold text-green-300">
             +20 XP
           </Text>
         </Animated.View>
@@ -146,7 +157,7 @@ export function ChallengeScene({
         >
           <Text
             testID={`${testID}-text`}
-            className="mt-5 text-center text-xl font-semibold leading-relaxed text-foreground"
+            className="mt-5 text-center text-xl font-semibold leading-relaxed text-white"
           >
             {text}
           </Text>
@@ -154,8 +165,8 @@ export function ChallengeScene({
           {completed ? (
             <View className="mt-6 w-full items-center">
               <View className="flex-row items-center gap-1.5">
-                <Check size={16} color={colors.success} />
-                <Text className="text-sm font-semibold text-success">
+                <Check size={16} color={C.success} />
+                <Text className="text-sm font-semibold text-green-300">
                   Already done today
                 </Text>
               </View>
@@ -166,12 +177,12 @@ export function ChallengeScene({
                 accessibilityLabel="Continue"
                 onPress={() => onDone()}
                 style={minTouchTarget}
-                className="mt-8 w-full flex-row items-center justify-center gap-2 rounded-2xl bg-primary py-4"
+                className="mt-8 w-full flex-row items-center justify-center gap-2 rounded-2xl bg-white py-4"
               >
-                <Text className="text-base font-bold text-primary-foreground">
+                <Text className="text-base font-bold text-black">
                   Continue
                 </Text>
-                <ArrowRight size={20} color={colors["primary-foreground"]} />
+                <ArrowRight size={20} color={C["primary-foreground"]} />
               </Pressable>
             </View>
           ) : (
@@ -183,23 +194,23 @@ export function ChallengeScene({
                 disabled={submitting}
                 onPress={markDone}
                 style={minTouchTarget}
-                className={`w-full flex-row items-center justify-center gap-2 rounded-2xl bg-primary py-4 ${
+                className={`w-full flex-row items-center justify-center gap-2 rounded-2xl bg-white py-4 ${
                   submitting ? "opacity-60" : ""
                 }`}
               >
                 {submitting ? (
                   <ActivityIndicator
                     size="small"
-                    color={colors["primary-foreground"]}
+                    color={C["primary-foreground"]}
                   />
                 ) : (
                   <Check
                     size={20}
-                    color={colors["primary-foreground"]}
+                    color={C["primary-foreground"]}
                     strokeWidth={3}
                   />
                 )}
-                <Text className="text-base font-bold text-primary-foreground">
+                <Text className="text-base font-bold text-black">
                   I did it
                 </Text>
               </Pressable>
@@ -212,7 +223,7 @@ export function ChallengeScene({
                 style={minTouchTarget}
                 className="items-center justify-center py-2"
               >
-                <Text className="text-sm font-medium text-muted-foreground">
+                <Text className="text-sm font-medium text-white/40">
                   Not today
                 </Text>
               </Pressable>

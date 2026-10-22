@@ -5,7 +5,19 @@ import { Check, Keyboard } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { useReducedMotion } from "@/lib/a11y/reducedMotion";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
-import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { resolveToken } from "@/lib/theme/tokens";
+
+/**
+ * ALWAYS BLACK, LIKE THE WEB. See `WinScene.tsx` — this scene renders
+ * straight onto the player's fixed `bg-black` stage (directly, and inside
+ * `SpeakScene` / `MirrorScene` write mode), so every colour is pinned to the
+ * DARK palette, never the `useThemeTokens()` hook.
+ */
+const C = {
+  "muted-foreground": resolveToken("muted-foreground", "dark"),
+  "primary-foreground": resolveToken("primary-foreground", "dark"),
+  success: resolveToken("success", "dark"),
+} as const;
 
 export interface WriteAffirmProps {
   statement?: string;
@@ -18,7 +30,6 @@ export function WriteAffirm({
   onDone,
   testID = "mind-write-affirm",
 }: WriteAffirmProps): React.JSX.Element {
-  const { colors } = useThemeTokens();
   const reduced = useReducedMotion();
 
   const [text, setText] = useState("");
@@ -34,6 +45,7 @@ export function WriteAffirm({
   return (
     <ScrollView
       testID={testID}
+      className="flex-1 bg-black"
       contentContainerStyle={{
         flexGrow: 1,
         alignItems: "center",
@@ -43,8 +55,8 @@ export function WriteAffirm({
       }}
       keyboardShouldPersistTaps="handled"
     >
-      <View className="mb-5 h-12 w-12 items-center justify-center rounded-2xl bg-primary/15">
-        <Keyboard size={24} color={colors.primary} />
+      <View className="mb-5 h-12 w-12 items-center justify-center rounded-2xl bg-white/10">
+        <Keyboard size={24} color={C["primary-foreground"]} />
       </View>
 
       {done ? (
@@ -53,13 +65,13 @@ export function WriteAffirm({
           entering={reduced ? undefined : FadeIn.duration(250)}
           className="w-full max-w-sm items-center"
         >
-          <View className="h-16 w-16 items-center justify-center rounded-full bg-success/20">
-            <Check size={32} color={colors.success} strokeWidth={3} />
+          <View className="h-16 w-16 items-center justify-center rounded-full bg-green-500/20">
+            <Check size={32} color={C.success} strokeWidth={3} />
           </View>
-          <Text className="mt-4 text-center text-lg font-bold text-foreground">
+          <Text className="mt-4 text-center text-lg font-bold text-white">
             Written in.
           </Text>
-          <Text className="mt-1 text-center text-sm text-muted-foreground">
+          <Text className="mt-1 text-center text-sm text-white/50">
             You meant it.
           </Text>
         </Animated.View>
@@ -72,12 +84,12 @@ export function WriteAffirm({
           {statement ? (
             <Text
               testID={`${testID}-statement`}
-              className="text-center text-xl font-bold leading-snug text-foreground"
+              className="text-center text-xl font-bold leading-snug text-white"
             >
               &ldquo;{statement}&rdquo;
             </Text>
           ) : null}
-          <Text className="mt-3 text-center text-sm text-muted-foreground">
+          <Text className="mt-3 text-center text-sm text-white/50">
             Write it — own words are fine.
           </Text>
 
@@ -86,10 +98,10 @@ export function WriteAffirm({
             value={text}
             onChangeText={setText}
             placeholder="Type it…"
-            placeholderTextColor={colors["muted-foreground"]}
+            placeholderTextColor={C["muted-foreground"]}
             multiline
             numberOfLines={3}
-            className="mt-5 w-full rounded-2xl border border-border bg-card p-4 text-center text-base text-foreground"
+            className="mt-5 w-full rounded-2xl border border-white/15 bg-white/5 p-4 text-center text-base text-white"
           />
 
           <Pressable
@@ -99,16 +111,16 @@ export function WriteAffirm({
             disabled={!valid}
             onPress={lock}
             style={minTouchTarget}
-            className={`mt-6 w-full flex-row items-center justify-center gap-2 rounded-2xl bg-primary py-4 ${
+            className={`mt-6 w-full flex-row items-center justify-center gap-2 rounded-2xl bg-white py-4 ${
               !valid ? "opacity-40" : ""
             }`}
           >
             <Check
               size={20}
-              color={colors["primary-foreground"]}
+              color={C["primary-foreground"]}
               strokeWidth={3}
             />
-            <Text className="text-base font-bold text-primary-foreground">
+            <Text className="text-base font-bold text-black">
               Lock it in
             </Text>
           </Pressable>
