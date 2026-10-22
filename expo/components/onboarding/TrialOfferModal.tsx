@@ -55,6 +55,7 @@ import { CheckoutAction } from "@/components/entitlements/UpgradeSheet";
 import {
   openBillingPortal,
   openExternally,
+  openExternallyDetailed,
   PORTAL_PATH,
   startCheckout,
   type BillingDeps,
@@ -69,6 +70,8 @@ export interface TrialOfferCardProps {
   agreed: boolean;
   onAgreedChange: (agreed: boolean) => void;
   checkout: CheckoutState;
+  /** Machine reason with an `error` state — rendered small under the friendly sentence. */
+  checkoutReason?: string | null;
   portalState: PortalState;
   browserOpened?: boolean;
   onStart: () => void;
@@ -88,6 +91,7 @@ export function TrialOfferCard({
   agreed,
   onAgreedChange,
   checkout,
+  checkoutReason,
   portalState,
   browserOpened = false,
   onStart,
@@ -317,6 +321,7 @@ export function TrialOfferCard({
           browserOpened={browserOpened}
           onStart={onStart}
           onOpenPortal={onOpenPortal}
+          reason={checkoutReason}
           testID={testID}
         />
       )}
@@ -362,6 +367,7 @@ export function TrialOfferModal({
   const [plan, setPlan] = useState<BillingPlan>("monthly");
   const [agreed, setAgreed] = useState(false);
   const [checkout, setCheckout] = useState<CheckoutState>("ready");
+  const [checkoutReason, setCheckoutReason] = useState<string | null>(null);
   const [portalState, setPortalState] = useState<PortalState>("idle");
   const [portalPath, setPortalPath] = useState<string>(PORTAL_PATH);
   const [browserOpened, setBrowserOpened] = useState(false);
@@ -383,15 +389,18 @@ export function TrialOfferModal({
   const onStart = useCallback(() => {
     if (checkout !== "ready" && checkout !== "error") return;
     setCheckout("starting");
+    setCheckoutReason(null);
     void (async () => {
       const result = await startCheckout({ ...deps, plan, trial: true });
       if (result.kind === "state") {
         if (result.portalPath) setPortalPath(result.portalPath);
         setCheckout(result.state);
+        setCheckoutReason(result.reason ?? null);
         return;
       }
-      const opened = await openExternally(result.url, deps);
+      const { opened, reason } = await openExternallyDetailed(result.url, deps);
       setCheckout(opened ? "ready" : "error");
+      setCheckoutReason(opened ? null : (reason ?? "open-failed"));
       if (opened) {
         rememberBillingHandover("checkout");
         setBrowserOpened(true);
@@ -426,6 +435,7 @@ export function TrialOfferModal({
           agreed={agreed}
           onAgreedChange={setAgreed}
           checkout={checkout}
+          checkoutReason={checkoutReason}
           portalState={portalState}
           browserOpened={browserOpened}
           onStart={onStart}
