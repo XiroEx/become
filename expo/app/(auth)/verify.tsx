@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { View, ActivityIndicator, Pressable } from "react-native";
 import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -126,17 +126,21 @@ export function VerifyScreen({
   // a ref, so a re-render caused by `setToken` (or by the route's inline
   // `onSuccess`) cannot re-trigger the request.
   const verifyFnRef = useRef(verifyFn);
-  verifyFnRef.current = verifyFn;
   const onSuccessRef = useRef(onSuccess);
-  onSuccessRef.current = onSuccess;
   const onFailureRef = useRef(onFailure);
-  onFailureRef.current = onFailure;
   const pendingStoreRef = useRef(pendingStore);
-  pendingStoreRef.current = pendingStore;
   const routerRef = useRef(router);
-  routerRef.current = router;
   const sessionTokenRef = useRef(sessionToken);
-  sessionTokenRef.current = sessionToken;
+  // Refreshed after every commit, never during render. A layout effect runs
+  // before the passive verify effect below, so it always sees this render's.
+  useLayoutEffect(() => {
+    verifyFnRef.current = verifyFn;
+    onSuccessRef.current = onSuccess;
+    onFailureRef.current = onFailure;
+    pendingStoreRef.current = pendingStore;
+    routerRef.current = router;
+    sessionTokenRef.current = sessionToken;
+  });
 
   useEffect(() => {
     const rawToken = params.token;
