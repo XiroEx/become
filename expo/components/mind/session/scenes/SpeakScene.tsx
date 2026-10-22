@@ -8,7 +8,21 @@ import { affirmLine } from "@/components/mind/session/scenes/HoldToAffirmScene";
 import { WriteAffirm } from "@/components/mind/session/scenes/WriteAffirm";
 import { useSpeechMatch } from "@/hooks/useSpeechMatch";
 import { lightHaptic, type HapticFn } from "@/lib/feedback/haptics";
-import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { resolveToken } from "@/lib/theme/tokens";
+
+/**
+ * ALWAYS BLACK, LIKE THE WEB. See `WinScene.tsx` — this scene renders
+ * straight onto the player's fixed `bg-black` stage, so every colour is
+ * pinned to the DARK palette, never the `useThemeTokens()` hook.
+ */
+const C = {
+  border: resolveToken("border", "dark"),
+  foreground: resolveToken("foreground", "dark"),
+  "muted-foreground": resolveToken("muted-foreground", "dark"),
+  primary: resolveToken("primary", "dark"),
+  accent: resolveToken("accent", "dark"),
+  success: resolveToken("success", "dark"),
+} as const;
 
 /**
  * SPEAK SCENE (NP-099)
@@ -41,7 +55,6 @@ export function SpeakScene({
   haptic = lightHaptic,
   testID = "mind-speak-scene",
 }: SpeakSceneProps): React.JSX.Element {
-  const { colors } = useThemeTokens();
   const [writeMode, setWriteMode] = useState(false);
   const [started, setStarted] = useState(false);
   const [done, setDone] = useState(false);
@@ -116,6 +129,7 @@ export function SpeakScene({
   return (
     <ScrollView
       testID={testID}
+      className="flex-1 bg-black"
       contentContainerStyle={{
         flexGrow: 1,
         alignItems: "center",
@@ -125,8 +139,8 @@ export function SpeakScene({
       }}
     >
       <View className="flex-row items-center gap-1.5">
-        <Mic size={14} color={colors["muted-foreground"]} />
-        <Text className="text-xs uppercase tracking-widest text-muted-foreground">
+        <Mic size={14} color={C["muted-foreground"]} />
+        <Text className="text-xs uppercase tracking-widest text-white/40">
           {move.title}
         </Text>
       </View>
@@ -134,7 +148,7 @@ export function SpeakScene({
       {/* Statement — plain until you start, then optimistic highlight */}
       <Text
         testID={`${testID}-statement`}
-        className="mt-6 max-w-sm text-center text-2xl font-bold leading-snug text-foreground"
+        className="mt-6 max-w-sm text-center text-2xl font-bold leading-snug text-white"
       >
         “
         {words.map((w, i) => {
@@ -142,10 +156,10 @@ export function SpeakScene({
           const statusColor = !showHighlight
             ? undefined
             : status === "matched"
-              ? colors.success
+              ? C.success
               : status === "missed"
-                ? colors.accent
-                : colors["muted-foreground"];
+                ? C.accent
+                : C["muted-foreground"];
           return (
             <Text
               key={i}
@@ -170,10 +184,10 @@ export function SpeakScene({
       {/* ── Done ── */}
       {done ? (
         <View testID={`${testID}-done`} className="mt-12 items-center">
-          <View className="h-20 w-20 items-center justify-center rounded-full bg-muted">
-            <Check size={40} color={colors.success} strokeWidth={3} />
+          <View className="h-20 w-20 items-center justify-center rounded-full bg-white/10">
+            <Check size={40} color={C.success} strokeWidth={3} />
           </View>
-          <Text className="mt-5 text-sm font-semibold text-success">
+          <Text className="mt-5 text-sm font-semibold text-green-300">
             Locked in.
           </Text>
         </View>
@@ -200,7 +214,7 @@ export function SpeakScene({
                 cy={60}
                 r={RADIUS}
                 fill="none"
-                stroke={colors.border}
+                stroke={C.border}
                 strokeWidth={6}
               />
               <Circle
@@ -208,20 +222,20 @@ export function SpeakScene({
                 cy={60}
                 r={RADIUS}
                 fill="none"
-                stroke={colors.success}
+                stroke={C.success}
                 strokeWidth={6}
                 strokeLinecap="round"
                 strokeDasharray={`${CIRC} ${CIRC}`}
                 strokeDashoffset={CIRC * (1 - holdPct)}
               />
             </Svg>
-            <View className="h-24 w-24 items-center justify-center rounded-full bg-muted px-2">
-              <Text className="text-center text-xs font-semibold text-foreground">
+            <View className="h-24 w-24 items-center justify-center rounded-full bg-white/10 px-2">
+              <Text className="text-center text-xs font-semibold text-white/80">
                 Hold &amp; say it
               </Text>
             </View>
           </Pressable>
-          <Text className="mt-6 max-w-xs text-center text-sm text-muted-foreground">
+          <Text className="mt-6 max-w-xs text-center text-sm text-white/60">
             {micBlocked
               ? "Mic blocked — say it out loud and hold the circle."
               : "Say it out loud and hold the circle."}
@@ -232,7 +246,7 @@ export function SpeakScene({
             accessibilityRole="button"
             className="mt-4 py-2"
           >
-            <Text className="text-xs font-medium text-muted-foreground underline">
+            <Text className="text-xs font-medium text-white/40 underline">
               Prefer to write it?
             </Text>
           </Pressable>
@@ -245,11 +259,11 @@ export function SpeakScene({
             accessibilityRole="button"
             accessibilityLabel="Start"
             onPress={begin}
-            className="h-28 w-28 items-center justify-center rounded-full bg-muted active:scale-95"
+            className="h-28 w-28 items-center justify-center rounded-full bg-white/10 active:scale-95"
           >
-            <Mic size={40} color={colors.foreground} />
+            <Mic size={40} color={C.foreground} />
           </Pressable>
-          <Text className="mt-6 text-sm text-muted-foreground">
+          <Text className="mt-6 text-sm text-white/60">
             Tap, then say it out loud
           </Text>
           <Pressable
@@ -258,7 +272,7 @@ export function SpeakScene({
             accessibilityRole="button"
             className="mt-4 py-2"
           >
-            <Text className="text-xs font-medium text-muted-foreground underline">
+            <Text className="text-xs font-medium text-white/40 underline">
               Prefer to write it?
             </Text>
           </Pressable>
@@ -266,10 +280,10 @@ export function SpeakScene({
       ) : (
         // ── Listening ──
         <View testID={`${testID}-listening`} className="mt-12 items-center">
-          <View className="h-28 w-28 items-center justify-center rounded-full bg-muted">
-            <Mic size={40} color={colors.primary} />
+          <View className="h-28 w-28 items-center justify-center rounded-full bg-white/10">
+            <Mic size={40} color={C.primary} />
           </View>
-          <Text className="mt-6 text-sm text-muted-foreground">
+          <Text className="mt-6 text-sm text-white/60">
             Say it like you mean it…
           </Text>
           <Pressable
@@ -279,7 +293,7 @@ export function SpeakScene({
             onPress={finish}
             className="mt-5 py-2"
           >
-            <Text className="text-sm font-medium text-muted-foreground">
+            <Text className="text-sm font-medium text-white/40">
               Lock it in anyway
             </Text>
           </Pressable>

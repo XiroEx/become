@@ -9,7 +9,18 @@ import type { MindSceneProps } from "@/components/mind/session/scenes/types";
 import { useReducedMotion } from "@/lib/a11y/reducedMotion";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { lightHaptic, type HapticFn } from "@/lib/feedback/haptics";
-import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { resolveToken } from "@/lib/theme/tokens";
+
+/**
+ * ALWAYS BLACK, LIKE THE WEB. See `WinScene.tsx` — this scene renders
+ * straight onto the player's fixed `bg-black` stage, so every colour is
+ * pinned to the DARK palette, never the `useThemeTokens()` hook.
+ */
+const C = {
+  border: resolveToken("border", "dark"),
+  success: resolveToken("success", "dark"),
+  primary: resolveToken("primary", "dark"),
+} as const;
 
 export const HOLD_MS = 1600;
 export const HOLD_TICK_MS = 50;
@@ -28,7 +39,6 @@ export function IdentityScene({
   testID = "mind-identity-scene",
   haptic = lightHaptic,
 }: IdentitySceneProps): React.JSX.Element {
-  const { colors } = useThemeTokens();
   const reduced = useReducedMotion();
 
   const sentenceCount = (move.statement || "")
@@ -78,6 +88,7 @@ export function IdentityScene({
   return (
     <ScrollView
       testID={testID}
+      className="flex-1 bg-black"
       contentContainerStyle={{
         flexGrow: 1,
         alignItems: "center",
@@ -87,7 +98,7 @@ export function IdentityScene({
       }}
       keyboardShouldPersistTaps="handled"
     >
-      <Text className="text-xs uppercase tracking-widest text-muted-foreground">
+      <Text className="text-xs uppercase tracking-widest text-white/40">
         {move.title}
       </Text>
 
@@ -96,7 +107,7 @@ export function IdentityScene({
         text={`“${move.statement ?? ""}”`}
         onComplete={() => setReady(true)}
         speed={revealSpeed}
-        className="mt-6 max-w-sm text-center text-2xl font-bold leading-snug text-foreground"
+        className="mt-6 max-w-sm text-center text-2xl font-bold leading-snug text-white"
       />
 
       <View className="mt-10 min-h-[220px] w-full items-center justify-center">
@@ -134,7 +145,7 @@ export function IdentityScene({
                   cy="60"
                   r={RADIUS}
                   fill="none"
-                  stroke={colors.border}
+                  stroke={C.border}
                   strokeWidth="6"
                 />
                 <Circle
@@ -143,18 +154,18 @@ export function IdentityScene({
                   cy="60"
                   r={RADIUS}
                   fill="none"
-                  stroke={affirmed ? colors.success : colors.primary}
+                  stroke={affirmed ? C.success : C.primary}
                   strokeWidth="6"
                   strokeLinecap="round"
                   strokeDasharray={CIRC}
                   strokeDashoffset={CIRC * (1 - progress)}
                 />
               </Svg>
-              <View className="h-24 w-24 items-center justify-center rounded-full bg-muted">
+              <View className="h-24 w-24 items-center justify-center rounded-full bg-white/10">
                 {affirmed ? (
-                  <Check testID={`${testID}-check`} size={36} color={colors.success} />
+                  <Check testID={`${testID}-check`} size={36} color={C.success} />
                 ) : (
-                  <Text className="px-2 text-center text-xs font-semibold text-foreground">
+                  <Text className="px-2 text-center text-xs font-semibold text-white/80">
                     Hold to affirm
                   </Text>
                 )}
@@ -164,7 +175,7 @@ export function IdentityScene({
             <Text
               testID={`${testID}-status`}
               accessibilityLiveRegion="polite"
-              className="mt-6 text-sm text-muted-foreground"
+              className="mt-6 text-sm text-white/40"
             >
               {affirmed ? "Locked in." : "Press and hold"}
             </Text>
@@ -178,7 +189,7 @@ export function IdentityScene({
                 style={minTouchTarget}
                 className="mt-3 items-center justify-center"
               >
-                <Text className="text-sm font-medium text-muted-foreground">
+                <Text className="text-sm font-medium text-white/40">
                   Skip
                 </Text>
               </Pressable>

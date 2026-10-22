@@ -7,7 +7,17 @@ import { Text } from "@/components/Text";
 import type { MindSceneProps } from "@/components/mind/session/scenes/types";
 import { useReducedMotion } from "@/lib/a11y/reducedMotion";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
-import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { onDarkForeground, resolveToken } from "@/lib/theme/tokens";
+
+/**
+ * ALWAYS BLACK, LIKE THE WEB. See `WinScene.tsx` — this scene renders
+ * straight onto the player's fixed `bg-black` stage, so every colour is
+ * pinned to the DARK palette, never the `useThemeTokens()` hook.
+ */
+const C = {
+  "primary-foreground": resolveToken("primary-foreground", "dark"),
+  success: resolveToken("success", "dark"),
+} as const;
 
 function pickAccountabilityAction(): string {
   return (
@@ -22,7 +32,6 @@ export function SocialScene({
   onDone,
   testID = "mind-social-scene",
 }: MindSceneProps): React.JSX.Element {
-  const { colors } = useThemeTokens();
   const reduced = useReducedMotion();
 
   const [committed, setCommitted] = useState(false);
@@ -44,6 +53,7 @@ export function SocialScene({
   return (
     <ScrollView
       testID={testID}
+      className="flex-1 bg-black"
       contentContainerStyle={{
         flexGrow: 1,
         alignItems: "center",
@@ -53,20 +63,20 @@ export function SocialScene({
       }}
       keyboardShouldPersistTaps="handled"
     >
-      <View className="mb-5 h-12 w-12 items-center justify-center rounded-2xl bg-success/15">
-        <Users size={24} color={colors.success} />
+      <View className="mb-5 h-12 w-12 items-center justify-center rounded-2xl bg-green-500/15">
+        <Users size={24} color={C.success} />
       </View>
 
       <Text
         testID={`${testID}-title`}
-        className="text-center text-xs uppercase tracking-widest text-muted-foreground"
+        className="text-center text-xs uppercase tracking-widest text-white/40"
       >
         {move.title}
       </Text>
 
       <Text
         testID={`${testID}-action`}
-        className="mt-5 max-w-sm text-center text-xl font-semibold leading-relaxed text-foreground"
+        className="mt-5 max-w-sm text-center text-xl font-semibold leading-relaxed text-white"
       >
         {action}
       </Text>
@@ -82,15 +92,19 @@ export function SocialScene({
           onPress={commit}
           style={minTouchTarget}
           className={`mt-10 w-full flex-row items-center justify-center gap-2 rounded-2xl py-4 ${
-            committed ? "bg-success" : "bg-primary"
+            committed ? "bg-green-500" : "bg-white"
           }`}
         >
           <Check
             size={20}
-            color={colors["primary-foreground"]}
+            color={committed ? onDarkForeground : C["primary-foreground"]}
             strokeWidth={3}
           />
-          <Text className="text-base font-bold text-primary-foreground">
+          <Text
+            className={`text-base font-bold ${
+              committed ? "text-white" : "text-black"
+            }`}
+          >
             {committed ? "I'm on it." : "I'll do this"}
           </Text>
         </Pressable>

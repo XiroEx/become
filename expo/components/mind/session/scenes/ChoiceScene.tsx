@@ -6,14 +6,22 @@ import { Text } from "@/components/Text";
 import type { MindSceneProps } from "@/components/mind/session/scenes/types";
 import { useReducedMotion } from "@/lib/a11y/reducedMotion";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
-import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { resolveToken } from "@/lib/theme/tokens";
+
+/**
+ * ALWAYS BLACK, LIKE THE WEB. See `WinScene.tsx` — this scene renders
+ * straight onto the player's fixed `bg-black` stage, so every colour is
+ * pinned to the DARK palette, never the `useThemeTokens()` hook.
+ */
+const C = {
+  "primary-foreground": resolveToken("primary-foreground", "dark"),
+} as const;
 
 export function ChoiceScene({
   move,
   onDone,
   testID = "mind-choice-scene",
 }: MindSceneProps): React.JSX.Element {
-  const { colors } = useThemeTokens();
   const reduced = useReducedMotion();
   const options = move.options ?? [];
   const [picked, setPicked] = useState<number | null>(null);
@@ -22,6 +30,7 @@ export function ChoiceScene({
   return (
     <ScrollView
       testID={testID}
+      className="flex-1 bg-black"
       contentContainerStyle={{
         flexGrow: 1,
         alignItems: "center",
@@ -39,14 +48,14 @@ export function ChoiceScene({
         >
           <Text
             testID={`${testID}-title`}
-            className="text-center text-2xl font-extrabold leading-snug text-foreground"
+            className="text-center text-2xl font-extrabold leading-snug text-white"
           >
             {move.title}
           </Text>
           {move.subtitle ? (
             <Text
               testID={`${testID}-subtitle`}
-              className="mt-2 text-center text-muted-foreground"
+              className="mt-2 text-center text-white/50"
             >
               {move.subtitle}
             </Text>
@@ -61,9 +70,9 @@ export function ChoiceScene({
                 accessibilityLabel={o.label}
                 onPress={() => setPicked(i)}
                 style={minTouchTarget}
-                className="w-full rounded-2xl border border-border bg-card px-4 py-3.5"
+                className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5"
               >
-                <Text className="text-left text-base font-medium text-foreground">
+                <Text className="text-left text-base font-medium text-white/90">
                   {o.label}
                 </Text>
               </Pressable>
@@ -76,13 +85,13 @@ export function ChoiceScene({
           entering={reduced ? undefined : FadeInUp.duration(300)}
           className="w-full max-w-sm items-center"
         >
-          <Text className="text-center text-xs uppercase tracking-widest text-muted-foreground">
+          <Text className="text-center text-xs uppercase tracking-widest text-white/40">
             {options[picked]?.label}
           </Text>
           {response ? (
             <Text
               testID={`${testID}-response`}
-              className="mt-5 text-center text-xl font-semibold leading-relaxed text-foreground"
+              className="mt-5 text-center text-xl font-semibold leading-relaxed text-white"
             >
               {response}
             </Text>
@@ -100,12 +109,12 @@ export function ChoiceScene({
               )
             }
             style={minTouchTarget}
-            className="mt-10 w-full flex-row items-center justify-center gap-2 rounded-2xl bg-primary py-4"
+            className="mt-10 w-full flex-row items-center justify-center gap-2 rounded-2xl bg-white py-4"
           >
-            <Text className="text-base font-bold text-primary-foreground">
+            <Text className="text-base font-bold text-black">
               Continue
             </Text>
-            <ArrowRight size={20} color={colors["primary-foreground"]} />
+            <ArrowRight size={20} color={C["primary-foreground"]} />
           </Pressable>
         </Animated.View>
       )}
