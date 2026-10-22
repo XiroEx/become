@@ -1286,10 +1286,13 @@ export function LiveWorkoutClient({
   const activityWeightTracked = activityExercise
     ? setInputsFor(activityExercise.trackingType).weight
     : false;
+  // A weight-tracked set ALWAYS gets the Lock Screen steppers — starting from
+  // 0 when nothing is typed and there is no last-done weight to prefill
+  // (device review 2026-10-22: a fresh dumbbell set showed no buttons).
   const activityWeight: number | null = activityWeightTracked
     ? (activityRow?.weight ??
       activityExercise?.prefill?.[activitySetIndex]?.weight ??
-      null)
+      0)
     : null;
   const activityWeightStep = weightUnit === "kg" ? 2.5 : 5;
   // The typing path, not the logging path: adjusting the weight must not
