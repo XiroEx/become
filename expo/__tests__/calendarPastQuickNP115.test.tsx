@@ -58,6 +58,7 @@ function paths(): string[] {
   return mockApiFetch.mock.calls.map((c) => String(c[0]));
 }
 
+
 describe("Calendar past days + quick sessions (NP-115)", () => {
   beforeEach(() => {
     mockPush.mockReset();
@@ -269,6 +270,36 @@ describe("Calendar past days + quick sessions (NP-115)", () => {
         (c[2] as { method?: string } | undefined)?.method === "DELETE",
     ) as unknown as [string, unknown, unknown];
     expect(String(del[0])).toContain("id=q-plan");
+  });
+
+  it("the Manage sheet closes while the delete confirm is up, and reopens on cancel", async () => {
+    // Regression for "the delete button isn't working": two native <Modal>s
+    // visible at once (the Manage sheet AND the confirm gate) is what made
+    // Delete look dead on device — iOS can fail to present a second modal
+    // over an already-presented one, so the confirm never actually showed.
+    // React Native's own `Modal` renders nothing while `visible` is false, so
+    // the two sheets being mutually exclusive here is exactly what keeps
+    // only one native Modal presented at a time.
+    mockParams = { date: FUTURE };
+    const { getByTestId, queryByTestId } = render(<CalendarIndexRoute />);
+    await waitFor(() => {
+      expect(getByTestId("day-detail-quick-manage-q-plan")).toBeTruthy();
+    });
+    fireEvent.press(getByTestId("day-detail-quick-manage-q-plan"));
+    expect(getByTestId("quick-menu")).toBeTruthy();
+    expect(queryByTestId("quick-confirm-delete")).toBeNull();
+
+    fireEvent.press(getByTestId("quick-menu-delete"));
+    // The Manage sheet is gone — the confirm gate is the only one left.
+    expect(queryByTestId("quick-menu")).toBeNull();
+    expect(getByTestId("quick-confirm-delete")).toBeTruthy();
+
+    fireEvent.press(getByTestId("quick-confirm-delete-cancel"));
+    // Cancelling brings the Manage sheet straight back — its data never left.
+    await waitFor(() => {
+      expect(getByTestId("quick-menu")).toBeTruthy();
+    });
+    expect(queryByTestId("quick-confirm-delete")).toBeNull();
   });
 
   it("skipping a quick session asks first and PATCHes { id, skipped: true }", async () => {
