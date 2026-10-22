@@ -89,11 +89,6 @@ export function QuickAddSheet({
       // "Quick Add" + X) — BottomSheet's own big title would just repeat it.
       testID="quick-add-sheet"
       accessibilityLabel="Quick Add Sheet"
-      // NP-316: bounding the sheet lets the ScrollView below actually scroll
-      // once the keyboard eats into the available height — without a cap the
-      // sheet sizes itself to its natural (un-keyboard-aware) content height
-      // and nothing can shrink to make room.
-      sheetStyle={{ maxHeight: "90%" }}
     >
       <KeyboardAvoidingView
         // NP-316: on Android, `behavior={undefined}` left this sheet's own

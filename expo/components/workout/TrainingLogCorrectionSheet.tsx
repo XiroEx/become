@@ -152,7 +152,6 @@ export function TrainingLogCorrectionSheet({
       title="Correct workout log"
       testID={testID}
       accessibilityLabel={`Correct workout log, ${workout.title || workout.day}`}
-      sheetStyle={{ maxHeight: "90%" }}
     >
       <ScrollView
         testID={`${testID}-scroll`}

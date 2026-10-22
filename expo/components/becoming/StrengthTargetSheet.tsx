@@ -5,7 +5,9 @@ import {
   Modal,
   Pressable,
   ScrollView,
+  useWindowDimensions,
 } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Text } from '@/components/Text'
 import { X, Trophy, Check, Info } from 'lucide-react-native'
 import type { LiftProgress } from '@/lib/becoming/types'
@@ -14,6 +16,20 @@ import { useThemeTokens } from '@/lib/theme/useThemeTokens'
 
 export const EST_MAX_LABEL = 'Estimated max'
 export const EST_MAX_LABEL_SHORT = 'Est. max'
+
+/**
+ * `useSafeAreaInsets` throws without a `SafeAreaProvider` above it in the
+ * tree; the real app always has one, but bare-mounted tests may not. Falling
+ * back to zero insets there keeps this a no-op in tests while fixing the
+ * real device (the same pattern as `BottomSheet`).
+ */
+function useSafeAreaInsetsOrZero() {
+  try {
+    return useSafeAreaInsets()
+  } catch {
+    return { top: 0, bottom: 0, left: 0, right: 0 }
+  }
+}
 
 export interface StrengthTargetSheetProps {
   open: boolean
@@ -31,6 +47,13 @@ export function StrengthTargetSheet({
   hue = 'hsl(142, 71%, 58%)',
 }: StrengthTargetSheetProps) {
   const { colors, tint, scrim } = useThemeTokens()
+  // Fixed at 90% of the window height, like every `BottomSheet` drawer.
+  const insets = useSafeAreaInsetsOrZero()
+  const { height: windowHeight } = useWindowDimensions()
+  const sheetHeight = Math.min(
+    Math.round(windowHeight * 0.9),
+    windowHeight - insets.top - 24,
+  )
   if (!open) return null
 
   const reached = lift?.target ? lift.e1RM >= lift.target : false
@@ -50,7 +73,7 @@ export function StrengthTargetSheet({
           accessibilityLabel="Dismiss sheet"
           accessibilityRole="button"
         />
-        <View style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border, height: sheetHeight, maxHeight: sheetHeight }]}>
           <View style={[styles.header, { borderBottomColor: colors.border }]}>
             <View style={styles.headerLeft}>
               <View style={[styles.iconWrap, { backgroundColor: tint('muted', 0.5) }]}>
@@ -154,7 +177,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     borderWidth: 1,
-    maxHeight: '75%',
     paddingHorizontal: 20,
     paddingTop: 16,
   },
@@ -195,6 +217,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   content: {
+    flex: 1,
     paddingTop: 16,
   },
   section: {

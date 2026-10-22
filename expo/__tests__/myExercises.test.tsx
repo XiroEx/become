@@ -28,6 +28,7 @@
  */
 
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { Dimensions } from "react-native";
 import { act } from "react";
 
 jest.mock("expo-router", () => ({
@@ -521,13 +522,16 @@ describe("(NP-276) native parity — the create sheet fits the safe area; list s
       expect(screen.getByTestId("my-exercises-create-modal")).toBeTruthy(),
     );
 
-    // Bounded, not an unbounded centred `Modal`: the sheet's own card caps
-    // its height to the safe area and the form scrolls inside it — this is
-    // what keeps the title, Cancel and Create reachable on a phone screen
+    // Bounded, not an unbounded centred `Modal`: the sheet's own card is the
+    // fixed 90% of the window height and the form scrolls inside it — this
+    // is what keeps the title, Cancel and Create reachable on a phone screen
     // shorter than the form (the card's BLOCKER).
-    expect(
-      screen.getByTestId("my-exercises-create-modal-sheet").props.style,
-    ).toMatchObject({ maxHeight: "90%" });
+    const sheetStyle = screen.getByTestId("my-exercises-create-modal-sheet")
+      .props.style as { height: number; maxHeight: number };
+    expect(sheetStyle.height).toBe(sheetStyle.maxHeight);
+    expect(sheetStyle.maxHeight).toBe(
+      Math.round(Dimensions.get("window").height * 0.9),
+    );
     expect(screen.getByTestId("my-exercises-create-form-scroll")).toBeTruthy();
     expect(screen.getByTestId("my-exercises-create-form-name")).toBeTruthy();
     expect(screen.getByTestId("my-exercises-create-form-cancel")).toBeTruthy();

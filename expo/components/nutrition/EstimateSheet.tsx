@@ -719,16 +719,6 @@ export function EstimateSheet({
         // The header below replaces the generic title row entirely.
         accessibilityLabel={headerTitle}
         testID={testID}
-        // After taking a photo the sheet used to stay capped at a fixed
-        // 520px ScrollView — on a real device that left it sitting over the
-        // bottom half of the screen instead of growing with its content, and
-        // once the keyboard opened for the note field the fixed-height
-        // ScrollView couldn't shrink to make room, so the field (and the
-        // Estimate button) scrolled out of reach behind the keyboard. Same
-        // fix as Quick Add's (NP-316): bound the sheet itself near full
-        // screen so the ScrollView below can actually grow and then shrink
-        // for the keyboard.
-        sheetStyle={{ maxHeight: "90%" }}
       >
         {/* NP-319: "undefined" on Android did nothing — a real Android
             behaviour is needed since this view lives inside a `Modal`, where

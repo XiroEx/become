@@ -19,7 +19,8 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Modal, Pressable, ScrollView, View } from "react-native";
+import { ActivityIndicator, Modal, Pressable, ScrollView, View, useWindowDimensions } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Plus, Search, X } from "lucide-react-native";
 import {
   apiFetch,
@@ -113,6 +114,20 @@ interface SearchRow {
   isCustom: boolean;
 }
 
+/**
+ * `useSafeAreaInsets` throws without a `SafeAreaProvider` above it in the
+ * tree; the real app always has one, but bare-mounted tests may not. Falling
+ * back to zero insets there keeps this a no-op in tests while fixing the
+ * real device (the same pattern as `BottomSheet`).
+ */
+function useSafeAreaInsetsOrZero() {
+  try {
+    return useSafeAreaInsets();
+  } catch {
+    return { top: 0, bottom: 0, left: 0, right: 0 };
+  }
+}
+
 function toRow(
   e: {
     slug: string;
@@ -158,6 +173,15 @@ export function AddExerciseSheet({
   testID = "add-exercise-sheet",
 }: AddExerciseSheetProps) {
   const { colors, scrim } = useThemeTokens();
+  // Fixed at 90% of the window height, like every `BottomSheet` drawer —
+  // a content-sized sheet plus a filling ScrollView collapses to the grab
+  // handle, so the height lives here and the lists below fill it.
+  const insets = useSafeAreaInsetsOrZero();
+  const { height: windowHeight } = useWindowDimensions();
+  const sheetHeight = Math.min(
+    Math.round(windowHeight * 0.9),
+    windowHeight - insets.top - 24,
+  );
   const { token } = useAuth();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchRow[]>([]);
@@ -465,7 +489,8 @@ export function AddExerciseSheet({
             paddingBottom: 32,
             borderTopLeftRadius: 20,
             borderTopRightRadius: 20,
-            maxHeight: "86%",
+            height: sheetHeight,
+            maxHeight: sheetHeight,
           }}
         >
           <View
@@ -495,7 +520,7 @@ export function AddExerciseSheet({
           </View>
 
           {!picked ? (
-            <ScrollView keyboardShouldPersistTaps="handled">
+            <ScrollView keyboardShouldPersistTaps="handled" style={{ flex: 1 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                 <View style={{ flex: 1 }}>
                   <Input
@@ -623,7 +648,7 @@ export function AddExerciseSheet({
               </View>
             </ScrollView>
           ) : (
-            <ScrollView keyboardShouldPersistTaps="handled">
+            <ScrollView keyboardShouldPersistTaps="handled" style={{ flex: 1 }}>
               <View
                 style={{
                   borderRadius: 12,

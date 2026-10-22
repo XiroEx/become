@@ -175,20 +175,23 @@ describe("(id: np288-step) The Live view is the web's full-screen step", () => {
     ).toBeNull();
   });
 
-  it("renders in light mode with light-mode tokens, and in dark with dark ones", () => {
+  it("is pinned to dark like the web, whatever the phone's mode is", () => {
     const dotColor = (r: { getByTestId: (id: string) => ReactTestInstance }) => {
       const style = r.getByTestId("live-workout-live-timer-dot").props
         .style as { backgroundColor?: string };
       return style.backgroundColor;
     };
 
+    // A light-mode phone still reads Live in the web's dark chrome (the
+    // web's live page is `fixed inset-0 bg-black` with white text in both
+    // modes) — theme tokens inside the Live subtree resolve to dark.
     act(() => {
       colorScheme.set("light");
     });
     const light = render(
       <LiveWorkoutClient workout={TWO_SETS} initialView="live" activeSeconds={5} />,
     );
-    expect(dotColor(light)).toBe(`rgb(${getTokens("light").brand})`);
+    expect(dotColor(light)).toBe(`rgb(${getTokens("dark").brand})`);
     light.unmount();
 
     act(() => {
@@ -198,8 +201,6 @@ describe("(id: np288-step) The Live view is the web's full-screen step", () => {
       <LiveWorkoutClient workout={TWO_SETS} initialView="live" activeSeconds={5} />,
     );
     expect(dotColor(dark)).toBe(`rgb(${getTokens("dark").brand})`);
-    // And the two modes really are different colours, so neither is hard-coded.
-    expect(dotColor(dark)).not.toBe(`rgb(${getTokens("light").brand})`);
   });
 
   it("never draws itself with the web's white-on-black literals", () => {
