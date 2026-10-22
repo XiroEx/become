@@ -915,11 +915,11 @@ function CustomizerBody({
   const [error, setError] = useState<string | null>(null);
   const counter = useRef(0);
 
-  // Fixed at 90% of the window height, like every `BottomSheet` drawer.
+  // Fixed at 80% of the window height, like every `BottomSheet` drawer.
   const insets = useSafeAreaInsetsOrZero();
   const { height: windowHeight } = useWindowDimensions();
   const sheetHeight = Math.min(
-    Math.round(windowHeight * 0.9),
+    Math.round(windowHeight * 0.8),
     windowHeight - insets.top - 24,
   );
 

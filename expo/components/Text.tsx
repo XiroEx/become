@@ -1,18 +1,18 @@
 /* eslint-disable no-restricted-imports -- the one file allowed to reach for React Native's Text */
 import { Text as RNText } from "react-native";
 import type { TextProps as RNTextProps } from "react-native";
-import { geistFontFamily } from "@/lib/theme/fonts";
+import { appFontFamily } from "@/lib/theme/fonts";
 
 export type TextProps = RNTextProps;
 
 /**
- * THE APP'S TEXT — React Native's, with Geist on it.
+ * THE APP'S TEXT — React Native's, with Arial on it.
  *
  * Every screen and every component imports Text from here (ESLint's
  * `no-restricted-imports` fails the build on `import { Text } from
  * "react-native"`), because React Native has no cascade: a `<Text>` with no
  * `fontFamily` renders in the system font no matter what
- * `tailwind.config.js` says, and the web's Geist would have reached only the
+ * `tailwind.config.js` says, and the web's Arial would have reached only the
  * handful of elements that happened to carry a `font-*` class.
  *
  * The family is resolved from the same two inputs the web's CSS uses — the
@@ -29,7 +29,7 @@ export function Text({ className, style, ...rest }: TextProps) {
     <RNText
       {...rest}
       className={className}
-      style={[{ fontFamily: geistFontFamily(className, style) }, style]}
+      style={[{ fontFamily: appFontFamily(className, style) }, style]}
     />
   );
 }

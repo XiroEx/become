@@ -12,7 +12,7 @@
 //   2. the retry button calls `retry()` — and a retry after the cause is
 //      gone brings the child back;
 //   3. the screen is themed from `useThemeTokens()` and renders its copy
-//      with no font preconditions (an unregistered Geist face falls back to
+//      with no font preconditions (an unregistered app face falls back to
 //      the system font; the screen never returns null for it).
 
 import { Component, type ComponentType, type ReactNode } from "react";
@@ -187,7 +187,7 @@ describe("root ErrorBoundary", () => {
     };
     // The mocked light palette's page colour — not a literal, not white.
     expect(backgrounds(screen.props.style)).toContain("rgb(250 250 250)");
-    // Honest copy, through the app's Text (the Geist stack): present even
+    // Honest copy, through the app's Text (the Arial stack): present even
     // though no font was loaded for this render.
     expect(getByText("Something went wrong")).toBeTruthy();
     expect(getByText("Try again")).toBeTruthy();

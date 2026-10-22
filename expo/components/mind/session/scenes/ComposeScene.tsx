@@ -6,14 +6,23 @@ import { Text } from "@/components/Text";
 import type { MindSceneProps } from "@/components/mind/session/scenes/types";
 import { useReducedMotion } from "@/lib/a11y/reducedMotion";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
-import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { resolveToken } from "@/lib/theme/tokens";
+
+/**
+ * ALWAYS BLACK, LIKE THE WEB. See `WinScene.tsx` — this scene renders
+ * straight onto the player's fixed `bg-black` stage, so every colour is
+ * pinned to the DARK palette, never the `useThemeTokens()` hook.
+ */
+const C = {
+  "primary-foreground": resolveToken("primary-foreground", "dark"),
+  success: resolveToken("success", "dark"),
+} as const;
 
 export function ComposeScene({
   move,
   onDone,
   testID = "mind-compose-scene",
 }: MindSceneProps): React.JSX.Element {
-  const { colors } = useThemeTokens();
   const reduced = useReducedMotion();
 
   const template = move.compose?.template ?? "{0}";
@@ -53,6 +62,7 @@ export function ComposeScene({
   return (
     <ScrollView
       testID={testID}
+      className="flex-1 bg-black"
       contentContainerStyle={{
         flexGrow: 1,
         alignItems: "center",
@@ -62,21 +72,21 @@ export function ComposeScene({
       }}
       keyboardShouldPersistTaps="handled"
     >
-      <View className="mb-5 h-12 w-12 items-center justify-center rounded-2xl bg-primary/10">
+      <View className="mb-5 h-12 w-12 items-center justify-center rounded-2xl bg-white/10">
         {locked ? (
-          <Check size={24} color={colors.success} strokeWidth={3} />
+          <Check size={24} color={C.success} strokeWidth={3} />
         ) : (
-          <SlidersHorizontal size={24} color={colors.primary} />
+          <SlidersHorizontal size={24} color={C["primary-foreground"]} />
         )}
       </View>
 
       {!locked ? (
-        <Text className="mb-1 text-center text-xs uppercase tracking-widest text-muted-foreground">
+        <Text className="mb-1 text-center text-xs uppercase tracking-widest text-white/40">
           {move.title}
         </Text>
       ) : null}
       {!locked ? (
-        <Text className="mb-6 text-center text-sm text-muted-foreground">
+        <Text className="mb-6 text-center text-sm text-white/50">
           {move.subtitle ?? "Choose the words that fit."}
         </Text>
       ) : null}
@@ -88,7 +98,7 @@ export function ComposeScene({
             return (
               <Text
                 key={i}
-                className="text-center text-2xl font-bold leading-relaxed text-foreground"
+                className="text-center text-2xl font-bold leading-relaxed text-white"
               >
                 {s}
               </Text>
@@ -109,15 +119,15 @@ export function ComposeScene({
               style={minTouchTarget}
               className={`mx-1 my-0.5 rounded-lg px-2.5 py-1 ${
                 isCurrent
-                  ? "border border-primary bg-primary/20"
+                  ? "border border-white/40 bg-white/10"
                   : val
-                    ? "bg-card border border-border"
-                    : "border border-dashed border-border bg-muted/40"
+                    ? "border border-white/10 bg-white/5"
+                    : "border border-dashed border-white/15 bg-white/5"
               }`}
             >
               <Text
                 className={`text-xl font-bold ${
-                  val ? "text-primary" : "text-muted-foreground"
+                  val ? "text-white" : "text-white/30"
                 }`}
               >
                 {val ?? "_____"}
@@ -133,7 +143,7 @@ export function ComposeScene({
           entering={reduced ? undefined : FadeIn.duration(250)}
           className="mt-6 items-center"
         >
-          <Text className="text-center text-base font-semibold text-success">
+          <Text className="text-center text-base font-semibold text-green-300">
             That&apos;s yours. Own it.
           </Text>
         </Animated.View>
@@ -151,9 +161,9 @@ export function ComposeScene({
               accessibilityLabel={opt}
               onPress={() => choose(opt)}
               style={minTouchTarget}
-              className="rounded-2xl border border-border bg-card px-4 py-2.5"
+              className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5"
             >
-              <Text className="text-sm font-medium text-foreground">
+              <Text className="text-sm font-medium text-white/90">
                 {opt}
               </Text>
             </Pressable>
@@ -171,14 +181,14 @@ export function ComposeScene({
             accessibilityLabel="Lock it in"
             onPress={lock}
             style={minTouchTarget}
-            className="w-full flex-row items-center justify-center gap-2 rounded-2xl bg-primary py-4"
+            className="w-full flex-row items-center justify-center gap-2 rounded-2xl bg-white py-4"
           >
             <Check
               size={20}
-              color={colors["primary-foreground"]}
+              color={C["primary-foreground"]}
               strokeWidth={3}
             />
-            <Text className="text-base font-bold text-primary-foreground">
+            <Text className="text-base font-bold text-black">
               Lock it in
             </Text>
           </Pressable>

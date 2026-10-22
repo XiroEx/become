@@ -26,11 +26,12 @@
  *     scheme was live when the task last ran. Dark on the launcher's own
  *     wallpaper is the one that is always legible. The palette is `darkTokens`
  *     rather than a literal so it still cannot drift from the app's.
- *  3. **The typeface is Geist.** The app owns its Text for exactly this reason
- *     (NP-160) and a widget is no different: `app.json` hands the three faces
- *     below to the config plugin, which copies them into the Android assets
- *     where `fontFamily` finds them by file name. A tile in Roboto beside an app
- *     in Geist is the drift that rule exists to stop.
+ *  3. **The typeface is the web's.** The app owns its Text for exactly this
+ *     reason (NP-160) and a widget is no different: `app.json` hands the
+ *     bundled Arimo faces below to the config plugin, which copies them into
+ *     the Android assets where `fontFamily` finds them by file name. A tile
+ *     in Roboto beside an app in Arial is the drift that rule exists to stop.
+ *     (Widgets are Android-only; iOS would draw the system Arial.)
  *  4. **Every state is a drawing, never an empty tile.** Signed out is a
  *     prompt; no cached day is an invitation to open the app. A blank widget
  *     reads as a broken app and raises no error anywhere.
@@ -38,7 +39,7 @@
 import type { JSX, ReactNode } from "react";
 import { FlexWidget, TextWidget } from "react-native-android-widget";
 import type { WidgetState } from "@become/api-client";
-import { GEIST_FACES } from "@/lib/theme/fonts";
+import { ANDROID_SANS_FACES } from "@/lib/theme/fonts";
 import { darkTokens, type TokenName } from "@/lib/theme/tokens";
 import type { AndroidWidgetDefinition } from "@/lib/widgets/androidWidgets";
 import type { WidgetSnapshotRow } from "@/lib/widgets/snapshot";
@@ -68,11 +69,11 @@ export const WIDGET_COLORS = {
   accent: token("accent"),
 } as const;
 
-/** The three faces the widget draws in — the app's own (see `app.json` fonts). */
+/** The two faces the widget draws in — the Android sans (see `app.json` fonts). */
 export const WIDGET_FONTS = {
-  title: GEIST_FACES.sans[500],
-  headline: GEIST_FACES.sans[700],
-  caption: GEIST_FACES.sans[400],
+  title: ANDROID_SANS_FACES.regular,
+  headline: ANDROID_SANS_FACES.bold,
+  caption: ANDROID_SANS_FACES.regular,
 } as const;
 
 /**

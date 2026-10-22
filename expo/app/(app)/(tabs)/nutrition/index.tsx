@@ -1393,10 +1393,11 @@ export default function NutritionIndexRoute() {
     [mealLogsData?.logs, handleRemoveItem],
   );
 
-  // Meal-photo / describe estimate (NP-089): Take photo and Upload capture
-  // inside the sheet (NP-059's capture helper); Describe opens on the text
-  // surface. Capture needs no device check here — NP-093's code is on beta
-  // and camera verification is deferred to NP-008.
+  // Meal-photo / describe estimate (NP-089): Take photo and Upload go
+  // straight to the OS camera / photo library (NP-059's capture helper,
+  // launched with the sheet hidden so iOS can present the picker); Describe
+  // opens on the text surface. Capture needs no device check here — NP-093's
+  // code is on beta and camera verification is deferred to NP-008.
   const openEstimate = (phase: "chooser" | "describe" | "review") => {
     if (phase !== "review") setReopenedScan(null);
     setEstimatePhase(phase === "review" ? "review" : phase);
@@ -1405,11 +1406,24 @@ export default function NutritionIndexRoute() {
   };
 
   // NP-263: open straight into the device's photo library, bypassing the
-  // chooser entirely — the Upload menu's "Upload photo" button only.
+  // chooser entirely — the Upload menu's "Upload photo" button only. The
+  // web's gallery file input is the equivalent: no capture attribute, so
+  // the OS presents its own picker straight away.
   const openEstimateWithLibraryUpload = () => {
     setReopenedScan(null);
     setEstimatePhase("chooser");
     setEstimateAutoCaptureSource("library");
+    setEstimateOpen(true);
+  };
+
+  // The camera menu's "Take photo" opens the camera directly — no chooser.
+  // The web's camera file input (`capture="environment"`) is the
+  // equivalent: the entry point goes straight to the camera, and the sheet
+  // hides itself while the picker is presenting (see `captureFrom`).
+  const openEstimateWithCameraCapture = () => {
+    setReopenedScan(null);
+    setEstimatePhase("chooser");
+    setEstimateAutoCaptureSource("camera");
     setEstimateOpen(true);
   };
 
@@ -2739,7 +2753,7 @@ export default function NutritionIndexRoute() {
               }}
               onPress={() => {
                 setCameraMenuOpen(false);
-                openEstimate("chooser");
+                openEstimateWithCameraCapture();
               }}
             >
               <Camera size={16} color={colors.foreground} />
@@ -2885,7 +2899,7 @@ export default function NutritionIndexRoute() {
         // to the same AI capture surface the camera menu uses
         // (`EstimateSheet`, NP-089) — the search sheet already closes
         // itself (its own `onClose`) before calling these.
-        onSnapPhoto={() => openEstimate("chooser")}
+        onSnapPhoto={openEstimateWithCameraCapture}
         onUpload={openEstimateWithLibraryUpload}
         onDescribe={() => openEstimate("describe")}
       />

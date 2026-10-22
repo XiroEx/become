@@ -50,8 +50,9 @@ export const TITLE_LINE_HEIGHT = 40;
 /** `tracking-tight`: −0.025em of a 36px face. */
 export const TITLE_TRACKING = -0.025 * TITLE_FONT_SIZE;
 /**
- * `font-black`. The heaviest Geist bundled is Bold — NP-160 snaps 900 to
- * 700 (`nearestGeistWeight`) — so the face drawn is `Geist-Bold`. Size,
+ * `font-black`. The heaviest sans bundled is the bold — the web's Arial snaps
+ * 900 to 700, and `nearestSansWeight` does the same — so the face drawn is
+ * the platform bold (`Arial-BoldMT` on iOS, `Arimo-Bold` on Android). Size,
  * tracking and measure are the web's, and at a phone's width the title
  * wraps where the web's does: "Who am I becoming?" runs ~351 px in Geist
  * Bold at 36 / −0.9 (the web's Black, ~363), both past the 326 px a 390-wide

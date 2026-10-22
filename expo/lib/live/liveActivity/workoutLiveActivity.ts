@@ -30,6 +30,8 @@
  * built into this binary) — every function below swallows and no-ops.
  */
 import { Platform } from "react-native";
+import { recordLiveActivityFailure } from "@/lib/diagnostics/deviceDiagnostics";
+import type { AsyncStorageLike } from "@/lib/query/persistor";
 
 export type WorkoutLiveActivityPhase = "exercise" | "rest";
 
@@ -96,8 +98,13 @@ export type WorkoutLiveActivityFailureReason =
 function reportFailure(
   handle: WorkoutLiveActivityHandle,
   reason: WorkoutLiveActivityFailureReason | null,
+  storage?: AsyncStorageLike | null,
 ): void {
   handle.lastFailure = reason;
+  // Persisted for the Settings Diagnostics block: the in-memory handle is
+  // gone with the workout, and a TestFlight console cannot be read. `null`
+  // (a clean start) clears the row, so a stale reason never outlives a fix.
+  void recordLiveActivityFailure(reason, Date.now(), storage);
 }
 
 function warnFailure(
@@ -209,27 +216,28 @@ export function startWorkoutLiveActivity(
   handle: WorkoutLiveActivityHandle,
   props: WorkoutLiveActivityProps,
   factory: WorkoutLiveActivityFactory | null = loadWorkoutLiveActivityFactory(),
+  storage?: AsyncStorageLike | null,
 ): void {
   if (!factory) {
-    reportFailure(handle, "factory-null");
+    reportFailure(handle, "factory-null", storage);
     warnFailure("factory-null");
     return;
   }
   if (handle.instance) {
-    reportFailure(handle, "already-running");
+    reportFailure(handle, "already-running", storage);
     return;
   }
   try {
     handle.instance = factory.start(props);
     if (handle.instance) {
-      reportFailure(handle, null);
+      reportFailure(handle, null, storage);
     } else {
-      reportFailure(handle, "start-null");
+      reportFailure(handle, "start-null", storage);
       warnFailure("start-null");
     }
   } catch (err) {
     handle.instance = null;
-    reportFailure(handle, "start-threw");
+    reportFailure(handle, "start-threw", storage);
     warnFailure("start-threw", err);
   }
 }
@@ -243,13 +251,14 @@ export function startWorkoutLiveActivity(
 export async function updateWorkoutLiveActivity(
   handle: WorkoutLiveActivityHandle,
   props: WorkoutLiveActivityProps,
+  storage?: AsyncStorageLike | null,
 ): Promise<void> {
   const instance = handle.instance;
   if (!instance) return;
   try {
     await instance.update(props);
   } catch (err) {
-    reportFailure(handle, "update-failed");
+    reportFailure(handle, "update-failed", storage);
     warnFailure("update-failed", err);
   }
 }
@@ -262,6 +271,7 @@ export async function updateWorkoutLiveActivity(
 export async function endWorkoutLiveActivity(
   handle: WorkoutLiveActivityHandle,
   props?: WorkoutLiveActivityProps,
+  storage?: AsyncStorageLike | null,
 ): Promise<void> {
   const instance = handle.instance;
   if (!instance) return;
@@ -269,7 +279,7 @@ export async function endWorkoutLiveActivity(
   try {
     await instance.end(props);
   } catch (err) {
-    reportFailure(handle, "end-failed");
+    reportFailure(handle, "end-failed", storage);
     warnFailure("end-failed", err);
   }
 }

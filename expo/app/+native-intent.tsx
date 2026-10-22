@@ -52,6 +52,24 @@ export function consumePendingRedirect(): string | null {
 }
 
 /**
+ * Warm-start double-navigation guard. `redirectSystemPath`'s return value is
+ * itself the navigation — expo-router resolves the incoming link to the
+ * returned href — so the `router.push` below is a second, redundant navigation
+ * to the same screen. A link the OS delivers twice (a re-fired intent, a
+ * duplicate call) then mounts `/verify` twice, and a magic-link token is
+ * single-use, so the second mount's POST can only fail. A repeated push of the
+ * SAME href inside the window is therefore dropped; a new href still pushes.
+ * Cold starts never push — the launch route consumes `pendingRedirect`.
+ */
+let lastWarmPush: { href: string; at: number } | null = null;
+const WARM_PUSH_DEDUPE_MS = 2000;
+
+/** Test-only reset for the warm-push dedupe. */
+export function resetWarmPushDedupeForTests(): void {
+  lastWarmPush = null;
+}
+
+/**
  * Normalise a direct native route from a bare path or `become://` / Web URL.
  * Preserves query parameters intact.
  */
@@ -163,11 +181,21 @@ export function redirectSystemPath({ path, initial }: NativeIntentInput): string
 
   // On warm starts, actively navigate via router.push so existing activities
   // that don't remount root index still transition to the intended screen.
+  // Dedupe: the returned href navigates on its own, so a second delivery of
+  // the same link must not push a second copy of the screen.
   if (!initial && targetHref && targetHref !== "/" && targetHref !== NATIVE_ROUTES.launch) {
-    try {
-      router.push(targetHref as any);
-    } catch {
-      // router might not be ready or active yet
+    const now = Date.now();
+    if (
+      !lastWarmPush ||
+      lastWarmPush.href !== targetHref ||
+      now - lastWarmPush.at >= WARM_PUSH_DEDUPE_MS
+    ) {
+      lastWarmPush = { href: targetHref, at: now };
+      try {
+        router.push(targetHref as any);
+      } catch {
+        // router might not be ready or active yet
+      }
     }
   }
 

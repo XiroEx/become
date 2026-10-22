@@ -1,15 +1,19 @@
 /* eslint-disable import/first */
-// GEIST, THE WEB'S TYPEFACE, ON THE PHONE (NP-160).
+// ARIAL, THE WEB'S BODY TYPEFACE, ON THE PHONE.
 //
-// The web has set Geist and Geist Mono since the first commit
-// (`webapp/app/layout.tsx`). Native loaded no font at all, so every screen drew
-// in San Francisco or Roboto and the two clients read differently side by side.
+// The web loads Geist but never uses it for body text: `webapp/app/globals.css`
+// sets `body { font-family: Arial, Helvetica, sans-serif; }`, unlayered, so it
+// overrides redstyle's `var(--font-geist-sans, …)`. Native drew all sans text
+// in Geist, which was the visible mismatch across the whole app.
 //
 // Four things have to hold, and this file asserts all four:
-//   1. the faces are IN THE REPO — eight `.ttf`s under the OFL, the same
-//      family and weights the web serves;
+//   1. the faces are IN THE REPO — Arimo (the metric-compatible Arial clone,
+//      OFL) for Android's sans, and the four Geist Mono faces — plus iOS's
+//      system Arial, which needs no file;
 //   2. a `<Text>` resolves to the right FACE, because React Native names a
-//      face and not a family+weight (`font-mono font-bold` is one file);
+//      face and not a family+weight (`font-mono font-bold` is one file), with
+//      the browser's Arial snap (100-500 → regular, 600-900 → bold, since
+//      Arial ships only 400 and 700);
 //   3. every screen and component goes through the app's Text, because React
 //      Native has no cascade and an unstyled `<Text>` is the system font;
 //   4. the launch screen is held until the faces are registered, so there is
@@ -25,7 +29,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
-import { StyleSheet, View } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
 import type { TextStyle } from "react-native";
 import { render } from "@testing-library/react-native";
 import { Text } from "@/components/Text";
@@ -34,12 +38,16 @@ import { RestTimerBar } from "@/components/live/RestTimerBar";
 import { CalorieRing } from "@/components/nutrition/CalorieRing";
 import { StreakBanner } from "@/components/StreakBanner";
 import {
-  GEIST_FACES,
+  ANDROID_SANS_FACES,
   GEIST_FONTS,
-  GEIST_WEIGHTS,
-  geistFontFamily,
+  IOS_SANS_FACES,
+  MONO_FACES,
+  MONO_WEIGHTS,
+  appFontFamily,
   geistFontFile,
   nearestGeistWeight,
+  nearestSansWeight,
+  sansFaceFor,
 } from "@/lib/theme/fonts";
 import { useGeistFonts } from "@/lib/theme/loadFonts";
 /* eslint-enable import/first */
@@ -51,10 +59,14 @@ const readExpo = (rel: string): string =>
 const readRepo = (rel: string): string =>
   fs.readFileSync(path.join(REPO_DIR, rel), "utf8");
 
-const ALL_FACES = [
-  ...GEIST_WEIGHTS.map((w) => [GEIST_FACES.sans[w], w, "sans"] as const),
-  ...GEIST_WEIGHTS.map((w) => [GEIST_FACES.mono[w], w, "mono"] as const),
-];
+const MONO_FILE_FACES = MONO_WEIGHTS.map(
+  (w) => [MONO_FACES[w], w, "mono"] as const,
+);
+const SANS_FILE_FACES = [
+  [ANDROID_SANS_FACES.regular, 400, "sans"],
+  [ANDROID_SANS_FACES.bold, 700, "sans"],
+] as const;
+const ALL_FACES = [...SANS_FILE_FACES, ...MONO_FILE_FACES];
 
 /** The style React Native actually receives, after the array is flattened. */
 function styleOf(node: { props: { style?: unknown } }): TextStyle {
@@ -106,7 +118,7 @@ function readTtf(file: string) {
   };
 }
 
-describe("the Geist files are in the repo, not on a CDN", () => {
+describe("the faces are in the repo, not on a CDN", () => {
   it.each(ALL_FACES)("%s is a TrueType file on disk", (face) => {
     const file = path.join(EXPO_DIR, geistFontFile(face));
     expect(fs.existsSync(file)).toBe(true);
@@ -120,18 +132,27 @@ describe("the Geist files are in the repo, not on a CDN", () => {
     );
   });
 
-  it.each(ALL_FACES)("%s names itself Geist", (face) => {
+  it.each(MONO_FILE_FACES)("%s names itself Geist Mono", (face) => {
     const fullName = readTtf(path.join(EXPO_DIR, geistFontFile(face))).fullName;
-    expect(fullName).toMatch(/^Geist( Mono)? (Regular|Medium|SemiBold|Bold)$/);
+    expect(fullName).toMatch(/^Geist Mono (Regular|Medium|SemiBold|Bold)$/);
   });
 
-  it("ships the OFL licence beside them", () => {
-    const licence = readExpo("assets/fonts/OFL.txt");
-    expect(licence).toContain("SIL OPEN FONT LICENSE Version 1.1");
-    expect(licence).toContain("Geist");
+  it.each(SANS_FILE_FACES)("%s names itself Arimo", (face) => {
+    const fullName = readTtf(path.join(EXPO_DIR, geistFontFile(face))).fullName;
+    expect(fullName).toMatch(/^Arimo (Regular|Bold)$/);
   });
 
-  it("hands every face to expo-font, and nothing else", () => {
+  it("ships the OFL licences beside them", () => {
+    const monoLicence = readExpo("assets/fonts/OFL.txt");
+    expect(monoLicence).toContain("SIL OPEN FONT LICENSE Version 1.1");
+    expect(monoLicence).toContain("Geist");
+    const arimoLicence = readExpo("assets/fonts/Arimo-OFL.txt");
+    expect(arimoLicence).toContain("SIL OPEN FONT LICENSE Version 1.1");
+    expect(arimoLicence).toContain("Arimo");
+  });
+
+  it("hands every file-backed face to expo-font, and nothing else", () => {
+    // iOS's Arial faces are system fonts — no file, nothing to register.
     expect(Object.keys(GEIST_FONTS).sort()).toEqual(
       ALL_FACES.map(([face]) => face).sort(),
     );
@@ -158,17 +179,27 @@ describe("the Geist files are in the repo, not on a CDN", () => {
 // ── 2. The face a Text resolves to ─────────────────────────────────────────
 
 describe("family × weight → one face", () => {
-  it("is the regular sans face when nothing asks for anything", () => {
-    expect(geistFontFamily()).toBe("Geist-Regular");
+  it("is the iOS Arial regular face when nothing asks for anything", () => {
+    expect(Platform.OS).toBe("ios");
+    expect(appFontFamily()).toBe("ArialMT");
   });
 
   it.each([
-    ["font-medium", "Geist-Medium"],
-    ["font-semibold", "Geist-SemiBold"],
-    ["font-bold", "Geist-Bold"],
-    ["text-foreground text-xl font-semibold", "Geist-SemiBold"],
-  ])("%s → %s", (className, face) => {
-    expect(geistFontFamily(className)).toBe(face);
+    ["font-medium", "ArialMT"],
+    ["font-semibold", "Arial-BoldMT"],
+    ["font-bold", "Arial-BoldMT"],
+    ["text-foreground text-xl font-semibold", "Arial-BoldMT"],
+  ])("iOS: %s → %s", (className, face) => {
+    expect(appFontFamily(className)).toBe(face);
+  });
+
+  it.each([
+    ["font-medium", "Arimo-Regular"],
+    ["font-semibold", "Arimo-Bold"],
+    ["font-bold", "Arimo-Bold"],
+    ["text-foreground text-xl font-semibold", "Arimo-Bold"],
+  ])("Android: %s → %s", (className, face) => {
+    expect(appFontFamily(className, undefined, "android")).toBe(face);
   });
 
   it.each([
@@ -179,50 +210,83 @@ describe("family × weight → one face", () => {
   ])("%s → %s — the pair CSS cannot express", (className, face) => {
     // `font-family` and `font-weight` are two properties in CSS and one file on
     // a phone. This is why the family is resolved in JS and not by NativeWind.
-    expect(geistFontFamily(className)).toBe(face);
+    expect(appFontFamily(className)).toBe(face);
+    expect(appFontFamily(className, undefined, "android")).toBe(face);
   });
 
   it("snaps a weight with no file of its own to the nearest one bundled", () => {
-    expect(geistFontFamily("font-light")).toBe("Geist-Regular");
-    expect(geistFontFamily("font-extrabold")).toBe("Geist-Bold");
-    expect(geistFontFamily("font-black")).toBe("Geist-Bold");
+    expect(appFontFamily("font-light")).toBe("ArialMT");
+    expect(appFontFamily("font-extrabold")).toBe("Arial-BoldMT");
+    expect(appFontFamily("font-black")).toBe("Arial-BoldMT");
+    expect(nearestSansWeight(100)).toBe(400);
+    expect(nearestSansWeight(500)).toBe(400);
+    expect(nearestSansWeight(600)).toBe(700);
+    expect(nearestSansWeight(900)).toBe(700);
+    expect(nearestSansWeight(undefined)).toBe(400);
     expect(nearestGeistWeight(100)).toBe(400);
     expect(nearestGeistWeight(900)).toBe(700);
     expect(nearestGeistWeight(undefined)).toBe(400);
   });
 
+  it("maps the sans weight per platform, pure in os", () => {
+    expect(sansFaceFor("ios", null)).toBe(IOS_SANS_FACES.regular);
+    expect(sansFaceFor("ios", null)).toBe("ArialMT");
+    expect(sansFaceFor("ios", 500)).toBe("ArialMT");
+    expect(sansFaceFor("ios", 600)).toBe("Arial-BoldMT");
+    expect(sansFaceFor("android", null)).toBe(ANDROID_SANS_FACES.regular);
+    expect(sansFaceFor("android", null)).toBe("Arimo-Regular");
+    expect(sansFaceFor("android", 500)).toBe("Arimo-Regular");
+    expect(sansFaceFor("android", 600)).toBe("Arimo-Bold");
+  });
+
   it("reads a variant's base token, so active:font-bold is still bold", () => {
-    expect(geistFontFamily("active:font-bold")).toBe("Geist-Bold");
+    expect(appFontFamily("active:font-bold")).toBe("Arial-BoldMT");
+    expect(appFontFamily("active:font-bold", undefined, "android")).toBe(
+      "Arimo-Bold",
+    );
   });
 
   it("lets an inline weight win over a class — NativeWind's own order", () => {
     // react-native-css-interop sorts inline above className
     // (`specificityCompare`), so the resolver has to agree with it.
-    expect(geistFontFamily("font-normal", { fontWeight: "bold" })).toBe(
-      "Geist-Bold",
+    expect(appFontFamily("font-normal", { fontWeight: "bold" })).toBe(
+      "Arial-BoldMT",
     );
-    expect(geistFontFamily("font-bold", { fontWeight: 500 })).toBe(
-      "Geist-Medium",
-    );
-    expect(geistFontFamily(undefined, { fontFamily: "GeistMono-Regular" })).toBe(
+    expect(appFontFamily("font-bold", { fontWeight: 500 })).toBe("ArialMT");
+    expect(appFontFamily(undefined, { fontFamily: "GeistMono-Regular" })).toBe(
       "GeistMono-Regular",
     );
   });
 });
 
 describe("<Text> carries the face it resolved", () => {
-  it("renders in Geist with no class at all", () => {
+  it("renders in Arial with no class at all", () => {
     const { getByTestId } = render(<Text testID="t">Hello</Text>);
-    expect(styleOf(getByTestId("t")).fontFamily).toBe("Geist-Regular");
+    expect(styleOf(getByTestId("t")).fontFamily).toBe("ArialMT");
   });
 
-  it("renders a bold class in the bold FILE, not a faked weight", () => {
+  it("renders a bold class in the bold FACE, not a faked weight", () => {
     const { getByTestId } = render(
       <Text testID="t" className="text-foreground font-bold">
         Hello
       </Text>,
     );
-    expect(styleOf(getByTestId("t")).fontFamily).toBe("Geist-Bold");
+    expect(styleOf(getByTestId("t")).fontFamily).toBe("Arial-BoldMT");
+  });
+
+  it("renders in Arimo on Android", () => {
+    const os = Platform.OS;
+    Object.defineProperty(Platform, "OS", { value: "android" });
+    try {
+      const { getByTestId } = render(
+        <Text testID="t" className="text-foreground font-semibold">
+          Hello
+        </Text>,
+      );
+      expect(styleOf(getByTestId("t")).fontFamily).toBe("Arimo-Bold");
+    } finally {
+      Object.defineProperty(Platform, "OS", { value: os });
+    }
   });
 
   it("still lets a caller name its own font", () => {
@@ -246,7 +310,7 @@ describe("<Text> carries the face it resolved", () => {
 
   it("puts it on the one TextInput too — a field is not a Text", () => {
     const { getByTestId } = render(<Input testID="i" label="Email" />);
-    expect(styleOf(getByTestId("i")).fontFamily).toBe("Geist-Regular");
+    expect(styleOf(getByTestId("i")).fontFamily).toBe("ArialMT");
   });
 });
 
@@ -278,7 +342,7 @@ describe("every screen, component and lib view goes through the app's Text", () 
 
   it("imports Text from nowhere else", () => {
     // React Native's Text with no fontFamily is the system font, always. This
-    // is the assertion behind "every native screen renders in Geist".
+    // is the assertion behind "every native screen renders in Arial/Arimo".
     const offenders = files.filter((file) => {
       const source = fs.readFileSync(file, "utf8");
       return /import\s*\{[^}]*\bText\b[^}]*\}\s*from\s*"react-native"/.test(
@@ -352,17 +416,24 @@ describe("the launch screen is held until the faces are in", () => {
 // ── The web is the source of truth ─────────────────────────────────────────
 
 describe("the same families as the web", () => {
-  it("NativeWind's sans and mono are the Geist faces", () => {
+  it("NativeWind's sans is the iOS Arial regular; mono is the Geist Mono regular", () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const config = require("../tailwind.config.js") as {
       theme: { extend: { fontFamily: Record<string, string[]> } };
     };
-    expect(config.theme.extend.fontFamily.sans).toEqual([GEIST_FACES.sans[400]]);
-    expect(config.theme.extend.fontFamily.mono).toEqual([GEIST_FACES.mono[400]]);
+    // The class can only name one family; the per-platform resolution
+    // (ArialMT on iOS, bundled Arimo on Android) lives in `lib/theme/fonts.ts`
+    // and is applied inline by `components/Text.tsx`, which outranks this.
+    expect(config.theme.extend.fontFamily.sans).toEqual([
+      IOS_SANS_FACES.regular,
+    ]);
+    expect(config.theme.extend.fontFamily.mono).toEqual([MONO_FACES[400]]);
   });
 
-  it("is the typeface the web still loads", () => {
-    // If the web ever changes typeface, this is the test that says so.
+  it("is the typeface the web sets for its body", () => {
+    // The web loads Geist but never uses it for body text: the unlayered
+    // `body` rule wins over the Tailwind theme vars. If the web ever changes
+    // its body typeface, this is the test that says so.
     const layout = readRepo("webapp/app/layout.tsx");
     expect(layout).toMatch(
       /import \{ Geist, Geist_Mono \} from "next\/font\/google"/,
@@ -370,6 +441,9 @@ describe("the same families as the web", () => {
     const globals = readRepo("webapp/app/globals.css");
     expect(globals).toContain("--font-sans: var(--font-geist-sans)");
     expect(globals).toContain("--font-mono: var(--font-geist-mono)");
+    expect(globals).toMatch(
+      /body\s*\{\s*font-family:\s*Arial,\s*Helvetica,\s*sans-serif;/,
+    );
   });
 
   it("puts the timer in the family the web puts it in", () => {
@@ -395,7 +469,7 @@ describe("the same families as the web", () => {
       />,
     );
     expect(styleOf(getByTestId("rest-timer-time")).fontFamily).toBe(
-      GEIST_FACES.sans[600],
+      "Arial-BoldMT",
     );
   });
 
@@ -416,12 +490,12 @@ describe("the same families as the web", () => {
       />,
     );
     expect(styleOf(totals.getByTestId("day-totals-kcal")).fontFamily).toBe(
-      GEIST_FACES.sans[700],
+      "Arial-BoldMT",
     );
 
     const streak = render(<StreakBanner streakDays={7} />);
     expect(styleOf(streak.getByTestId("streak-banner-days")).fontFamily).toBe(
-      GEIST_FACES.sans[600],
+      "Arial-BoldMT",
     );
   });
 });

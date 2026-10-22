@@ -10,17 +10,15 @@ module.exports = {
   darkMode: "class",
   theme: {
     extend: {
-      // The web's two families (`webapp/app/globals.css` maps
-      // `--font-geist-sans` / `--font-geist-mono` onto Tailwind's `--font-sans`
-      // / `--font-mono`), named here as the faces `expo-font` registers.
-      //
-      // A class can only name a FAMILY, and React Native's `fontFamily` names a
-      // FACE, so `font-sans` / `font-mono` are the regular weights. The face for
-      // a weight is picked by `lib/theme/fonts.ts` and applied inline by
-      // `components/Text.tsx`, which outranks these (NativeWind: inline beats
-      // className) — that is how `font-mono font-bold` resolves to one face.
+      // The web's two families — `body` Arial (`webapp/app/globals.css`) and
+      // `font-mono` Geist Mono — named here as the faces the app draws.
+      // `font-sans` is the iOS regular only: the real per-platform resolution
+      // (ArialMT on iOS, bundled Arimo on Android) lives in
+      // `lib/theme/fonts.ts` and is applied inline by `components/Text.tsx`,
+      // which outranks these (NativeWind: inline beats className) — that is
+      // how `font-mono font-bold` resolves to one face.
       fontFamily: {
-        sans: ["Geist-Regular"],
+        sans: ["ArialMT"],
         mono: ["GeistMono-Regular"],
       },
       colors: {

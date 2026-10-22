@@ -6,7 +6,18 @@ import { Text } from "@/components/Text";
 import type { MindSceneProps } from "@/components/mind/session/scenes/types";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { lightHaptic, type HapticFn } from "@/lib/feedback/haptics";
-import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { resolveToken } from "@/lib/theme/tokens";
+
+/**
+ * ALWAYS BLACK, LIKE THE WEB. See `WinScene.tsx` — this scene renders
+ * straight onto the player's fixed `bg-black` stage, so every colour is
+ * pinned to the DARK palette, never the `useThemeTokens()` hook.
+ */
+const C = {
+  border: resolveToken("border", "dark"),
+  success: resolveToken("success", "dark"),
+  primary: resolveToken("primary", "dark"),
+} as const;
 
 /**
  * HOLD TO AFFIRM — and, until the rest of the scenes land, the FALLBACK for
@@ -69,7 +80,6 @@ export function HoldToAffirmScene({
   haptic = lightHaptic,
   testID = "mind-hold-affirm",
 }: HoldToAffirmSceneProps) {
-  const { colors } = useThemeTokens();
   const [held, setHeld] = useState(0);
   const [holding, setHolding] = useState(false);
   const [affirmed, setAffirmed] = useState(false);
@@ -111,6 +121,7 @@ export function HoldToAffirmScene({
   return (
     <ScrollView
       testID={testID}
+      className="flex-1 bg-black"
       contentContainerStyle={{
         flexGrow: 1,
         alignItems: "center",
@@ -119,12 +130,12 @@ export function HoldToAffirmScene({
         paddingVertical: 32,
       }}
     >
-      <Text className="text-xs uppercase tracking-widest text-muted-foreground">
+      <Text className="text-xs uppercase tracking-widest text-white/40">
         {move.title}
       </Text>
       <Text
         testID={`${testID}-line`}
-        className="mt-6 max-w-sm text-center text-2xl font-bold leading-snug text-foreground"
+        className="mt-6 max-w-sm text-center text-2xl font-bold leading-snug text-white"
       >
         {affirmDisplayLine(move)}
       </Text>
@@ -157,7 +168,7 @@ export function HoldToAffirmScene({
             cy="60"
             r={RADIUS}
             fill="none"
-            stroke={colors.border}
+            stroke={C.border}
             strokeWidth="6"
           />
           <Circle
@@ -166,18 +177,18 @@ export function HoldToAffirmScene({
             cy="60"
             r={RADIUS}
             fill="none"
-            stroke={affirmed ? colors.success : colors.primary}
+            stroke={affirmed ? C.success : C.primary}
             strokeWidth="6"
             strokeLinecap="round"
             strokeDasharray={CIRC}
             strokeDashoffset={CIRC * (1 - progress)}
           />
         </Svg>
-        <View className="h-24 w-24 items-center justify-center rounded-full bg-muted">
+        <View className="h-24 w-24 items-center justify-center rounded-full bg-white/10">
           {affirmed ? (
-            <Check testID={`${testID}-check`} size={36} color={colors.success} />
+            <Check testID={`${testID}-check`} size={36} color={C.success} />
           ) : (
-            <Text className="px-2 text-center text-xs font-semibold text-foreground">
+            <Text className="px-2 text-center text-xs font-semibold text-white/80">
               Hold to affirm
             </Text>
           )}
@@ -187,7 +198,7 @@ export function HoldToAffirmScene({
       <Text
         testID={`${testID}-status`}
         accessibilityLiveRegion="polite"
-        className="mt-6 text-sm text-muted-foreground"
+        className="mt-6 text-sm text-white/40"
       >
         {affirmed ? "Locked in." : "Press and hold"}
       </Text>
@@ -200,7 +211,7 @@ export function HoldToAffirmScene({
           style={minTouchTarget}
           className="mt-3 items-center justify-center"
         >
-          <Text className="text-sm font-medium text-muted-foreground">Skip</Text>
+          <Text className="text-sm font-medium text-white/40">Skip</Text>
         </Pressable>
       ) : null}
     </ScrollView>

@@ -42,7 +42,7 @@ import {
   fetchBillingPlans,
   fetchBillingStatus,
   openBillingPortal,
-  openExternally,
+  openExternallyDetailed,
   startCheckout,
   type BillingDeps,
   type BillingStatusResult,
@@ -344,6 +344,8 @@ export interface PlanPricingProps {
   plans: BillingPlansResponse["plans"];
   currency: string;
   checkout: CheckoutState;
+  /** Machine reason with an `error` state — rendered small under the friendly sentence. */
+  checkoutReason?: string | null;
   available: PlanAvailability;
   portalState: PortalState;
   browserOpened?: boolean;
@@ -358,6 +360,7 @@ export function PlanPricing({
   plans,
   currency,
   checkout,
+  checkoutReason,
   available,
   portalState,
   browserOpened = false,
@@ -550,6 +553,7 @@ export function PlanPricing({
           browserOpened={browserOpened}
           onStart={() => onStart("monthly")}
           onOpenPortal={onOpenPortal}
+          reason={checkoutReason}
           testID="pricing-checkout-action"
         />
       )}
@@ -837,6 +841,7 @@ export default function PlanScreen({
     annual: initialStatus?.plans?.annual ?? false,
   });
   const [startingPlan, setStartingPlan] = useState<BillingPlan | null>(null);
+  const [checkoutReason, setCheckoutReason] = useState<string | null>(null);
   const [portalState, setPortalState] = useState<PortalState>("idle");
   const [portalPath, setPortalPath] = useState<string>(PORTAL_PATH);
   const [browserOpened, setBrowserOpened] = useState(false);
@@ -972,16 +977,19 @@ export default function PlanScreen({
     async (plan: BillingPlan) => {
       if (checkout !== "ready" && checkout !== "error") return;
       setCheckout("starting");
+      setCheckoutReason(null);
       setStartingPlan(plan);
       try {
         const result = await startCheckout(plan, deps);
         if (result.kind === "state") {
           if (result.portalPath) setPortalPath(result.portalPath);
           setCheckout(result.state);
+          setCheckoutReason(result.reason ?? null);
           return;
         }
-        const opened = await openExternally(result.url, deps);
+        const { opened, reason } = await openExternallyDetailed(result.url, deps);
         setCheckout(opened ? "ready" : "error");
+        setCheckoutReason(opened ? null : (reason ?? "open-failed"));
         // The purchase is now in the device browser. Remember the handover so
         // the foreground re-read picks up the new tier even when the member
         // comes back through the app switcher (NP-054).
@@ -1097,6 +1105,7 @@ export default function PlanScreen({
                   plans={plansData.plans}
                   currency={plansData.currency}
                   checkout={checkout}
+                  checkoutReason={checkoutReason}
                   available={available}
                   portalState={portalState}
                   browserOpened={browserOpened}
