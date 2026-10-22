@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { View, ActivityIndicator, Pressable } from "react-native";
 import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -49,6 +49,29 @@ function defaultVerifyFn(token: string): Promise<{ token: string }> {
  *  `Error`/`unknown` value in state. */
 export type LocalVerifyFailure = "no-token" | "bad-mode";
 
+type VerifyOutcome =
+  | { ok: true; jwt: string }
+  | { ok: false; error: unknown };
+
+/**
+ * Single-flight verify-link requests, keyed by magic-link token.
+ *
+ * A magic-link token is single-use: the FIRST POST consumes it and every later
+ * POST fails. The verify effect below used to depend on its callbacks, and the
+ * route passes an INLINE `onSuccess` (a new function every render) while
+ * `useAuth().setToken` re-renders the tree on success — so the effect re-ran,
+ * the first run was marked `cancelled`, and a SECOND POST went out with the
+ * already-consumed token. The failure UI that followed was the second request's,
+ * shown over a sign-in that had already succeeded. Any re-run or second mount
+ * with the same token now awaits the SAME promise instead of re-POSTing.
+ */
+const verifyFlights = new Map<string, Promise<VerifyOutcome>>();
+
+/** Test-only reset for the module-level flight cache. */
+export function resetVerifyFlightsForTests(): void {
+  verifyFlights.clear();
+}
+
 /**
  * Turns a verify failure into the SAME card copy the web `/verify` page shows
  * (`webapp/app/verify/page.tsx`) — never a raw local-validation string, and
@@ -88,6 +111,7 @@ export function VerifyScreen({
   const { colors, tint } = useThemeTokens();
   const router = useRouter();
   const params = useLocalSearchParams<{ token?: string; mode?: string }>();
+  const { token: sessionToken } = useAuth();
   const [status, setStatus] = useState<"working" | "success" | "error">(
     "working",
   );
@@ -97,6 +121,22 @@ export function VerifyScreen({
   // effect into a render loop under React 19 + react-test-renderer.
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const pendingStore = pendingSessionStore ?? defaultPendingSessionStore;
+
+  // The effect below runs only on [token, mode] — everything it calls lives in
+  // a ref, so a re-render caused by `setToken` (or by the route's inline
+  // `onSuccess`) cannot re-trigger the request.
+  const verifyFnRef = useRef(verifyFn);
+  verifyFnRef.current = verifyFn;
+  const onSuccessRef = useRef(onSuccess);
+  onSuccessRef.current = onSuccess;
+  const onFailureRef = useRef(onFailure);
+  onFailureRef.current = onFailure;
+  const pendingStoreRef = useRef(pendingStore);
+  pendingStoreRef.current = pendingStore;
+  const routerRef = useRef(router);
+  routerRef.current = router;
+  const sessionTokenRef = useRef(sessionToken);
+  sessionTokenRef.current = sessionToken;
 
   useEffect(() => {
     const rawToken = params.token;
@@ -117,39 +157,50 @@ export function VerifyScreen({
       return;
     }
     /* eslint-enable react-hooks/set-state-in-effect */
-    const fn =
-      verifyFn ?? ((token: string, _mode: VerifyMode) => defaultVerifyFn(token));
+    // Single-flight: a re-run or a second mount with the same token awaits the
+    // SAME promise instead of POSTing again (the token is single-use, so a
+    // second POST can only fail — and its error is what used to be displayed).
+    let flight = verifyFlights.get(rawToken);
+    if (!flight) {
+      const fn =
+        verifyFnRef.current ??
+        ((token: string, _mode: VerifyMode) => defaultVerifyFn(token));
+      flight = fn(rawToken, rawMode).then<VerifyOutcome>(
+        (result) => ({ ok: true, jwt: result.token }),
+        (error: unknown) => ({ ok: false, error }),
+      );
+      verifyFlights.set(rawToken, flight);
+    }
     let cancelled = false;
     (async () => {
-      try {
-        const result = await fn(rawToken, rawMode);
-        if (cancelled) return;
+      const outcome = await flight;
+      if (cancelled) return;
+      if (outcome.ok) {
         setStatus("success");
         // Clear any pending magic-link session and complete sign-in
-        await pendingStore.clear();
-        await Promise.resolve(onSuccess?.(result.token));
+        await pendingStoreRef.current.clear();
+        await Promise.resolve(onSuccessRef.current?.(outcome.jwt));
         // After sign-in, go through the guards (consent, onboarding) instead
         // of straight to the dashboard.
-        router.replace("/");
-      } catch (err) {
-        if (cancelled) return;
-        setStatus("error");
-        setErrorMessage(friendlyVerifyErrorMessage(err));
-        onFailure?.(err);
+        routerRef.current.replace("/");
+        return;
       }
+      // The verify failed but the app is already signed in — the first attempt
+      // succeeded (and spent the token) before this run, so its "already
+      // consumed" refusal must not be shown. Route home like a success.
+      if (sessionTokenRef.current) {
+        setStatus("success");
+        routerRef.current.replace("/");
+        return;
+      }
+      setStatus("error");
+      setErrorMessage(friendlyVerifyErrorMessage(outcome.error));
+      onFailureRef.current?.(outcome.error);
     })();
     return () => {
       cancelled = true;
     };
-  }, [
-    params.token,
-    params.mode,
-    verifyFn,
-    onSuccess,
-    onFailure,
-    pendingStore,
-    router,
-  ]);
+  }, [params.token, params.mode]);
 
   const mode: VerifyMode = params.mode === "register" ? "register" : "login";
 
