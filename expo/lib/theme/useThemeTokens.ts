@@ -7,7 +7,8 @@ import {
   useMemo,
   type ReactNode,
 } from "react";
-import { useColorScheme } from "nativewind";
+import { View } from "react-native";
+import { useColorScheme, vars } from "nativewind";
 import * as SystemUI from "expo-system-ui";
 import {
   getTokens,
@@ -87,21 +88,62 @@ export function themeModeFrom(
  * nothing changes. It is a context and not a literal, so the components keep
  * reading tokens and still follow the system wherever else they are mounted.
  *
- * ONLY THE HOOK SEES IT. A Tailwind class (`bg-card`, `text-foreground`)
- * resolves against NativeWind's global scheme, which has no per-subtree
- * override, so a forced subtree must take every colour from `useThemeTokens()`.
- * `__tests__/card-NP-341-acceptance.test.tsx` checks the stage's files for
- * colour classes for that reason.
+ * ONLY THE HOOK SEES IT — unless the subtree opts into `scopeClassColors`. A
+ * Tailwind class (`bg-card`, `text-foreground`) resolves against NativeWind's
+ * global scheme, which has no per-subtree override, so a forced subtree takes
+ * every colour from `useThemeTokens()` by default. Pass `scopeClassColors` and
+ * the forced palette is ALSO written onto a wrapping View as scoped CSS
+ * variables (`vars()` from NativeWind, one `--<token>` per triplet, the same
+ * strings `global.css` uses), so classes inside resolve to the forced palette
+ * instead of the system's. `__tests__/card-NP-341-acceptance.test.tsx` checks
+ * the stage's files for colour classes for that reason; Live opts in because
+ * its panel is class-coloured throughout.
  */
 const ThemeModeOverride = createContext<ThemeMode | null>(null);
 
+/**
+ * The forced palette as scoped CSS variables — one `--<token>` per triplet,
+ * the same strings `global.css` uses under `.dark` / `:root` (proved equal by
+ * `__tests__/themeFollowsSystem.test.tsx`). A View carrying this style makes
+ * every Tailwind class beneath it resolve to `mode`'s palette, whatever the
+ * system scheme is.
+ */
+export function scopedClassVars(mode: ThemeMode) {
+  return vars(
+    Object.fromEntries(
+      Object.entries(getTokens(mode)).map(([name, triplet]) => [
+        `--${name}`,
+        triplet,
+      ]),
+    ),
+  );
+}
+
 export interface ForcedThemeModeProps {
   mode: ThemeMode;
+  /**
+   * Also pin CLASS colours, not just the hook. Wraps the children in a View
+   * carrying `scopedClassVars(mode)`, so `text-foreground` et al resolve to
+   * the forced palette. Off by default: the Becoming stage (NP-341) takes
+   * every colour from the hook and must not gain a class-colour override.
+   */
+  scopeClassColors?: boolean;
   children?: ReactNode;
 }
 
-export function ForcedThemeMode({ mode, children }: ForcedThemeModeProps) {
-  return createElement(ThemeModeOverride.Provider, { value: mode }, children);
+export function ForcedThemeMode({
+  mode,
+  scopeClassColors = false,
+  children,
+}: ForcedThemeModeProps) {
+  const content = scopeClassColors
+    ? createElement(
+        View,
+        { style: [{ flex: 1 }, scopedClassVars(mode)] },
+        children,
+      )
+    : children;
+  return createElement(ThemeModeOverride.Provider, { value: mode }, content);
 }
 
 export function useThemeTokens(): ThemeTokens {

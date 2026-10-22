@@ -279,15 +279,17 @@ export function lastSetLine(
  *
  * The web's live page is `fixed inset-0 bg-black` with white text in both
  * modes, so everything inside the `${testID}-live` root renders under
- * `ForcedThemeMode mode="dark"` — theme tokens inside resolve to dark (light
- * text, dark scrims and pills) whatever the phone's mode is. `useThemeTokens`
- * is therefore read inside the forced subtree, in `LiveStepContent` below.
- * Track is untouched: `TrackWorkoutView` never mounts here.
+ * `ForcedThemeMode mode="dark" scopeClassColors` — theme tokens inside resolve
+ * to dark (light text, dark scrims and pills) whatever the phone's mode is,
+ * AND Tailwind classes resolve to dark too, through the scoped CSS variables
+ * (`useThemeTokens.ts`). `useThemeTokens` is therefore read inside the forced
+ * subtree, in `LiveStepContent` below. Track is untouched: `TrackWorkoutView`
+ * never mounts here.
  */
 export function LiveStepView(props: LiveStepViewProps) {
   return (
     <View testID={`${props.testID}-live`} style={{ flex: 1 }}>
-      <ForcedThemeMode mode="dark">
+      <ForcedThemeMode mode="dark" scopeClassColors>
         <LiveStepContent {...props} />
       </ForcedThemeMode>
     </View>
@@ -381,7 +383,7 @@ function LiveStepContent({
       <View style={{ gap: 12 }}>
         <Text
           testID={`${testID}-live-empty`}
-          className="text-muted-foreground text-sm"
+          className="text-foreground/60 text-sm"
         >
           Nothing to log yet.
         </Text>
@@ -482,13 +484,13 @@ function LiveStepContent({
         borderRadius: 999,
         paddingHorizontal: 12,
         paddingVertical: 6,
-        backgroundColor: colors.muted,
       }}
+      className="bg-foreground/10"
     >
       {icon}
       <Text
         style={WRAPPABLE_TEXT}
-        className="text-foreground text-xs font-medium"
+        className="text-foreground/70 text-xs font-medium"
       >
         {text}
       </Text>
@@ -836,20 +838,20 @@ function LiveStepContent({
                     left it a size small and semibold). */}
                 <Text
                   testID={`${testID}-live-step`}
-                  className="text-muted-foreground text-sm"
+                  className="text-foreground/60 text-sm"
                 >
                   {`Exercise ${step.exerciseIndex + 1}/${exercises.length}`}
                 </Text>
-                <Text className="text-muted-foreground text-sm">•</Text>
+                <Text className="text-foreground/60 text-sm">•</Text>
                 <Text
                   testID={`${testID}-live-set-label`}
-                  className="text-muted-foreground text-sm"
+                  className="text-foreground/60 text-sm"
                 >
                   {`${unit} ${step.setIndex + 1}/${totalSets}`}
                 </Text>
                 {groupLabel ? (
                   <>
-                    <Text className="text-muted-foreground text-sm">•</Text>
+                    <Text className="text-foreground/60 text-sm">•</Text>
                     <Text
                       testID={`${testID}-live-group-label`}
                       className="text-mindset text-sm"
@@ -930,14 +932,14 @@ function LiveStepContent({
                     borderRadius: 999,
                     paddingHorizontal: 10,
                     paddingVertical: 4,
-                    backgroundColor: colors.muted,
                   }}
+                  className="bg-foreground/10"
                 >
-                  <Dumbbell size={12} color={colors["muted-foreground"]} />
+                  <Dumbbell size={12} color={tint("foreground", 0.7)} />
                   <Text
                     testID={`${testID}-live-${exercise.slug}-assumption`}
                     style={WRAPPABLE_TEXT}
-                    className="text-muted-foreground text-[11px] font-medium"
+                    className="text-foreground/70 text-[11px] font-medium"
                   >
                     {assumptionLabel}
                   </Text>
@@ -947,7 +949,7 @@ function LiveStepContent({
               {exercise.notes ? (
                 <Text
                   testID={`${testID}-live-${exercise.slug}-notes`}
-                  className="text-muted-foreground text-xs"
+                  className="text-foreground/60 text-xs"
                 >
                   {exercise.notes}
                 </Text>
@@ -1017,7 +1019,7 @@ function LiveStepContent({
                 />
               </View>
               {/* The web's `text-sm font-medium text-white/70 tabular-nums`. */}
-              <Text className="text-muted-foreground text-sm font-medium tabular-nums">
+              <Text className="text-foreground/70 text-sm font-medium tabular-nums">
                 {`${overall}%`}
               </Text>
             </View>
@@ -1142,7 +1144,7 @@ function LiveStepContent({
             {previousLine ? (
               <Text
                 testID={`${testID}-live-last-set`}
-                className="text-muted-foreground text-sm text-center"
+                className="text-foreground/60 text-sm text-center"
               >
                 {previousLine}
               </Text>
