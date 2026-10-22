@@ -71,7 +71,7 @@ export interface BottomSheetProps {
  * hardware back button closed the keyboard AND the sheet in one press — see
  * `handleSheetRequestClose`.
  *
- * SAFE-AREA CAP (NP-271), now a FIXED 90% sheet.
+ * SAFE-AREA CAP (NP-271), now a FIXED 80% sheet.
  *
  * With no height limit, a sheet taller than the screen (e.g. the recipe
  * editor, mid-edit, with several ingredients and steps already filled in)
@@ -80,7 +80,7 @@ export interface BottomSheetProps {
  * back. On Android the same lack of a bottom inset let the sheet's own
  * footer sit under the gesture/navigation bar.
  *
- * The sheet is therefore always exactly 90% of the window height (capped
+ * The sheet is therefore always exactly 80% of the window height (capped
  * further only so it never touches the top inset), and its bottom padding
  * grows to clear the bottom inset, so it can never cover either system bar;
  * callers whose content is taller than that scroll inside their own
@@ -104,12 +104,12 @@ export function BottomSheet({
   const reduceMotion = useReducedMotion();
   const insets = useSafeAreaInsetsOrZero();
   const { height: windowHeight } = useWindowDimensions();
-  // Fixed at 90% of the window height, capped further only so the sheet
+  // Fixed at 80% of the window height, capped further only so the sheet
   // never touches the top inset (status bar / notch). `pb-8` (32px) is the
   // floor for devices with no bottom inset; a gesture-nav Android device
   // adds its inset on top of it.
   const sheetHeight = Math.min(
-    Math.round(windowHeight * 0.9),
+    Math.round(windowHeight * 0.8),
     windowHeight - insets.top - 24,
   );
   const sheetBottomPadding = Math.max(32, insets.bottom + 16);

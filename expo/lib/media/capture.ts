@@ -154,6 +154,9 @@ export interface CaptureOptions {
 const FAILED_MESSAGE =
   "Become could not get that photo. Try again in a moment.";
 
+/** What a member sees when the camera, picker or encoder fails outright. */
+export const CAPTURE_FAILED_MESSAGE = FAILED_MESSAGE;
+
 /** The button beside every permission message. */
 export const SETTINGS_ACTION_LABEL = "Open Settings";
 

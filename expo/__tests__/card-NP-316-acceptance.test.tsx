@@ -60,15 +60,15 @@ describe("NP-316 (1): the Mindset card never auto-starts a session", () => {
 });
 
 describe("NP-316 (2): Quick Add is keyboard-aware on Android", () => {
-  it("wraps its content in a KeyboardAvoidingView that shrinks (behavior=\"height\") on Android, and the 90% fixed height lives in BottomSheet", () => {
+  it("wraps its content in a KeyboardAvoidingView that shrinks (behavior=\"height\") on Android, and the 80% fixed height lives in BottomSheet", () => {
     const src = readExpo("components/nutrition/QuickAddSheet.tsx");
     expect(src).toContain('Platform.OS === "ios" ? "padding" : "height"');
     // A per-caller `sheetStyle` height cap plus a `flex: 1` ScrollView
     // inside a content-sized sheet collapsed the sheet to its grab handle —
-    // so the sheet sets no height of its own; `BottomSheet` is the fixed 90%.
+    // so the sheet sets no height of its own; `BottomSheet` is the fixed 80%.
     expect(src).not.toContain("sheetStyle");
     const sheet = readExpo("components/BottomSheet.tsx");
-    expect(sheet).toContain("windowHeight * 0.9");
+    expect(sheet).toContain("windowHeight * 0.8");
   });
 });
 

@@ -509,7 +509,7 @@ export default function MyExercisesRoute() {
           with no height limit and no scroll — on a phone the title and Name
           field sat under the status bar and Cancel/Create sat below the
           bottom edge, so a custom exercise could not be created natively.
-          `BottomSheet` (fixed at 90% of the window height) + an inner
+          `BottomSheet` (fixed at 80% of the window height) + an inner
           `ScrollView` is the pattern already proven for long native forms
           (`GenerateSheet`, `UpgradeSheet`, `TrainingLogCorrectionSheet`): the
           sheet itself never exceeds the safe area, and scrolling is what
