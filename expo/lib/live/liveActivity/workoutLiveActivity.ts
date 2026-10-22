@@ -149,6 +149,29 @@ interface NativeLiveActivityLike {
 
 interface NativeLiveActivityFactoryLike {
   start: (props: unknown, url?: string, staleDate?: Date) => NativeLiveActivityLike;
+  /** Every activity of this type the OS is still showing. */
+  getInstances?: () => NativeLiveActivityLike[];
+}
+
+/**
+ * End every activity of this type the OS still shows, immediately. A live
+ * workout owns exactly ONE Lock Screen activity, but the handle that tracks it
+ * lives in JS memory: an app reload, a crash or a kill mid-workout loses it,
+ * and the activity it started stays on the Lock Screen with nothing left to
+ * end it (device review 2026-10-22: two copies of the workout, and the stray
+ * outliving the workout). So a start clears strays first, and an end clears
+ * any that remain. Best-effort, never throws.
+ */
+function endStrayActivities(native: NativeLiveActivityFactoryLike): void {
+  let strays: NativeLiveActivityLike[] = [];
+  try {
+    strays = native.getInstances?.() ?? [];
+  } catch {
+    return;
+  }
+  for (const stray of strays) {
+    void stray.end("immediate").catch(() => {});
+  }
 }
 
 function wrapNativeFactory(
@@ -157,10 +180,17 @@ function wrapNativeFactory(
   return {
     start(props) {
       try {
+        endStrayActivities(native);
         const activity = native.start(props);
         return {
           update: (next) => activity.update(next),
-          end: (next) => activity.end("default", next),
+          // "immediate", not "default": iOS keeps a "default"-ended activity
+          // on the Lock Screen for up to four hours, so leaving the workout
+          // left it there.
+          end: async (next) => {
+            await activity.end("immediate", next);
+            endStrayActivities(native);
+          },
         };
       } catch {
         return null;
