@@ -11,6 +11,7 @@ import {
   ProgramStartDateResponseSchema,
   ProgramAbandonResponseSchema,
   ScheduleApiResponseSchema,
+  classifyApiError,
   type ProgramAbandonRequest,
   type ProgramAbandonResponse,
   type ProgramStartDateRequest,
@@ -96,6 +97,7 @@ export default function ProgramDetailRoute() {
   }, [schedulesFetch.data?.schedules]);
 
   const [showEnrollModal, setShowEnrollModal] = useState(false);
+  const [enrollError, setEnrollError] = useState<string | null>(null);
   const [showStartDateModal, setShowStartDateModal] = useState(false);
   const [showShiftModal, setShowShiftModal] = useState(false);
   const [showAbandonModal, setShowAbandonModal] = useState(false);
@@ -200,14 +202,20 @@ export default function ProgramDetailRoute() {
   const onConfirmEnroll = useCallback(
     async (startDate: string) => {
       setActionPending(true);
+      setEnrollError(null);
       try {
         await enrollProgram(fetchOpts, { programId: id, startDate });
         setShowEnrollModal(false);
         await active.refetch();
         notifyProgramUpdated();
         router.push(`/(tabs)/programming/${encodeURIComponent(id)}/schedule`);
-      } catch {
-        // Surface nothing for now; the action buttons re-enable below.
+      } catch (err) {
+        // Keep the modal open and show the refusal — a swallowed error left
+        // the member on an empty calendar with no way to know enrolment failed.
+        setEnrollError(
+          classifyApiError(err).message ??
+            "Could not enroll in this program. Try again.",
+        );
       } finally {
         setActionPending(false);
       }
@@ -533,8 +541,12 @@ export default function ProgramDetailRoute() {
         durationWeeks={data?.duration_weeks ?? 4}
         initialDate={suggestedStartDate}
         onConfirm={onConfirmEnroll}
-        onClose={() => setShowEnrollModal(false)}
+        onClose={() => {
+          setEnrollError(null);
+          setShowEnrollModal(false);
+        }}
         loading={actionPending}
+        error={enrollError}
         testID="enroll-modal"
       />
       <ChangeStartDateModal

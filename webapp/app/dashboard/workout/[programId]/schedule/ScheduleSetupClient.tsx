@@ -84,6 +84,26 @@ export default function ScheduleSetupClient({ programId, programName, trainingDa
             setExistingSchedule(match)
             setSelectedDays(match.settings.trainingDays)
             setStartDate(new Date(match.settings.startDate))
+            // A re-enrolled program keeps its stale schedule doc while its
+            // enrolment has `hasSchedule !== true`: show SETUP prefilled from
+            // the old settings, not the view of last season's slots. Only
+            // `hasSchedule === true` earns VIEW. Unreachable active read keeps
+            // today's behaviour (view) rather than flipping on a failed fetch.
+            try {
+              const activeRes = await fetch('/api/programs/active', {
+                headers: { 'Authorization': `Bearer ${token}` },
+              })
+              if (activeRes.ok) {
+                const activeData = await activeRes.json()
+                const activeMatch = activeData.activePrograms?.find(
+                  (p: { programId: string }) => p.programId === programId
+                )
+                if (activeMatch?.hasSchedule !== true) {
+                  setMode('create')
+                  return
+                }
+              }
+            } catch { /* ignore */ }
             setMode('view')
             return
           }

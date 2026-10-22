@@ -669,6 +669,7 @@ test('GET /api/programs/active matches ActiveProgramsApiResponseSchema with a st
       'activePrograms.0.totalWorkouts',
       'activePrograms.0.progress',
       'activePrograms.0.status',
+      'activePrograms.0.hasSchedule',
     ],
   })
 

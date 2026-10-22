@@ -78,6 +78,7 @@ export async function GET(request: NextRequest) {
       completedWorkouts: number
       totalWorkouts: number
       status: string
+      hasSchedule?: boolean
       lastWorkoutDate?: Date
     }
 
@@ -91,6 +92,7 @@ export async function GET(request: NextRequest) {
       totalWorkouts: number
       progress: number
       status: string
+      hasSchedule: boolean
       lastWorkoutDate?: Date
     }
 
@@ -192,6 +194,9 @@ export async function GET(request: NextRequest) {
           ? Math.round((completedWorkouts / totalWorkouts) * 100)
           : 0,
         status: effectiveStatus,
+        // Always present (older rows never had the field) so a client can
+        // tell "enrolled, no schedule yet" apart from "scheduled".
+        hasSchedule: program.hasSchedule ?? false,
         lastWorkoutDate: program.lastWorkoutDate,
       })
     }
