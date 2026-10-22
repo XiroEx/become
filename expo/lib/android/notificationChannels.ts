@@ -156,7 +156,7 @@ export function getNotificationChannels(): NotificationChannel[] {
       name: "Live Workout",
       description:
         "Shows the current exercise and rest countdown during a live workout.",
-      importance: "default",
+      importance: "low",
       sound: false,
       vibrate: false,
     },
@@ -210,7 +210,7 @@ export async function ensureAndroidChannels(
             name: config.name,
             description: config.description,
             importance: config.importance as never,
-            sound: config.sound ? "default" : undefined,
+            sound: config.sound ? "default" : null,
             vibrationPattern: config.vibrate ? [0, 250, 250, 250] : null,
           }),
       })));
