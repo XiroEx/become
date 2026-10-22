@@ -20,7 +20,7 @@ export type RootErrorScreenProps = ErrorBoundaryProps;
  * plan gates, AI consent), it never sees a React render throw.
  *
  * Themed like the rest of the app — every colour from `useThemeTokens()`,
- * every glyph through the app's `Text` (the Geist stack) — so this is never
+ * every glyph through the app's `Text` (the Arial stack) — so this is never
  * the one screen that draws San Francisco on a white background. Fonts may
  * not be registered when this draws; that is fine, and this screen never
  * returns null for it: an unregistered Geist face falls back to the system

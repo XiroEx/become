@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { Text } from "@/components/Text";
 import type { TextInputProps } from "react-native";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
-import { geistFontFamily } from "@/lib/theme/fonts";
+import { appFontFamily } from "@/lib/theme/fonts";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 
 export type InputVariant = "default" | "prominent" | "live";
@@ -76,7 +76,7 @@ export function Input({
     : null;
   const computedStyle = [
     minTouchTarget,
-    { fontFamily: geistFontFamily(inputClassName) },
+    { fontFamily: appFontFamily(inputClassName) },
     multilineStyle,
     style,
   ].filter(Boolean);

@@ -35,7 +35,7 @@ import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
-import { geistFontFamily } from "@/lib/theme/fonts";
+import { appFontFamily } from "@/lib/theme/fonts";
 
 export type BiologicalSex = "male" | "female" | "prefer_not_to_say";
 
@@ -430,7 +430,7 @@ export function ProfileSettingsScreen({
                 className="bg-muted border border-border rounded-xl px-3 py-2.5 text-muted-foreground"
                 style={[
                   minTouchTarget,
-                  { fontFamily: geistFontFamily("") },
+                  { fontFamily: appFontFamily("") },
                 ]}
               />
               <Text className="text-muted-foreground text-xs mt-1">
