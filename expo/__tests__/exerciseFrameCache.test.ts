@@ -61,8 +61,10 @@ jest.mock("expo-file-system", () => {
     Directory: FakeDirectory,
     File: FakeFile,
     Paths: {
+      // A literal, not `mockGroupId`: jest.mock is hoisted above that const,
+      // so it is still undefined when this factory runs.
       appleSharedContainers: {
-        [mockGroupId]: new FakeDirectory("file:///group"),
+        "group.io.redbtn.become": new FakeDirectory("file:///group"),
       },
     },
   };
