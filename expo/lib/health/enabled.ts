@@ -13,20 +13,23 @@ import { Platform } from "react-native";
  *  - **Android: on.** NP-199 installs `react-native-health-connect`, declares
  *    the four Health Connect permissions in `app.json` and wires read and write
  *    for weight and workouts (`lib/health/healthConnect.ts`, `lib/health/sync.ts`).
- *  - **iOS: off.** No HealthKit module is installed yet — `lib/health/ios.ts`
- *    is still the adapter shell with no `write` half. NP-185 (weight, both
- *    directions) and NP-186 (workouts) install `react-native-health`, add the
- *    two `NSHealth*UsageDescription` strings and flip this to true.
+ *  - **iOS: on.** NP-185 installs `react-native-health`, adds the HealthKit
+ *    entitlement and the `NSHealthShareUsageDescription` /
+ *    `NSHealthUpdateUsageDescription` strings, and wires read AND write for
+ *    weight (`lib/health/healthKit.ts`, `lib/health/ios.ts`). NP-186 adds
+ *    the finished-workout write (`writeWorkout`, with its own `Workout`
+ *    permission and a client-kept HealthKit id so retries write once).
  *
  * Everything else about the feature is platform-neutral on purpose: the
- * switches, the launch snapshot, the sync and the server route are shared, so
- * iOS turns on by implementing `HealthClient.write` and changing the line below.
+ * switches, the launch snapshot, the sync and the server route are shared
+ * between both platforms.
  *
  * NP-199: https://board.redbtn.io/b/6a70c4ea2fff468f8e253a89?card=6abb12692379586ae015cb0e
  * NP-185: https://board.redbtn.io/b/6a70c4ea2fff468f8e253a89?card=6abb12672379586ae015cac4
+ * NP-186: https://board.redbtn.io/b/6a70c4ea2fff468f8e253a89?card=6abb12682379586ae015cac9
  */
 export const HEALTH_SYNC_ENABLED_ANDROID = true;
-export const HEALTH_SYNC_ENABLED_IOS = false;
+export const HEALTH_SYNC_ENABLED_IOS = true;
 
 /**
  * `platform` defaults to the device's. It is a parameter so a test can ask

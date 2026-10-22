@@ -21,6 +21,7 @@ import { Text } from "@/components/Text";
 import { Button } from "@/components/Button";
 import { Toggle } from "@/components/Toggle";
 import { DangerZone } from "@/components/settings/DangerZone";
+import { DiagnosticsSection } from "@/components/settings/DiagnosticsSection";
 import { BiometricUnlockSection } from "@/components/settings/BiometricUnlockSection";
 import { FeedbackSheet } from "@/components/settings/FeedbackSheet";
 import { ProfileSettingsScreen } from "@/components/profile/ProfileSettingsScreen";
@@ -1153,6 +1154,10 @@ export default function SettingsScreen({
           >
             {`Version ${appVersion} (${appBuild})`}
           </Text>
+
+          {/* Device-only failure reasons (checkout, Live Activity, rest
+              alert) — read live on mount. Plain text, never a gate. */}
+          <DiagnosticsSection />
         </View>
 
         {/* 6. Delete account (always at the bottom, 2 taps away) */}

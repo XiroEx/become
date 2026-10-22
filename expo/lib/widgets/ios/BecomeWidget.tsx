@@ -58,7 +58,7 @@ import {
   Text,
   VStack,
 } from "@expo/ui/swift-ui";
-import { font, widgetURL } from "@expo/ui/swift-ui/modifiers";
+import { containerBackground, font, widgetURL } from "@expo/ui/swift-ui/modifiers";
 import type { WidgetState } from "@become/api-client";
 import type { IosWidgetProps } from "@/lib/widgets/iosTimeline";
 
@@ -92,6 +92,10 @@ export function iosWidgetStateTint(state: WidgetState): string {
  * names the size being painted. It is untyped on purpose — the stringified
  * layout receives whatever the OS sent, and an unknown family draws small.
  */
+// Every root view declares its container background. expo-widgets 57 stopped
+// adding one itself ("Remove hardcoded containerBackground in favor of
+// @expo/ui modifier"), and on iOS 17+ a widget without one draws only
+// "Please adopt containerBackground API" (seen on a device, 2026-10-22).
 export function BecomeWidget(
   props: IosWidgetProps,
   environment?: { widgetFamily?: string },
@@ -101,7 +105,7 @@ export function BecomeWidget(
   if (!props.signedIn) {
     if (family === "accessoryCircular") {
       return (
-        <VStack alignment="center" spacing={0} modifiers={[widgetURL(props.url)]}>
+        <VStack alignment="center" spacing={0} modifiers={[widgetURL(props.url), containerBackground({ type: "material", material: "regular" }, "widget")]}>
           <Text modifiers={[font({ size: 13, weight: "semibold" })]}>
             {"Sign in"}
           </Text>
@@ -111,7 +115,7 @@ export function BecomeWidget(
     }
     if (family === "accessoryInline") {
       return (
-        <VStack alignment="leading" spacing={0} modifiers={[widgetURL(props.url)]}>
+        <VStack alignment="leading" spacing={0} modifiers={[widgetURL(props.url), containerBackground({ type: "material", material: "regular" }, "widget")]}>
           <Text>{"Become: open the app to sign in"}</Text>
           <Link destination={props.url} label="Open Become" />
         </VStack>
@@ -119,7 +123,7 @@ export function BecomeWidget(
     }
     if (family === "accessoryRectangular") {
       return (
-        <VStack alignment="leading" spacing={2} modifiers={[widgetURL(props.url)]}>
+        <VStack alignment="leading" spacing={2} modifiers={[widgetURL(props.url), containerBackground({ type: "material", material: "regular" }, "widget")]}>
           <Text modifiers={[font({ size: 13, weight: "medium" })]}>
             {props.title}
           </Text>
@@ -132,7 +136,7 @@ export function BecomeWidget(
     }
     if (family === "systemMedium") {
       return (
-        <VStack alignment="leading" spacing={4} modifiers={[widgetURL(props.url)]}>
+        <VStack alignment="leading" spacing={4} modifiers={[widgetURL(props.url), containerBackground({ type: "material", material: "regular" }, "widget")]}>
           <Text modifiers={[font({ size: 12, weight: "medium" })]}>
             {props.title}
           </Text>
@@ -145,7 +149,7 @@ export function BecomeWidget(
       );
     }
     return (
-      <VStack alignment="leading" spacing={4} modifiers={[widgetURL(props.url)]}>
+      <VStack alignment="leading" spacing={4} modifiers={[widgetURL(props.url), containerBackground({ type: "material", material: "regular" }, "widget")]}>
         <Text modifiers={[font({ size: 12, weight: "medium" })]}>
           {props.title}
         </Text>
@@ -159,7 +163,7 @@ export function BecomeWidget(
   }
   if (family === "accessoryCircular") {
     return (
-      <VStack alignment="center" spacing={0} modifiers={[widgetURL(props.url)]}>
+      <VStack alignment="center" spacing={0} modifiers={[widgetURL(props.url), containerBackground({ type: "material", material: "regular" }, "widget")]}>
         <Text modifiers={[font({ size: 20, weight: "bold" })]}>
           {props.headline}
         </Text>
@@ -172,7 +176,7 @@ export function BecomeWidget(
   }
   if (family === "accessoryRectangular") {
     return (
-      <VStack alignment="leading" spacing={2} modifiers={[widgetURL(props.url)]}>
+      <VStack alignment="leading" spacing={2} modifiers={[widgetURL(props.url), containerBackground({ type: "material", material: "regular" }, "widget")]}>
         <HStack spacing={4}>
           <Text modifiers={[font({ size: 18, weight: "bold" })]}>
             {props.headline}
@@ -188,7 +192,7 @@ export function BecomeWidget(
   }
   if (family === "accessoryInline") {
     return (
-      <VStack alignment="leading" spacing={0} modifiers={[widgetURL(props.url)]}>
+      <VStack alignment="leading" spacing={0} modifiers={[widgetURL(props.url), containerBackground({ type: "material", material: "regular" }, "widget")]}>
         <Link destination={props.url}>
           <Text>
             {props.headlineUnit
@@ -201,7 +205,7 @@ export function BecomeWidget(
   }
   if (family === "systemMedium") {
     return (
-      <VStack alignment="leading" spacing={4} modifiers={[widgetURL(props.url)]}>
+      <VStack alignment="leading" spacing={4} modifiers={[widgetURL(props.url), containerBackground({ type: "material", material: "regular" }, "widget")]}>
         <Text modifiers={[font({ size: 12, weight: "medium" })]}>
           {props.title}
         </Text>
@@ -213,17 +217,17 @@ export function BecomeWidget(
         </HStack>
         <Text modifiers={[font({ size: 12 })]}>{props.caption}</Text>
         {props.rings.map((ring) => (
-          <HStack key={ring[0]} spacing={4}>
+          <HStack key={ring.label} spacing={4}>
             <Text modifiers={[font({ size: 11 })]}>
-              {`${ring[0]} ${ring[1]}${ring[3]}`}
+              {`${ring.label} ${ring.value}${ring.unit}`}
             </Text>
             <Spacer />
-            {ring[2] !== null ? (
-              <ProgressView value={ring[2]} />
+            {typeof ring.pct === "number" ? (
+              <ProgressView value={ring.pct} />
             ) : null}
           </HStack>
         ))}
-        {props.progress !== null ? (
+        {typeof props.progress === "number" ? (
           <ProgressView value={props.progress} />
         ) : null}
         <Text modifiers={[font({ size: 10 })]}>
@@ -242,7 +246,7 @@ export function BecomeWidget(
     );
   }
   return (
-    <VStack alignment="leading" spacing={4} modifiers={[widgetURL(props.url)]}>
+    <VStack alignment="leading" spacing={4} modifiers={[widgetURL(props.url), containerBackground({ type: "material", material: "regular" }, "widget")]}>
       <Text modifiers={[font({ size: 12, weight: "medium" })]}>
         {props.title}
       </Text>
@@ -253,7 +257,7 @@ export function BecomeWidget(
         {props.headlineUnit ? <Text>{props.headlineUnit}</Text> : null}
       </HStack>
       <Text modifiers={[font({ size: 12 })]}>{props.caption}</Text>
-      {props.progress !== null ? (
+      {typeof props.progress === "number" ? (
         <ProgressView value={props.progress} />
       ) : null}
       <Text modifiers={[font({ size: 10 })]}>

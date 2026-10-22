@@ -80,18 +80,28 @@ export interface WorkoutWrite {
   startISO: string;
   endISO: string;
   notes?: string;
+  /**
+   * Total active energy, kilocalories, when known. Become does not estimate
+   * burn, so most writes omit it — HealthKit then records the session with
+   * no energy total, and the workout still counts toward the Activity rings.
+   */
+  energyKcal?: number;
   /** See `WeightWrite.clientId` — the attempt id, so a retry overwrites. */
   clientId?: string;
 }
 
 /**
- * The half of the platform store Become WRITES to. Optional on `HealthClient`
- * because a platform adapter may not have it yet: Android does (NP-199), iOS
- * gets it with NP-185 / NP-186.
+ * The half of the platform store Become WRITES to. `writeWorkout` is
+ * optional on this interface because a platform adapter may not have one
+ * yet: Android has both halves (NP-199), iOS gained `writeWeight` with
+ * NP-185 and `writeWorkout` with NP-186. `exportWorkoutToHealth`
+ * (`lib/health/sync.ts`) answers `reason: "no-writer"` for a platform whose
+ * `write` exists but whose `writeWorkout` does not, the same answer it gives
+ * a platform with no `write` at all.
  */
 export interface HealthWriteClient {
   writeWeight: (sample: WeightWrite) => Promise<void>;
-  writeWorkout: (workout: WorkoutWrite) => Promise<void>;
+  writeWorkout?: (workout: WorkoutWrite) => Promise<void>;
 }
 
 export interface HealthClient {

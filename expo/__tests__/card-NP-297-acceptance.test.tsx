@@ -102,13 +102,17 @@ describe("(id: np297-theme) the chrome is the web's fixed black, not the system 
     expect(backIcon.props.color).toBe(onDarkForeground);
   });
 
-  it("the `move` stage keeps its OWN themed surface — the scenes it hosts are untouched", () => {
+  // Superseded 2026-10-22 (Jon: "Daily Mindset sessions need to have a black
+  // background in all parts of that session"): the move stage no longer
+  // keeps a themed surface — the whole session is the web's black stage,
+  // pinned by card-mind-session-dark-stage.test.tsx.
+  it("the `move` stage no longer paints a themed surface over the black session", () => {
     setSystemScheme("light");
     const { getByTestId } = render(
       <SessionPlayer plan={PLAN} onExit={jest.fn()} />,
     );
     fireEvent.press(getByTestId(`${P}-intro-begin`));
-    expect(getByTestId(`${P}-stage`).props.className).toContain(
+    expect(getByTestId(`${P}-stage`).props.className).not.toContain(
       "bg-background",
     );
   });

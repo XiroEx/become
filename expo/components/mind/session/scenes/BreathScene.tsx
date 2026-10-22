@@ -21,7 +21,21 @@ import { useReducedMotion } from "@/lib/a11y/reducedMotion";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { lightHaptic, type HapticFn } from "@/lib/feedback/haptics";
 import type { TokenName } from "@/lib/theme/tokens";
-import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { resolveToken } from "@/lib/theme/tokens";
+
+/**
+ * ALWAYS BLACK, LIKE THE WEB. See `WinScene.tsx` — this scene renders
+ * straight onto the player's fixed `bg-black` stage, so every colour is
+ * pinned to the DARK palette, never the `useThemeTokens()` hook.
+ */
+const C = {
+  border: resolveToken("border", "dark"),
+  foreground: resolveToken("foreground", "dark"),
+  "muted-foreground": resolveToken("muted-foreground", "dark"),
+  "primary-foreground": resolveToken("primary-foreground", "dark"),
+  muted: resolveToken("muted", "dark"),
+  success: resolveToken("success", "dark"),
+} as const;
 
 /**
  * The breath pacer, ported from
@@ -65,14 +79,13 @@ export function kindOf(label: string): Kind {
 }
 
 /**
- * Per-phase visual language. The web's violet / blue / green becomes
- * primary / muted / success, because a colour in native comes from a token so it
- * can follow the system light-dark setting (NP-123).
+ * Per-phase visual language. The web's violet / blue / green, pinned to the
+ * dark palette (see `C`) so the stage stays black in both system schemes.
  */
 const PHASE_STYLE: Record<Kind, { token: TokenName; chip: string; Icon: LucideIcon }> = {
-  in: { token: "primary", chip: "text-primary", Icon: ArrowUp },
-  hold: { token: "muted-foreground", chip: "text-muted-foreground", Icon: Minus },
-  out: { token: "success", chip: "text-success", Icon: ArrowDown },
+  in: { token: "mind-violet", chip: "text-violet-300", Icon: ArrowUp },
+  hold: { token: "info", chip: "text-blue-300", Icon: Minus },
+  out: { token: "success", chip: "text-green-300", Icon: ArrowDown },
 };
 
 /** `2200` → `2.2s`, `4000` → `4s` — the web's `secs()`. */
@@ -92,7 +105,6 @@ export function BreathScene({
   haptic = lightHaptic,
   testID = "mind-breath",
 }: BreathSceneProps) {
-  const { colors } = useThemeTokens();
   const reduce = useReducedMotion();
   // The web's fallback when a protocol somehow fails to resolve.
   const p = protocol ?? BREATH_PROTOCOLS.sigh!;
@@ -260,6 +272,7 @@ export function BreathScene({
     return (
       <ScrollView
         testID={`${testID}-ready`}
+        className="flex-1 bg-black"
         contentContainerStyle={{
           flexGrow: 1,
           justifyContent: "center",
@@ -268,21 +281,21 @@ export function BreathScene({
         }}
       >
         <View className="mx-auto w-full max-w-sm items-center">
-          <View className="mb-5 h-14 w-14 items-center justify-center rounded-2xl bg-muted">
-            <Wind size={28} color={colors.foreground} />
+          <View className="mb-5 h-14 w-14 items-center justify-center rounded-2xl bg-white/10">
+            <Wind size={28} color={C.foreground} />
           </View>
           <Text
             testID={`${testID}-name`}
-            className="text-center text-3xl font-extrabold text-foreground"
+            className="text-center text-3xl font-extrabold text-white"
           >
             {p.name}
           </Text>
-          <View className="mt-2 rounded-full bg-muted px-3 py-1">
-            <Text className="text-xs font-semibold text-muted-foreground">
+          <View className="mt-2 rounded-full bg-white/10 px-3 py-1">
+            <Text className="text-xs font-semibold text-white/70">
               {p.bestFor}
             </Text>
           </View>
-          <Text className="mt-4 text-center text-sm leading-relaxed text-muted-foreground">
+          <Text className="mt-4 text-center text-sm leading-relaxed text-white/60">
             {p.description}
           </Text>
 
@@ -295,10 +308,10 @@ export function BreathScene({
                 <View
                   key={`${ph.label}-${i}`}
                   testID={`${testID}-phase-pill-${i}`}
-                  className="flex-row items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5"
+                  className="flex-row items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5"
                 >
-                  <PIcon size={14} color={colors[st.token]} />
-                  <Text className="text-xs font-medium text-foreground">
+                  <PIcon size={14} color={resolveToken(st.token, "dark")} />
+                  <Text className="text-xs font-medium text-white/80">
                     {ph.label} · {secs(ph.durationMs)}
                   </Text>
                 </View>
@@ -307,7 +320,7 @@ export function BreathScene({
           </View>
           <Text
             testID={`${testID}-rounds`}
-            className="mt-3 text-xs uppercase tracking-widest text-muted-foreground"
+            className="mt-3 text-xs uppercase tracking-widest text-white/40"
           >
             {p.rounds} rounds
           </Text>
@@ -318,10 +331,10 @@ export function BreathScene({
             accessibilityLabel="Start"
             onPress={() => begin("run")}
             style={minTouchTarget}
-            className="mt-8 w-full flex-row items-center justify-center gap-2 rounded-2xl bg-primary py-4"
+            className="mt-8 w-full flex-row items-center justify-center gap-2 rounded-2xl bg-white py-4"
           >
-            <Play size={20} color={colors["primary-foreground"]} />
-            <Text className="text-base font-bold text-primary-foreground">
+            <Play size={20} color={C["primary-foreground"]} />
+            <Text className="text-base font-bold text-black">
               Start
             </Text>
           </Pressable>
@@ -331,10 +344,10 @@ export function BreathScene({
             accessibilityLabel="Preview one round"
             onPress={() => begin("preview")}
             style={minTouchTarget}
-            className="mt-3 w-full flex-row items-center justify-center gap-2 rounded-2xl border border-border py-3"
+            className="mt-3 w-full flex-row items-center justify-center gap-2 rounded-2xl border border-white/15 py-3"
           >
-            <Eye size={16} color={colors.foreground} />
-            <Text className="text-sm font-semibold text-foreground">
+            <Eye size={16} color={C.foreground} />
+            <Text className="text-sm font-semibold text-white/80">
               Preview one round
             </Text>
           </Pressable>
@@ -346,7 +359,7 @@ export function BreathScene({
             style={minTouchTarget}
             className="mt-3 items-center justify-center"
           >
-            <Text className="text-sm font-medium text-muted-foreground">Skip</Text>
+            <Text className="text-sm font-medium text-white/40">Skip</Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -355,16 +368,16 @@ export function BreathScene({
 
   // ── Running ──
   return (
-    <View testID={`${testID}-run`} className="flex-1 items-center px-6">
+    <View testID={`${testID}-run`} className="flex-1 items-center bg-black px-6">
       {/* Header — anchored just above the orb, so the orb sits at the true
           vertical centre of the stage. */}
       <View className="flex-1 items-center justify-end pb-8">
-        <Text className="text-xs uppercase tracking-widest text-muted-foreground">
+        <Text className="text-xs uppercase tracking-widest text-white/40">
           {p.name}
         </Text>
         <Text
           testID={`${testID}-round`}
-          className="mt-1 text-sm text-muted-foreground"
+          className="mt-1 text-sm text-white/60"
         >
           {isPreview
             ? "Preview"
@@ -378,10 +391,10 @@ export function BreathScene({
       <View className="h-72 w-72 items-center justify-center">
         {done ? (
           <View testID={`${testID}-done`} className="items-center justify-center">
-            <View className="h-36 w-36 items-center justify-center rounded-full border border-success bg-muted">
-              <Check size={64} color={colors.success} />
+            <View className="h-36 w-36 items-center justify-center rounded-full border border-green-400 bg-white/10">
+              <Check size={64} color={C.success} />
             </View>
-            <Text className="mt-4 text-lg font-bold text-foreground">Nice.</Text>
+            <Text className="mt-4 text-lg font-bold text-white">Nice.</Text>
           </View>
         ) : (
           <>
@@ -394,7 +407,7 @@ export function BreathScene({
                 height: 224,
                 width: 224,
                 borderRadius: 112,
-                backgroundColor: colors.muted,
+                backgroundColor: C.muted,
                 transform: [{ scale: orbScale }],
               }}
             />
@@ -411,7 +424,7 @@ export function BreathScene({
                 cy="50"
                 r={RING_R}
                 fill="none"
-                stroke={colors.border}
+                stroke={C.border}
                 strokeWidth="2.5"
               />
               <Circle
@@ -420,7 +433,7 @@ export function BreathScene({
                 cy="50"
                 r={RING_R}
                 fill="none"
-                stroke={colors[style.token]}
+                stroke={resolveToken(style.token, "dark")}
                 strokeWidth="3"
                 strokeLinecap="round"
                 strokeDasharray={RING_C}
@@ -432,7 +445,7 @@ export function BreathScene({
             <View className="items-center">
               <Text
                 testID={`${testID}-phase`}
-                className={`text-2xl font-bold ${paused ? "text-muted-foreground" : style.chip}`}
+                className={`text-2xl font-bold ${paused ? "text-white/40" : style.chip}`}
               >
                 {paused ? "Paused" : phase.label}
               </Text>
@@ -440,13 +453,13 @@ export function BreathScene({
                 <>
                   <Text
                     testID={`${testID}-countdown`}
-                    className="mt-1 text-3xl font-extrabold text-foreground"
+                    className="mt-1 text-3xl font-extrabold text-white"
                   >
                     {secondsLeft}
                   </Text>
                   <Text
                     style={{ maxWidth: 160 }}
-                    className="mt-1 text-center text-xs text-muted-foreground"
+                    className="mt-1 text-center text-xs text-white/60"
                   >
                     {phase.instruction}
                   </Text>
@@ -473,14 +486,14 @@ export function BreathScene({
                   setPaused((v) => !v);
                 }}
                 style={minTouchTarget}
-                className="flex-row items-center justify-center gap-1.5 rounded-full bg-muted px-4 py-2"
+                className="flex-row items-center justify-center gap-1.5 rounded-full bg-white/10 px-4 py-2"
               >
                 {paused ? (
-                  <Play size={16} color={colors.foreground} />
+                  <Play size={16} color={C.foreground} />
                 ) : (
-                  <Pause size={16} color={colors.foreground} />
+                  <Pause size={16} color={C.foreground} />
                 )}
-                <Text className="text-sm font-medium text-foreground">
+                <Text className="text-sm font-medium text-white">
                   {paused ? "Resume" : "Pause"}
                 </Text>
               </Pressable>
@@ -490,10 +503,10 @@ export function BreathScene({
                 accessibilityLabel="Restart"
                 onPress={() => begin(isPreview ? "preview" : "run")}
                 style={minTouchTarget}
-                className="flex-row items-center justify-center gap-1.5 rounded-full bg-muted px-4 py-2"
+                className="flex-row items-center justify-center gap-1.5 rounded-full bg-white/10 px-4 py-2"
               >
-                <RotateCcw size={16} color={colors.foreground} />
-                <Text className="text-sm font-medium text-foreground">
+                <RotateCcw size={16} color={C.foreground} />
+                <Text className="text-sm font-medium text-white">
                   Restart
                 </Text>
               </Pressable>
@@ -507,7 +520,7 @@ export function BreathScene({
                 style={minTouchTarget}
                 className="items-center justify-center"
               >
-                <Text className="text-sm font-medium text-muted-foreground">
+                <Text className="text-sm font-medium text-white/40">
                   Back
                 </Text>
               </Pressable>
@@ -520,10 +533,10 @@ export function BreathScene({
                 style={minTouchTarget}
                 className="flex-row items-center justify-center gap-1"
               >
-                <Text className="text-sm font-medium text-muted-foreground">
+                <Text className="text-sm font-medium text-white/40">
                   Skip
                 </Text>
-                <ArrowRight size={16} color={colors["muted-foreground"]} />
+                <ArrowRight size={16} color={C["muted-foreground"]} />
               </Pressable>
             )}
           </View>

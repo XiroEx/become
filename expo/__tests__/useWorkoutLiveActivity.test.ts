@@ -96,6 +96,28 @@ describe("useWorkoutLiveActivity", () => {
     expect(rec.updated[0]?.restEndsAtMs).toBe(endsAt);
   });
 
+  it("carries weightLabel into the snapshot only when present — omitted, never null", () => {
+    const rec = recordingFactory();
+    const handle = createWorkoutLiveActivityHandle();
+    const { rerender } = renderHook(
+      (props: { weightLabel?: string }) =>
+        useWorkoutLiveActivity({
+          ...BASE,
+          active: true,
+          ...(props.weightLabel !== undefined
+            ? { weightLabel: props.weightLabel }
+            : {}),
+          handle,
+          factory: rec.factory,
+        }),
+      { initialProps: { weightLabel: undefined as string | undefined } },
+    );
+    expect(rec.started[0]).not.toHaveProperty("weightLabel");
+
+    act(() => rerender({ weightLabel: "135 lbs" }));
+    expect(rec.updated).toEqual([{ ...BASE, weightLabel: "135 lbs" }]);
+  });
+
   it("ends the activity when `active` turns false", () => {
     const rec = recordingFactory();
     const handle = createWorkoutLiveActivityHandle();

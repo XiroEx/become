@@ -162,8 +162,8 @@ export const PERMISSION_BEARING_MODULES: readonly PermissionBearingModule[] = [
   {
     module: "react-native-health",
     infoPlistKey: "NSHealthUpdateUsageDescription",
-    what: "write a weigh-in back to Apple Health",
-    card: "NP-185",
+    what: "write a weigh-in or a finished workout back to Apple Health",
+    card: "NP-185 / NP-186",
   },
   {
     module: "@kingstinct/react-native-healthkit",
@@ -174,8 +174,8 @@ export const PERMISSION_BEARING_MODULES: readonly PermissionBearingModule[] = [
   {
     module: "@kingstinct/react-native-healthkit",
     infoPlistKey: "NSHealthUpdateUsageDescription",
-    what: "write a weigh-in back to Apple Health",
-    card: "NP-185",
+    what: "write a weigh-in or a finished workout back to Apple Health",
+    card: "NP-185 / NP-186",
   },
 ];
 
@@ -317,9 +317,9 @@ export const V1_ANDROID_INSTALL_TIME_PERMISSIONS: readonly string[] = [
 ];
 
 /**
- * Every iOS usage-string key the v1 release candidate ships (NP-206 audit).
- * Push needs no key on iOS; HealthKit ships no key until NP-185 installs its
- * module; nothing is saved back to the photo library so there is no
+ * Every iOS usage-string key the v1 release candidate ships (NP-206 audit,
+ * NP-185 added the two HealthKit keys). Push needs no key on iOS; nothing is
+ * saved back to the photo library so there is no
  * `NSPhotoLibraryAddUsageDescription`; no location, contacts, calendar,
  * tracking or background-mode keys exist because no v1 module touches those
  * resources.
@@ -330,6 +330,8 @@ export const V1_IOS_USAGE_STRING_KEYS: readonly string[] = [
   "NSMicrophoneUsageDescription",
   "NSSpeechRecognitionUsageDescription",
   "NSFaceIDUsageDescription",
+  "NSHealthShareUsageDescription",
+  "NSHealthUpdateUsageDescription",
 ];
 
 /** A plugin entry in `expo.plugins`: a name, or a name with props. */

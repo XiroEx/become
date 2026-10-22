@@ -49,7 +49,7 @@ import {
   AUTH_LINK_MAX_AGE_MS,
 } from "@/lib/auth/pendingAuthSession";
 import LoginScreen from "../app/(auth)/login";
-import { VerifyScreen } from "../app/(auth)/verify";
+import { VerifyScreen, resetVerifyFlightsForTests } from "../app/(auth)/verify";
 /* eslint-enable import/first */
 
 const mockApiFetch = apiFetch as unknown as jest.Mock;
@@ -62,6 +62,7 @@ describe("Native email-link sign-in and sign-up with consent and resumable wait"
     mockApiFetch.mockReset();
     mockParams = {};
     mockAuth = baseAuth();
+    resetVerifyFlightsForTests();
   });
 
   // Acceptance criterion (id: e015c784)

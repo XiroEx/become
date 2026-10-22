@@ -1,14 +1,42 @@
 import { createHealthAdapter } from "@/lib/health/adapter";
 import type { IosClientImpl } from "@/lib/health/ios";
 import type { AndroidClientImpl } from "@/lib/health/android";
-import { HealthPermissionError } from "@/lib/health/types";
 import type { HealthPermission } from "@/lib/health/types";
 
-const fakeIos: IosClientImpl = {
-  isPermissionGranted: async () => true,
-  queryWeightKg: async () => [{ valueKg: 80, timestamp: "2026-05-27T08:00:00Z" }],
-  querySteps: async () => [{ count: 8000, timestamp: "2026-05-27T08:00:00Z" }],
-};
+interface IosCalls {
+  weightWrites: { valueKg: number; atISO: string; clientId?: string }[];
+  workoutWrites: { startISO: string; endISO: string; energyKcal?: number; clientId?: string }[];
+  requested: HealthPermission[][];
+}
+
+function makeIos(
+  overrides: Partial<IosClientImpl> = {},
+): { impl: IosClientImpl; calls: IosCalls } {
+  const calls: IosCalls = { weightWrites: [], workoutWrites: [], requested: [] };
+  let writeAuthorized = true;
+  const impl: IosClientImpl = {
+    isAvailable: async () => true,
+    requestAuthorization: async (wanted) => {
+      calls.requested.push([...wanted]);
+    },
+    isWriteAuthorized: async () => writeAuthorized,
+    queryWeightKg: async () => [{ valueKg: 80, timestamp: "2026-05-27T08:00:00Z" }],
+    querySteps: async () => [{ count: 8000, timestamp: "2026-05-27T08:00:00Z" }],
+    writeWeightKg: async (input) => {
+      calls.weightWrites.push(input);
+    },
+    writeWorkout: async (input) => {
+      calls.workoutWrites.push(input);
+      return "hk-workout-uuid-1";
+    },
+    ...overrides,
+  };
+  // Allow a test to flip write authorization via override of isWriteAuthorized.
+  void writeAuthorized;
+  return { impl, calls };
+}
+
+const fakeIos: IosClientImpl = makeIos().impl;
 
 /** Everything NP-199 asks Health Connect for. */
 const ALL_GRANTS: HealthPermission[] = [
@@ -118,6 +146,17 @@ describe("readWeight conversion", () => {
       originPackage: "com.withings.wiscale2",
     });
   });
+
+  it("iOS: carries the sample's own HealthKit id through as externalId", async () => {
+    const { impl } = makeIos({
+      queryWeightKg: async () => [
+        { valueKg: 80, timestamp: "2026-05-27T08:00:00Z", externalId: "hk-uuid-1" },
+      ],
+    });
+    const adapter = createHealthAdapter({ platform: "ios", ios: impl })!;
+    const [sample] = await adapter.readWeight(range);
+    expect(sample).toMatchObject({ externalId: "hk-uuid-1" });
+  });
 });
 
 describe("readSteps pass-through", () => {
@@ -129,17 +168,6 @@ describe("readSteps pass-through", () => {
 });
 
 describe("permission denial", () => {
-  it("readWeight throws HealthPermissionError when iOS permission denied", async () => {
-    const denyingIos: IosClientImpl = {
-      ...fakeIos,
-      isPermissionGranted: async () => false,
-    };
-    const adapter = createHealthAdapter({ platform: "ios", ios: denyingIos })!;
-    await expect(adapter.readWeight(range)).rejects.toBeInstanceOf(
-      HealthPermissionError,
-    );
-  });
-
   it("readSteps throws HealthPermissionError when Android permission denied", async () => {
     const { impl } = makeAndroid({ grantedPermissions: async () => [] });
     const adapter = createHealthAdapter({ platform: "android", android: impl })!;
@@ -176,7 +204,7 @@ describe("permission denial", () => {
     });
     const adapter = createHealthAdapter({ platform: "android", android: impl })!;
     await expect(
-      adapter.write!.writeWorkout({
+      adapter.write!.writeWorkout!({
         title: "Day 1",
         startISO: "2026-05-27T17:00:00Z",
         endISO: "2026-05-27T18:00:00Z",
@@ -186,31 +214,51 @@ describe("permission denial", () => {
   });
 
   it("propagates underlying network errors as-is (not wrapped in PermissionError)", async () => {
-    const failingIos: IosClientImpl = {
-      ...fakeIos,
+    const { impl } = makeIos({
       queryWeightKg: async () => {
         throw new Error("HealthKit unavailable");
       },
-    };
-    const adapter = createHealthAdapter({ platform: "ios", ios: failingIos })!;
+    });
+    const adapter = createHealthAdapter({ platform: "ios", ios: impl })!;
     await expect(adapter.readWeight(range)).rejects.toThrow(
       "HealthKit unavailable",
     );
   });
+
+  // iOS cannot tell "denied" apart from "no data" for a READ (Apple's own
+  // privacy design — see lib/health/ios.ts's file comment). A write IS
+  // checkable, so a declined write authorization throws.
+  it("iOS: a declined WRITE authorization throws, where a declined read cannot be detected", async () => {
+    const { impl, calls } = makeIos({ isWriteAuthorized: async () => false });
+    const adapter = createHealthAdapter({ platform: "ios", ios: impl })!;
+    await expect(
+      adapter.write!.writeWeight({
+        valueLbs: 181.4,
+        atISO: "2026-05-27T08:00:00Z",
+      }),
+    ).rejects.toMatchObject({
+      name: "HealthPermissionError",
+      metric: "weight",
+      direction: "write",
+    });
+    expect(calls.weightWrites).toHaveLength(0);
+  });
 });
 
-describe("the write half (NP-199)", () => {
-  it("Android exposes a writer; the iOS shell does not (NP-185 adds it)", () => {
+describe("the write half (NP-199 / NP-185 / NP-186)", () => {
+  it("both Android and iOS expose a weight writer and a workout writer", () => {
     const android = createHealthAdapter({
       platform: "android",
       android: makeAndroid().impl,
     })!;
     const ios = createHealthAdapter({ platform: "ios", ios: fakeIos })!;
     expect(android.write).toBeDefined();
-    expect(ios.write).toBeUndefined();
+    expect(ios.write).toBeDefined();
+    expect(android.write?.writeWorkout).toBeDefined();
+    expect(ios.write?.writeWorkout).toBeDefined();
   });
 
-  it("writeWeight converts pounds back to kilograms", async () => {
+  it("writeWeight converts pounds back to kilograms (Android)", async () => {
     const { impl, calls } = makeAndroid();
     const adapter = createHealthAdapter({ platform: "android", android: impl })!;
     await adapter.write!.writeWeight({
@@ -223,9 +271,22 @@ describe("the write half (NP-199)", () => {
     expect(calls.weightWrites[0]!.clientId).toBe("become-weight-2026-05-27");
   });
 
+  it("writeWeight converts pounds back to kilograms (iOS)", async () => {
+    const { impl, calls } = makeIos();
+    const adapter = createHealthAdapter({ platform: "ios", ios: impl })!;
+    await adapter.write!.writeWeight({
+      valueLbs: 165.35,
+      atISO: "2026-05-27T08:00:00Z",
+      clientId: "become-weight-2026-05-27",
+    });
+    expect(calls.weightWrites).toHaveLength(1);
+    expect(calls.weightWrites[0]!.valueKg).toBeCloseTo(75, 2);
+    expect(calls.weightWrites[0]!.clientId).toBe("become-weight-2026-05-27");
+  });
+
   // A pound that became a kilogram and came back a different pound is the bug
   // one shared conversion exists to stop.
-  it("a weigh-in survives the round trip", async () => {
+  it("a weigh-in survives the round trip (Android)", async () => {
     const { impl, calls } = makeAndroid();
     const adapter = createHealthAdapter({ platform: "android", android: impl })!;
     await adapter.write!.writeWeight({
@@ -245,10 +306,30 @@ describe("the write half (NP-199)", () => {
     expect(sample!.valueLbs).toBeCloseTo(181.4, 6);
   });
 
-  it("writeWorkout hands the session through untouched", async () => {
+  it("a weigh-in survives the round trip (iOS)", async () => {
+    const { impl, calls } = makeIos();
+    const adapter = createHealthAdapter({ platform: "ios", ios: impl })!;
+    await adapter.write!.writeWeight({
+      valueLbs: 181.4,
+      atISO: "2026-05-27T08:00:00Z",
+    });
+    const kg = calls.weightWrites[0]!.valueKg;
+    const back = createHealthAdapter({
+      platform: "ios",
+      ios: makeIos({
+        queryWeightKg: async () => [
+          { valueKg: kg, timestamp: "2026-05-27T08:00:00Z" },
+        ],
+      }).impl,
+    })!;
+    const [sample] = await back.readWeight(range);
+    expect(sample!.valueLbs).toBeCloseTo(181.4, 6);
+  });
+
+  it("writeWorkout hands the session through untouched (Android)", async () => {
     const { impl, calls } = makeAndroid();
     const adapter = createHealthAdapter({ platform: "android", android: impl })!;
-    await adapter.write!.writeWorkout({
+    await adapter.write!.writeWorkout!({
       title: "Push Day",
       startISO: "2026-05-27T17:00:00Z",
       endISO: "2026-05-27T18:02:00Z",
@@ -262,7 +343,7 @@ describe("the write half (NP-199)", () => {
     });
   });
 
-  it("availability and permission requests reach the impl", async () => {
+  it("availability and permission requests reach the impl (Android)", async () => {
     const asked: HealthPermission[][] = [];
     const { impl } = makeAndroid({
       isAvailable: async () => false,
@@ -275,5 +356,90 @@ describe("the write half (NP-199)", () => {
     expect(await adapter.isAvailable!()).toBe(false);
     await adapter.ensurePermissions!([{ metric: "weight", direction: "read" }]);
     expect(asked).toEqual([[{ metric: "weight", direction: "read" }]]);
+  });
+
+  it("availability and permission requests reach the impl (iOS)", async () => {
+    const { impl, calls } = makeIos({ isAvailable: async () => false });
+    const adapter = createHealthAdapter({ platform: "ios", ios: impl })!;
+    expect(await adapter.isAvailable!()).toBe(false);
+    await adapter.ensurePermissions!([{ metric: "weight", direction: "read" }]);
+    expect(calls.requested).toEqual([[{ metric: "weight", direction: "read" }]]);
+  });
+
+  // iOS's read-permission blind spot (lib/health/ios.ts): a read request that
+  // resolves without error is reported granted, because HealthKit itself will
+  // not say otherwise.
+  it("iOS: a read permission is reported granted once requested", async () => {
+    const { impl } = makeIos();
+    const adapter = createHealthAdapter({ platform: "ios", ios: impl })!;
+    const granted = await adapter.ensurePermissions!([
+      { metric: "weight", direction: "read" },
+    ]);
+    expect(granted).toEqual([{ metric: "weight", direction: "read" }]);
+  });
+
+  // The write half is NOT reported granted just because the request did not
+  // error — it is checked with isWriteAuthorized, which HealthKit answers
+  // truthfully.
+  it("iOS: a write permission is only reported granted when isWriteAuthorized confirms it", async () => {
+    const { impl } = makeIos({ isWriteAuthorized: async () => false });
+    const adapter = createHealthAdapter({ platform: "ios", ios: impl })!;
+    const granted = await adapter.ensurePermissions!([
+      { metric: "weight", direction: "write" },
+    ]);
+    expect(granted).toEqual([]);
+  });
+
+  // NP-186: the workouts write has its OWN HealthKit permission, checked
+  // separately from weight's — a weight grant does not authorise a workout.
+  it("iOS: workouts write is granted only when its own permission is authorized", async () => {
+    const seen: string[] = [];
+    const { impl } = makeIos({
+      isWriteAuthorized: async (metric: "weight" | "workouts") => {
+        seen.push(metric);
+        return metric === "workouts";
+      },
+    });
+    const adapter = createHealthAdapter({ platform: "ios", ios: impl })!;
+    const granted = await adapter.ensurePermissions!([
+      { metric: "weight", direction: "write" },
+      { metric: "workouts", direction: "write" },
+    ]);
+    expect(granted).toEqual([{ metric: "workouts", direction: "write" }]);
+    expect(seen).toEqual(["weight", "workouts"]);
+  });
+
+  it("iOS: writeWorkout hands start/end through, and a declined workouts write throws", async () => {
+    const { impl, calls } = makeIos();
+    const adapter = createHealthAdapter({ platform: "ios", ios: impl })!;
+    await adapter.write!.writeWorkout!({
+      title: "Push Day",
+      startISO: "2026-05-27T17:00:00Z",
+      endISO: "2026-05-27T18:02:00Z",
+      clientId: "become-workout-abc",
+    });
+    expect(calls.workoutWrites[0]).toMatchObject({
+      startISO: "2026-05-27T17:00:00Z",
+      endISO: "2026-05-27T18:02:00Z",
+      clientId: "become-workout-abc",
+    });
+
+    const denied = makeIos({ isWriteAuthorized: async () => false });
+    const deniedAdapter = createHealthAdapter({
+      platform: "ios",
+      ios: denied.impl,
+    })!;
+    await expect(
+      deniedAdapter.write!.writeWorkout!({
+        title: "Push Day",
+        startISO: "2026-05-27T17:00:00Z",
+        endISO: "2026-05-27T18:02:00Z",
+      }),
+    ).rejects.toMatchObject({
+      name: "HealthPermissionError",
+      metric: "workouts",
+      direction: "write",
+    });
+    expect(denied.calls.workoutWrites).toHaveLength(0);
   });
 });

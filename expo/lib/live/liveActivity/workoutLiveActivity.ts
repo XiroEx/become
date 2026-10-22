@@ -30,6 +30,8 @@
  * built into this binary) — every function below swallows and no-ops.
  */
 import { Platform } from "react-native";
+import { recordLiveActivityFailure } from "@/lib/diagnostics/deviceDiagnostics";
+import type { AsyncStorageLike } from "@/lib/query/persistor";
 
 export type WorkoutLiveActivityPhase = "exercise" | "rest";
 
@@ -49,6 +51,14 @@ export interface WorkoutLiveActivityProps {
   restEndsAtMs: number | null;
   /** The rest's total length in seconds, for a progress read-out. Null when not resting. */
   restTotalSec: number | null;
+  /**
+   * The current set's load, e.g. `"135 lbs"` — drawn beside the Lock Screen
+   * − / + controls and adjusted by them. Omitted when the set has no load
+   * (timed / bodyweight-only work shows no controls). Always omitted, never
+   * null: ActivityKit refuses to persist a dictionary containing null (see
+   * PR #2159).
+   */
+  weightLabel?: string;
 }
 
 /** The name `createLiveActivity` registers under, and the one this module starts. */
@@ -88,8 +98,13 @@ export type WorkoutLiveActivityFailureReason =
 function reportFailure(
   handle: WorkoutLiveActivityHandle,
   reason: WorkoutLiveActivityFailureReason | null,
+  storage?: AsyncStorageLike | null,
 ): void {
   handle.lastFailure = reason;
+  // Persisted for the Settings Diagnostics block: the in-memory handle is
+  // gone with the workout, and a TestFlight console cannot be read. `null`
+  // (a clean start) clears the row, so a stale reason never outlives a fix.
+  void recordLiveActivityFailure(reason, Date.now(), storage);
 }
 
 function warnFailure(
@@ -126,6 +141,29 @@ interface NativeLiveActivityLike {
 
 interface NativeLiveActivityFactoryLike {
   start: (props: unknown, url?: string, staleDate?: Date) => NativeLiveActivityLike;
+  /** Every activity of this type the OS is still showing. */
+  getInstances?: () => NativeLiveActivityLike[];
+}
+
+/**
+ * End every activity of this type the OS still shows, immediately. A live
+ * workout owns exactly ONE Lock Screen activity, but the handle that tracks it
+ * lives in JS memory: an app reload, a crash or a kill mid-workout loses it,
+ * and the activity it started stays on the Lock Screen with nothing left to
+ * end it (device review 2026-10-22: two copies of the workout, and the stray
+ * outliving the workout). So a start clears strays first, and an end clears
+ * any that remain. Best-effort, never throws.
+ */
+function endStrayActivities(native: NativeLiveActivityFactoryLike): void {
+  let strays: NativeLiveActivityLike[] = [];
+  try {
+    strays = native.getInstances?.() ?? [];
+  } catch {
+    return;
+  }
+  for (const stray of strays) {
+    void stray.end("immediate").catch(() => {});
+  }
 }
 
 function wrapNativeFactory(
@@ -134,10 +172,17 @@ function wrapNativeFactory(
   return {
     start(props) {
       try {
+        endStrayActivities(native);
         const activity = native.start(props);
         return {
           update: (next) => activity.update(next),
-          end: (next) => activity.end("default", next),
+          // "immediate", not "default": iOS keeps a "default"-ended activity
+          // on the Lock Screen for up to four hours, so leaving the workout
+          // left it there.
+          end: async (next) => {
+            await activity.end("immediate", next);
+            endStrayActivities(native);
+          },
         };
       } catch {
         return null;
@@ -201,27 +246,28 @@ export function startWorkoutLiveActivity(
   handle: WorkoutLiveActivityHandle,
   props: WorkoutLiveActivityProps,
   factory: WorkoutLiveActivityFactory | null = loadWorkoutLiveActivityFactory(),
+  storage?: AsyncStorageLike | null,
 ): void {
   if (!factory) {
-    reportFailure(handle, "factory-null");
+    reportFailure(handle, "factory-null", storage);
     warnFailure("factory-null");
     return;
   }
   if (handle.instance) {
-    reportFailure(handle, "already-running");
+    reportFailure(handle, "already-running", storage);
     return;
   }
   try {
     handle.instance = factory.start(props);
     if (handle.instance) {
-      reportFailure(handle, null);
+      reportFailure(handle, null, storage);
     } else {
-      reportFailure(handle, "start-null");
+      reportFailure(handle, "start-null", storage);
       warnFailure("start-null");
     }
   } catch (err) {
     handle.instance = null;
-    reportFailure(handle, "start-threw");
+    reportFailure(handle, "start-threw", storage);
     warnFailure("start-threw", err);
   }
 }
@@ -235,13 +281,14 @@ export function startWorkoutLiveActivity(
 export async function updateWorkoutLiveActivity(
   handle: WorkoutLiveActivityHandle,
   props: WorkoutLiveActivityProps,
+  storage?: AsyncStorageLike | null,
 ): Promise<void> {
   const instance = handle.instance;
   if (!instance) return;
   try {
     await instance.update(props);
   } catch (err) {
-    reportFailure(handle, "update-failed");
+    reportFailure(handle, "update-failed", storage);
     warnFailure("update-failed", err);
   }
 }
@@ -254,6 +301,7 @@ export async function updateWorkoutLiveActivity(
 export async function endWorkoutLiveActivity(
   handle: WorkoutLiveActivityHandle,
   props?: WorkoutLiveActivityProps,
+  storage?: AsyncStorageLike | null,
 ): Promise<void> {
   const instance = handle.instance;
   if (!instance) return;
@@ -261,7 +309,7 @@ export async function endWorkoutLiveActivity(
   try {
     await instance.end(props);
   } catch (err) {
-    reportFailure(handle, "end-failed");
+    reportFailure(handle, "end-failed", storage);
     warnFailure("end-failed", err);
   }
 }

@@ -9,7 +9,22 @@ import { useReducedMotion } from "@/lib/a11y/reducedMotion";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { useAuth } from "@/lib/auth/useAuth";
 import { WEBAPP_BASE_URL } from "@/lib/config";
-import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { onDarkForeground, resolveToken } from "@/lib/theme/tokens";
+
+/**
+ * ALWAYS BLACK, LIKE THE WEB. This scene renders straight onto the session
+ * player's fixed `bg-black` stage (the web's `WinScene` has no surface of its
+ * own and never reads `prefers-color-scheme`), so every colour below is
+ * pinned to the DARK palette via `resolveToken` — not the `useThemeTokens()`
+ * hook — and every surface is a literal dark class, mirroring the web.
+ */
+const C = {
+  foreground: onDarkForeground,
+  "muted-foreground": resolveToken("muted-foreground", "dark"),
+  "primary-foreground": resolveToken("primary-foreground", "dark"),
+  accent: resolveToken("accent", "dark"),
+  success: resolveToken("success", "dark"),
+} as const;
 
 export function WinScene({
   move,
@@ -17,7 +32,6 @@ export function WinScene({
   preview,
   testID = "mind-win-scene",
 }: MindSceneProps): React.JSX.Element {
-  const { colors } = useThemeTokens();
   const reduced = useReducedMotion();
   const { token } = useAuth();
 
@@ -58,6 +72,7 @@ export function WinScene({
   return (
     <ScrollView
       testID={testID}
+      className="flex-1 bg-black"
       contentContainerStyle={{
         flexGrow: 1,
         alignItems: "center",
@@ -67,8 +82,8 @@ export function WinScene({
       }}
       keyboardShouldPersistTaps="handled"
     >
-      <View className="mb-5 h-12 w-12 items-center justify-center rounded-2xl bg-accent/15">
-        <Trophy size={24} color={colors.accent} />
+      <View className="mb-5 h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/15">
+        <Trophy size={24} color={C.accent} />
       </View>
 
       {saved ? (
@@ -77,13 +92,13 @@ export function WinScene({
           entering={reduced ? undefined : FadeIn.duration(250)}
           className="w-full max-w-sm items-center"
         >
-          <View className="h-16 w-16 items-center justify-center rounded-full bg-success/20">
-            <Check size={32} color={colors.success} strokeWidth={3} />
+          <View className="h-16 w-16 items-center justify-center rounded-full bg-green-500/20">
+            <Check size={32} color={C.success} strokeWidth={3} />
           </View>
-          <Text className="mt-4 text-center text-lg font-bold text-foreground">
+          <Text className="mt-4 text-center text-lg font-bold text-white">
             Logged.
           </Text>
-          <Text className="mt-1 text-center text-sm text-muted-foreground">
+          <Text className="mt-1 text-center text-sm text-white/50">
             That&apos;s evidence of who you&apos;re becoming.
           </Text>
         </Animated.View>
@@ -95,11 +110,11 @@ export function WinScene({
         >
           <Text
             testID={`${testID}-title`}
-            className="text-center text-2xl font-extrabold text-foreground"
+            className="text-center text-2xl font-extrabold text-white"
           >
             {move.title}
           </Text>
-          <Text className="mt-2 text-center text-muted-foreground">
+          <Text className="mt-2 text-center text-white/50">
             {move.prompt ?? "Name one thing you did today."}
           </Text>
 
@@ -110,8 +125,8 @@ export function WinScene({
             multiline
             numberOfLines={3}
             placeholder="I…"
-            placeholderTextColor={colors["muted-foreground"]}
-            className="mt-6 w-full rounded-2xl border border-border bg-card p-4 text-center text-base text-foreground"
+            placeholderTextColor={C["muted-foreground"]}
+            className="mt-6 w-full rounded-2xl border border-white/15 bg-white/5 p-4 text-center text-base text-white"
           />
 
           <Pressable
@@ -121,19 +136,19 @@ export function WinScene({
             disabled={!valid || submitting}
             onPress={save}
             style={minTouchTarget}
-            className={`mt-6 w-full flex-row items-center justify-center gap-2 rounded-2xl bg-primary py-4 ${
+            className={`mt-6 w-full flex-row items-center justify-center gap-2 rounded-2xl bg-white py-4 ${
               !valid || submitting ? "opacity-40" : ""
             }`}
           >
             {submitting ? (
               <ActivityIndicator
                 size="small"
-                color={colors["primary-foreground"]}
+                color={C["primary-foreground"]}
               />
             ) : (
-              <Trophy size={20} color={colors["primary-foreground"]} />
+              <Trophy size={20} color={C["primary-foreground"]} />
             )}
-            <Text className="text-base font-bold text-primary-foreground">
+            <Text className="text-base font-bold text-black">
               Bank it
             </Text>
           </Pressable>
@@ -146,7 +161,7 @@ export function WinScene({
             style={minTouchTarget}
             className="mt-3 items-center justify-center"
           >
-            <Text className="text-sm font-medium text-muted-foreground">
+            <Text className="text-sm font-medium text-white/40">
               Skip
             </Text>
           </Pressable>

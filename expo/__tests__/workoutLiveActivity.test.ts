@@ -84,6 +84,21 @@ describe("startWorkoutLiveActivity", () => {
     expect(rec.started).toEqual([EXERCISE_PROPS]);
   });
 
+  it("carries weightLabel through start and update — and omits the key when absent, never null", () => {
+    const rec = recordingFactory();
+    const handle = createWorkoutLiveActivityHandle();
+    const weighed: WorkoutLiveActivityProps = {
+      ...EXERCISE_PROPS,
+      weightLabel: "135 lbs",
+    };
+    startWorkoutLiveActivity(handle, weighed, rec.factory);
+    expect(rec.started).toEqual([weighed]);
+
+    // The omit rule: a timed / bodyweight set carries no weightLabel key at
+    // all — ActivityKit refuses a dictionary containing null (PR #2159).
+    expect(EXERCISE_PROPS).not.toHaveProperty("weightLabel");
+  });
+
   it("does nothing when there is no factory (Android, Expo Go, iOS < 16.2)", () => {
     const handle = createWorkoutLiveActivityHandle();
     startWorkoutLiveActivity(handle, EXERCISE_PROPS, null);
@@ -210,7 +225,39 @@ describe("loadWorkoutLiveActivityFactory", () => {
     startWorkoutLiveActivity(handle, EXERCISE_PROPS, factory);
     expect(handle.instance).not.toBeNull();
     void handle.instance?.end(EXERCISE_PROPS);
-    expect(nativeEnded).toEqual([["default", EXERCISE_PROPS]]);
+    expect(nativeEnded).toEqual([["immediate", EXERCISE_PROPS]]);
+  });
+
+  it("clears stray activities a lost handle left behind, on start and on end", async () => {
+    // An app reload / kill mid-workout loses the JS handle; the activity it
+    // started stays on the Lock Screen. Starting again must not stack a
+    // second copy, and ending must not leave one behind.
+    const strayEnds: unknown[] = [];
+    const stray = {
+      update: async () => undefined,
+      end: async (policy: unknown) => {
+        strayEnds.push(policy);
+      },
+    };
+    let instances = [stray, stray];
+    const native = {
+      start: () => {
+        const started = {
+          update: async () => undefined,
+          end: async () => undefined,
+        };
+        instances = [started];
+        return started;
+      },
+      getInstances: () => instances,
+    };
+    const factory = loadWorkoutLiveActivityFactory(() => native, { fakeLayout: true });
+    const handle = createWorkoutLiveActivityHandle();
+    startWorkoutLiveActivity(handle, EXERCISE_PROPS, factory);
+    expect(strayEnds).toEqual(["immediate", "immediate"]);
+    instances = [stray];
+    await handle.instance?.end(EXERCISE_PROPS);
+    expect(strayEnds).toEqual(["immediate", "immediate", "immediate"]);
   });
 
   it("never throws when the native side is unavailable", () => {

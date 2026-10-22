@@ -140,10 +140,10 @@ export function CoachChat({
 }: CoachChatProps) {
   const { colors, scrim } = useThemeTokens();
   const insets = useSafeAreaInsetsOrZero();
-  // Fixed at 90% of the window height, like every `BottomSheet` drawer.
+  // Fixed at 80% of the window height, like every `BottomSheet` drawer.
   const { height: windowHeight } = useWindowDimensions();
   const sheetHeight = Math.min(
-    Math.round(windowHeight * 0.9),
+    Math.round(windowHeight * 0.8),
     windowHeight - insets.top - 24,
   );
   // Flat fallback for the header tile / send button when no gradient is

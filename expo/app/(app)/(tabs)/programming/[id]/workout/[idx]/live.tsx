@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { View } from "react-native";
-import { useKeepAwake } from "expo-keep-awake";
+import { useLiveNativeSurfaces } from "@/lib/live/useLiveNativeSurfaces";
 import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -47,10 +47,8 @@ import {
 import type { LiveSetState } from "@/components/live/LiveSetRow";
 import { useLiveBackGuard } from "@/lib/live/useLiveBackGuard";
 import { NativeShareButton } from "@/components/share/NativeShareButton";
-import {
-  loadWorkoutLiveActivityFactory,
-  type WorkoutLiveActivityFactory,
-} from "@/lib/live/liveActivity/workoutLiveActivity";
+import type { WorkoutLiveActivityFactory } from "@/lib/live/liveActivity/workoutLiveActivity";
+import type { WorkoutNotificationNative } from "@/lib/live/liveActivity/workoutNotification";
 
 export interface LiveWorkoutRouteProps {
   /** DI for tests — defaults to the SecureStore-backed cache. */
@@ -86,6 +84,14 @@ export interface LiveWorkoutRouteProps {
    * tests render with no Live Activity DI at all.
    */
   workoutLiveActivityFactory?: WorkoutLiveActivityFactory | null;
+  /**
+   * DI for tests: the Android ongoing notification native wrapper (NP-200).
+   * Omitted, the route loads the real `expo-notifications` wrapper itself —
+   * deliberately NOT the default inside `LiveWorkoutClient`, for the same
+   * reason as the Live Activity factory above. Null (or forever-null on
+   * iOS / Expo Go) means "no shade surface".
+   */
+  workoutNotificationNative?: WorkoutNotificationNative | null;
 }
 
 /**
@@ -123,6 +129,7 @@ export default function LiveWorkoutRoute({
   navigation,
   backHandler,
   workoutLiveActivityFactory: workoutLiveActivityFactoryProp,
+  workoutNotificationNative: workoutNotificationNativeProp,
 }: LiveWorkoutRouteProps = {}) {
   const router = useRouter();
   const { colors } = useThemeTokens();
@@ -132,29 +139,13 @@ export default function LiveWorkoutRoute({
   // every load on this screen agrees. Native never asks for it — the web gate
   // owns the one ask and both apps read the same profile.
   const liftingUnit = useLiftingUnit();
-  // The screen must not dim mid-set (NP-082): keep the display awake while
-  // the live view is open. Released automatically on unmount.
-  useKeepAwake("live-workout");
-
-  // The Lock Screen Live Activity's factory (NP-188). Loaded HERE, once per
-  // mount, in an effect — never inside `LiveWorkoutClient` itself, which is
-  // the component dozens of unrelated tests render with no Live Activity
-  // DI at all; loading it there by default once broke one of those tests
-  // (`@expo/ui/swift-ui`, pulled in by the layout registration, raced that
-  // test's own render). Null until the effect resolves, or forever on
-  // Android / Expo Go / iOS < 16.2 — `useWorkoutLiveActivity` treats a null
-  // factory as "no Lock Screen surface" and simply does not start one.
-  const [workoutLiveActivityFactory, setWorkoutLiveActivityFactory] =
-    useState<WorkoutLiveActivityFactory | null>(
-      workoutLiveActivityFactoryProp ?? null,
-    );
-  useEffect(() => {
-    if (workoutLiveActivityFactoryProp !== undefined) return;
-    /* eslint-disable-next-line react-hooks/set-state-in-effect -- loading a
-       native module is exactly the "something outside React" case the rule
-       carves out; it cannot be derived during render. */
-    setWorkoutLiveActivityFactory(loadWorkoutLiveActivityFactory());
-  }, [workoutLiveActivityFactoryProp]);
+  // Keep-awake, the Lock Screen Live Activity (iOS) and the ongoing
+  // notification (Android): one hook, shared with the quick-session route.
+  const { workoutLiveActivityFactory, workoutNotificationNative } =
+    useLiveNativeSurfaces({
+      workoutLiveActivityFactory: workoutLiveActivityFactoryProp,
+      workoutNotificationNative: workoutNotificationNativeProp,
+    });
   const params = useLocalSearchParams<{
     id?: string;
     programId?: string;
@@ -591,6 +582,7 @@ export default function LiveWorkoutRoute({
         onDismissHint={(slug) => void dismissHint(slug)}
         onExit={() => router.back()}
         workoutLiveActivityFactory={workoutLiveActivityFactory}
+        workoutNotificationNative={workoutNotificationNative}
         manageExercises={
           workout
             ? {

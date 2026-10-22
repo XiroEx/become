@@ -21,6 +21,7 @@ jest.mock("@/lib/auth/useAuth", () => ({
 }));
 
 import { render, waitFor } from "@testing-library/react-native";
+import type { AppStateStatus } from "react-native";
 import { HealthSyncBridge } from "@/components/health/HealthSyncBridge";
 
 beforeEach(() => {
@@ -60,5 +61,46 @@ describe("HealthSyncBridge", () => {
     await waitFor(() => {
       expect(run).toHaveBeenCalled();
     });
+  });
+
+  // NP-185: a weigh-in entered in Apple Health / Health Connect while Become
+  // was backgrounded should not wait for the next cold start.
+  it("re-runs every time the app returns to the foreground, not just at launch", async () => {
+    mockToken.current = "jwt";
+    const run = jest.fn(async () => null);
+    const listenerBox: { current: ((status: AppStateStatus) => void) | null } =
+      { current: null };
+    const subscribeToAppState = jest.fn(
+      (l: (status: AppStateStatus) => void) => {
+        listenerBox.current = l;
+        return () => {};
+      },
+    );
+    render(
+      <HealthSyncBridge run={run} subscribeToAppState={subscribeToAppState} />,
+    );
+    await waitFor(() => {
+      expect(run).toHaveBeenCalledTimes(1);
+    });
+
+    listenerBox.current?.("active");
+    await waitFor(() => {
+      expect(run).toHaveBeenCalledTimes(2);
+    });
+
+    // A background transition is not a foreground return — no extra call.
+    listenerBox.current?.("background");
+    expect(run).toHaveBeenCalledTimes(2);
+  });
+
+  it("the foreground listener does nothing without a session", () => {
+    const subscribeToAppState = jest.fn(() => () => {});
+    render(
+      <HealthSyncBridge
+        run={async () => null}
+        subscribeToAppState={subscribeToAppState}
+      />,
+    );
+    expect(subscribeToAppState).not.toHaveBeenCalled();
   });
 });

@@ -33,7 +33,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
         style={
           [
             {
-              "fontFamily": "Geist-Bold",
+              "fontFamily": "Arial-BoldMT",
             },
             undefined,
           ]
@@ -51,7 +51,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
           style={
             [
               {
-                "fontFamily": "Geist-SemiBold",
+                "fontFamily": "Arial-BoldMT",
               },
               undefined,
             ]
@@ -65,7 +65,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
           style={
             [
               {
-                "fontFamily": "Geist-Regular",
+                "fontFamily": "ArialMT",
               },
               undefined,
             ]
@@ -79,7 +79,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
           style={
             [
               {
-                "fontFamily": "Geist-Regular",
+                "fontFamily": "ArialMT",
               },
               undefined,
             ]
@@ -98,7 +98,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
           style={
             [
               {
-                "fontFamily": "Geist-SemiBold",
+                "fontFamily": "Arial-BoldMT",
               },
               undefined,
             ]
@@ -160,7 +160,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
               style={
                 [
                   {
-                    "fontFamily": "Geist-SemiBold",
+                    "fontFamily": "Arial-BoldMT",
                   },
                   [
                     {
@@ -222,7 +222,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
               style={
                 [
                   {
-                    "fontFamily": "Geist-SemiBold",
+                    "fontFamily": "Arial-BoldMT",
                   },
                   [
                     {
@@ -284,7 +284,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
               style={
                 [
                   {
-                    "fontFamily": "Geist-SemiBold",
+                    "fontFamily": "Arial-BoldMT",
                   },
                   [
                     {
@@ -346,7 +346,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
               style={
                 [
                   {
-                    "fontFamily": "Geist-SemiBold",
+                    "fontFamily": "Arial-BoldMT",
                   },
                   [
                     {
@@ -458,7 +458,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
               style={
                 [
                   {
-                    "fontFamily": "Geist-SemiBold",
+                    "fontFamily": "Arial-BoldMT",
                   },
                   [
                     {
@@ -486,7 +486,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
           style={
             [
               {
-                "fontFamily": "Geist-SemiBold",
+                "fontFamily": "Arial-BoldMT",
               },
               undefined,
             ]
@@ -503,7 +503,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
             style={
               [
                 {
-                  "fontFamily": "Geist-Medium",
+                  "fontFamily": "ArialMT",
                 },
                 undefined,
               ]
@@ -533,7 +533,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
                     "minWidth": 44,
                   },
                   {
-                    "fontFamily": "Geist-Regular",
+                    "fontFamily": "ArialMT",
                   },
                 ]
               }
@@ -557,7 +557,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
             style={
               [
                 {
-                  "fontFamily": "Geist-Medium",
+                  "fontFamily": "ArialMT",
                 },
                 undefined,
               ]
@@ -587,7 +587,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
                     "minWidth": 44,
                   },
                   {
-                    "fontFamily": "Geist-Regular",
+                    "fontFamily": "ArialMT",
                   },
                 ]
               }
@@ -602,7 +602,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
             style={
               [
                 {
-                  "fontFamily": "Geist-Regular",
+                  "fontFamily": "ArialMT",
                 },
                 undefined,
               ]
@@ -623,7 +623,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
           style={
             [
               {
-                "fontFamily": "Geist-SemiBold",
+                "fontFamily": "Arial-BoldMT",
               },
               undefined,
             ]
@@ -673,6 +673,12 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
           onResponderTerminate={[Function]}
           onResponderTerminationRequest={[Function]}
           onStartShouldSetResponder={[Function]}
+          style={
+            {
+              "height": 28,
+              "width": 48,
+            }
+          }
           testID="toggle-feature"
         >
           <View
@@ -691,7 +697,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
           style={
             [
               {
-                "fontFamily": "Geist-SemiBold",
+                "fontFamily": "Arial-BoldMT",
               },
               undefined,
             ]
@@ -719,7 +725,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
               style={
                 [
                   {
-                    "fontFamily": "Geist-Medium",
+                    "fontFamily": "ArialMT",
                   },
                   undefined,
                 ]
@@ -739,7 +745,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
               style={
                 [
                   {
-                    "fontFamily": "Geist-Medium",
+                    "fontFamily": "ArialMT",
                   },
                   undefined,
                 ]
@@ -759,7 +765,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
               style={
                 [
                   {
-                    "fontFamily": "Geist-Medium",
+                    "fontFamily": "ArialMT",
                   },
                   undefined,
                 ]
@@ -779,7 +785,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
               style={
                 [
                   {
-                    "fontFamily": "Geist-Medium",
+                    "fontFamily": "ArialMT",
                   },
                   undefined,
                 ]
@@ -799,7 +805,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
               style={
                 [
                   {
-                    "fontFamily": "Geist-Medium",
+                    "fontFamily": "ArialMT",
                   },
                   undefined,
                 ]
@@ -821,7 +827,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
           style={
             [
               {
-                "fontFamily": "Geist-SemiBold",
+                "fontFamily": "Arial-BoldMT",
               },
               undefined,
             ]
@@ -883,7 +889,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
               style={
                 [
                   {
-                    "fontFamily": "Geist-SemiBold",
+                    "fontFamily": "Arial-BoldMT",
                   },
                   [
                     {
@@ -945,7 +951,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
               style={
                 [
                   {
-                    "fontFamily": "Geist-SemiBold",
+                    "fontFamily": "Arial-BoldMT",
                   },
                   [
                     {
@@ -973,7 +979,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
           style={
             [
               {
-                "fontFamily": "Geist-SemiBold",
+                "fontFamily": "Arial-BoldMT",
               },
               undefined,
             ]
@@ -992,7 +998,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
             style={
               [
                 {
-                  "fontFamily": "Geist-Regular",
+                  "fontFamily": "ArialMT",
                 },
                 undefined,
               ]
@@ -1051,7 +1057,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
               style={
                 [
                   {
-                    "fontFamily": "Geist-SemiBold",
+                    "fontFamily": "Arial-BoldMT",
                   },
                   [
                     {

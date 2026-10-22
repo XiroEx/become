@@ -110,11 +110,11 @@ describe("app.json declares exactly the health permissions the code asks for", (
 });
 
 describe("the platform gate", () => {
-  it("is on for Android (NP-199) and off for iOS until NP-185", () => {
+  it("is on for both Android (NP-199) and iOS (NP-185), off for web", () => {
     expect(HEALTH_SYNC_ENABLED_ANDROID).toBe(true);
-    expect(HEALTH_SYNC_ENABLED_IOS).toBe(false);
+    expect(HEALTH_SYNC_ENABLED_IOS).toBe(true);
     expect(isHealthSyncEnabled("android")).toBe(true);
-    expect(isHealthSyncEnabled("ios")).toBe(false);
+    expect(isHealthSyncEnabled("ios")).toBe(true);
     expect(isHealthSyncEnabled("web")).toBe(false);
   });
 });

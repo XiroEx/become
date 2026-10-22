@@ -77,15 +77,55 @@ of that (it names Become, it is long enough to be a sentence, it is not a
 placeholder) and the unused half of the rule too: a usage string with no module
 behind it is a question from App Review, so it fails as well.
 
-The v1 set is five keys (NP-206 audit): camera (meal photo, barcode scan,
-food-label evidence, Mind mirror preview), photo library (meal, food label,
-avatar, feedback screenshot — picked, never scanned), microphone + speech
-recognition (speaking the affirmation out loud), and Face ID (unlock instead
-of a fresh sign-in link). Push needs no key on iOS; HealthKit ships no key
-until NP-185 installs its module; nothing is saved to the library so there is
-no `NSPhotoLibraryAddUsageDescription`. `__tests__/releaseCandidatePermissions.test.ts`
+The v1 set is seven keys (NP-206 audit, NP-185 added the two HealthKit keys):
+camera (meal photo, barcode scan, food-label evidence, Mind mirror preview),
+photo library (meal, food label, avatar, feedback screenshot — picked, never
+scanned), microphone + speech recognition (speaking the affirmation out
+loud), Face ID (unlock instead of a fresh sign-in link), and HealthKit share +
+update (reading weight from Apple Health, writing a weigh-in back). Push
+needs no key on iOS; nothing is saved to the library so there is no
+`NSPhotoLibraryAddUsageDescription`. `__tests__/releaseCandidatePermissions.test.ts`
 pins the whole set — add a key with the module that needs it, or the suite
 fails.
+
+## HealthKit (NP-185 weight, NP-186 workouts)
+
+`react-native-health` is the maintained module and its own Expo config plugin
+(`"react-native-health"` in `expo.plugins`), the same shape
+`react-native-health-connect` is for Android. The plugin writes the
+`com.apple.developer.healthkit` entitlement and leaves the two
+`NSHealth*UsageDescription` strings alone when `ios.infoPlist` already sets
+them (it only falls back to its own generic sentence when a key is missing) —
+so the app's own sentences in `app.json`, not the plugin's placeholders, are
+what ships.
+
+**The read-permission blind spot is real, and it is Apple's, not a bug here.**
+HealthKit will not tell an app whether a SHARE (read) authorization was
+denied — `getAuthStatus`'s own docs say the read half of its answer is always
+`SharingAuthorized`, whether or not the person actually allowed it. So
+`lib/health/ios.ts`'s `ensurePermissions` reports a READ request granted once
+it resolves without error, and a decline shows up downstream as an empty
+read, never as a thrown `HealthPermissionError` — unlike Android, where a
+declined read throws. The WRITE half IS checkable (`getAuthStatus`'s write
+array answers truthfully), so `write.writeWeight` asserts it before writing,
+same contract as Android's write.
+
+**The loop guard uses a metadata marker, not a source filter.** Health
+Connect's `dataOrigin` lets Android exclude this app's own writes from a
+read; `react-native-health`'s query results expose no equivalent, so every
+weigh-in this module writes is tagged with a metadata key
+(`BECOME_WRITE_METADATA_KEY`, `lib/health/healthKit.ts`) and a read filters on
+it before the sample ever reaches `lib/health/sync.ts`.
+
+**Workouts write is NP-186, same file.** `HealthWriteClient.writeWorkout`
+stays optional (`lib/health/types.ts`) so a platform whose workout half has
+not landed still answers `reason: "no-writer"` from `exportWorkoutToHealth`
+instead of throwing. On iOS the writer checks its OWN `Workout` update
+permission (separate from weight's), writes `TraditionalStrengthTraining`
+with start/end and energy when known, and keeps the returned HealthKit UUID
+under the attempt's client id (`lib/health/workoutIds.ts`) — HealthKit's
+`saveWorkout` takes no client marker, so a retry resolves against that
+stored id instead of writing a second workout.
 
 ## Safe area
 

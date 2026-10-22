@@ -54,6 +54,9 @@ export function Toggle({
       // points tall is not a switch any more. The TOUCHABLE area grows
       // instead: 8 points of slop top and bottom make it 48 x 44.
       hitSlop={hitSlopToMinTarget(TRACK_WIDTH, TRACK_HEIGHT)}
+      // Same 48 x 28 as the w-12 h-7 classes, stated inline so the touch-target
+      // audit (test-support/a11y) can see the track's size, not only the slop.
+      style={{ width: TRACK_WIDTH, height: TRACK_HEIGHT }}
       className={`w-12 h-7 rounded-full justify-center px-1 ${
         value ? (color === "info" ? "bg-info" : "bg-primary") : "bg-muted"
       } ${disabled ? "opacity-50" : ""}`}
