@@ -86,7 +86,7 @@ function checkoutLine(record: FailureRecord | null): string {
  * rest-alert scheduler) and listed here, read live when this mounts. Plain
  * text, muted, small — decoration, never a gate.
  *
- * No Copy button on purpose: `expo-clipboard` is not a dependency, and adding
+ * No Copy button on purpose: the clipboard module is not a dependency, and adding
  * one dependency for a diagnostics convenience is not worth the native module
  * surface.
  */

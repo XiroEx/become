@@ -8,7 +8,7 @@
  * the last reason for each of the three, so the Diagnostics block in Settings
  * can show it on the device.
  *
- * Storage is AsyncStorage, not SecureStore: these are small prefs, not
+ * Storage is AsyncStorage, not the keychain store: these are small prefs, not
  * secrets — the same reason `lib/becoming/storage.ts` and the tour progress
  * use AsyncStorage. Every function takes an optional `storage` (DI for tests);
  * without one it lazy-requires AsyncStorage and no-ops when absent (Jest,
