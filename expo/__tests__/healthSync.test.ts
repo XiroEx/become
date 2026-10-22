@@ -437,10 +437,9 @@ describe("export (Become → Health)", () => {
     ).toEqual({ written: false, reason: "no-writer" });
   });
 
-  // iOS (NP-185) writes weight but not workouts yet (NP-186 is separate):
-  // `write` exists, `write.writeWorkout` does not. That answers the same as
-  // having no writer at all, never a throw.
-  it("exportWorkoutToHealth answers no-writer when write exists but writeWorkout does not (iOS before NP-186)", async () => {
+  // A `write` without `writeWorkout` (a platform whose workout half has not
+  // landed) answers the same as having no writer at all, never a throw.
+  it("exportWorkoutToHealth answers no-writer when write exists but writeWorkout does not", async () => {
     const client: HealthClient = {
       platform: "ios",
       readWeight: async () => [],

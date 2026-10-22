@@ -5,13 +5,14 @@ import type { HealthPermission } from "@/lib/health/types";
 
 interface IosCalls {
   weightWrites: { valueKg: number; atISO: string; clientId?: string }[];
+  workoutWrites: { startISO: string; endISO: string; energyKcal?: number; clientId?: string }[];
   requested: HealthPermission[][];
 }
 
 function makeIos(
   overrides: Partial<IosClientImpl> = {},
 ): { impl: IosClientImpl; calls: IosCalls } {
-  const calls: IosCalls = { weightWrites: [], requested: [] };
+  const calls: IosCalls = { weightWrites: [], workoutWrites: [], requested: [] };
   let writeAuthorized = true;
   const impl: IosClientImpl = {
     isAvailable: async () => true,
@@ -23,6 +24,10 @@ function makeIos(
     querySteps: async () => [{ count: 8000, timestamp: "2026-05-27T08:00:00Z" }],
     writeWeightKg: async (input) => {
       calls.weightWrites.push(input);
+    },
+    writeWorkout: async (input) => {
+      calls.workoutWrites.push(input);
+      return "hk-workout-uuid-1";
     },
     ...overrides,
   };
@@ -240,8 +245,8 @@ describe("permission denial", () => {
   });
 });
 
-describe("the write half (NP-199 / NP-185)", () => {
-  it("both Android and iOS expose a weight writer; neither exposes a workout writer on iOS (NP-186)", () => {
+describe("the write half (NP-199 / NP-185 / NP-186)", () => {
+  it("both Android and iOS expose a weight writer and a workout writer", () => {
     const android = createHealthAdapter({
       platform: "android",
       android: makeAndroid().impl,
@@ -249,7 +254,8 @@ describe("the write half (NP-199 / NP-185)", () => {
     const ios = createHealthAdapter({ platform: "ios", ios: fakeIos })!;
     expect(android.write).toBeDefined();
     expect(ios.write).toBeDefined();
-    expect(ios.write?.writeWorkout).toBeUndefined();
+    expect(android.write?.writeWorkout).toBeDefined();
+    expect(ios.write?.writeWorkout).toBeDefined();
   });
 
   it("writeWeight converts pounds back to kilograms (Android)", async () => {
@@ -382,5 +388,58 @@ describe("the write half (NP-199 / NP-185)", () => {
       { metric: "weight", direction: "write" },
     ]);
     expect(granted).toEqual([]);
+  });
+
+  // NP-186: the workouts write has its OWN HealthKit permission, checked
+  // separately from weight's — a weight grant does not authorise a workout.
+  it("iOS: workouts write is granted only when its own permission is authorized", async () => {
+    const seen: string[] = [];
+    const { impl } = makeIos({
+      isWriteAuthorized: async (metric: "weight" | "workouts") => {
+        seen.push(metric);
+        return metric === "workouts";
+      },
+    });
+    const adapter = createHealthAdapter({ platform: "ios", ios: impl })!;
+    const granted = await adapter.ensurePermissions!([
+      { metric: "weight", direction: "write" },
+      { metric: "workouts", direction: "write" },
+    ]);
+    expect(granted).toEqual([{ metric: "workouts", direction: "write" }]);
+    expect(seen).toEqual(["weight", "workouts"]);
+  });
+
+  it("iOS: writeWorkout hands start/end through, and a declined workouts write throws", async () => {
+    const { impl, calls } = makeIos();
+    const adapter = createHealthAdapter({ platform: "ios", ios: impl })!;
+    await adapter.write!.writeWorkout!({
+      title: "Push Day",
+      startISO: "2026-05-27T17:00:00Z",
+      endISO: "2026-05-27T18:02:00Z",
+      clientId: "become-workout-abc",
+    });
+    expect(calls.workoutWrites[0]).toMatchObject({
+      startISO: "2026-05-27T17:00:00Z",
+      endISO: "2026-05-27T18:02:00Z",
+      clientId: "become-workout-abc",
+    });
+
+    const denied = makeIos({ isWriteAuthorized: async () => false });
+    const deniedAdapter = createHealthAdapter({
+      platform: "ios",
+      ios: denied.impl,
+    })!;
+    await expect(
+      deniedAdapter.write!.writeWorkout!({
+        title: "Push Day",
+        startISO: "2026-05-27T17:00:00Z",
+        endISO: "2026-05-27T18:02:00Z",
+      }),
+    ).rejects.toMatchObject({
+      name: "HealthPermissionError",
+      metric: "workouts",
+      direction: "write",
+    });
+    expect(denied.calls.workoutWrites).toHaveLength(0);
   });
 });

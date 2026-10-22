@@ -1,5 +1,5 @@
 /**
- * iOS HealthKit adapter implementation (NP-185).
+ * iOS HealthKit adapter implementation (NP-185 weight, NP-186 workouts).
  *
  * The native bridge (`react-native-health`, wrapped as `IosClientImpl` in
  * `lib/health/healthKit.ts`) is INJECTED, exactly like the Android half
@@ -25,18 +25,27 @@
  *
  * THE WRITE HALF IS ASSERTED. Unlike read, HealthKit DOES answer a write
  * authorization status truthfully (`authorizationStatusForType` for an
- * update type), so `write.writeWeight` checks it before writing and throws
- * `HealthPermissionError` when it is not `SharingAuthorized` — the same
- * contract Android's `write.writeWeight` has.
+ * update type), so `write.writeWeight` and `write.writeWorkout` each check
+ * their OWN permission before writing and throw `HealthPermissionError` when
+ * it is not `SharingAuthorized` — the same contract Android's writers have.
+ * The workout permission (`Workout`) is separate from the weight one, and
+ * the member's write switch gates both together (one switch per direction,
+ * `lib/health/switches.ts`).
  *
- * `write.writeWorkout` is NOT here: NP-185 is weight-only. NP-186 adds the
- * workout write, which is why `HealthWriteClient.writeWorkout` is optional
- * (`lib/health/types.ts`) and `exportWorkoutToHealth` answers `no-writer`
- * rather than throwing.
+ * RETRIES WRITE ONCE. HealthKit's `saveWorkout` takes no client marker (the
+ * native side passes `metadata: nil`), so unlike Health Connect's
+ * `clientRecordId` the platform cannot match a retry. The adapter keeps the
+ * returned HealthKit UUID under the attempt's `clientId`
+ * (`lib/health/workoutIds.ts`): a retry for an id that already has one
+ * resolves without writing again.
  */
-import type { DateRange, HealthClient, HealthPermission, StepSample, WeightSample, WeightWrite } from "./types";
+import type { DateRange, HealthClient, HealthPermission, StepSample, WeightSample, WeightWrite, WorkoutWrite } from "./types";
 import { HealthPermissionError } from "./types";
 import { kgToLbs, lbsToKg } from "./units";
+import {
+  createWorkoutExportStore,
+  type WorkoutExportStore,
+} from "./workoutIds";
 
 /** One HealthKit weight sample, in the units HealthKit uses. */
 export interface IosWeightSample {
@@ -60,9 +69,10 @@ export interface IosClientImpl {
   requestAuthorization: (wanted: readonly HealthPermission[]) => Promise<void>;
   /**
    * Whether an UPDATE (write) authorization for `metric` is actually
-   * granted — the one direction HealthKit will answer truthfully.
+   * granted — the one direction HealthKit will answer truthfully. Weight
+   * and workouts are separate HealthKit permissions, checked separately.
    */
-  isWriteAuthorized: (metric: "weight") => Promise<boolean>;
+  isWriteAuthorized: (metric: "weight" | "workouts") => Promise<boolean>;
   queryWeightKg: (range: DateRange) => Promise<IosWeightSample[]>;
   querySteps: (range: DateRange) => Promise<{ count: number; timestamp: string }[]>;
   writeWeightKg: (input: {
@@ -72,6 +82,20 @@ export interface IosClientImpl {
      * duplicates — `HKMetadataKeyExternalUUID` on the written sample. */
     clientId?: string;
   }) => Promise<void>;
+  /**
+   * Write one finished workout. Answers the saved workout's own HealthKit
+   * UUID string — the adapter keeps it under `clientId`
+   * (`lib/health/workoutIds.ts`) so a retry writes once.
+   */
+  writeWorkout: (input: {
+    startISO: string;
+    endISO: string;
+    /** Total active energy, kilocalories, when known. */
+    energyKcal?: number;
+    /** Become's own id for the attempt, so a retry resolves without a
+     * second workout. */
+    clientId?: string;
+  }) => Promise<string>;
   /** Apple Health's own Settings path for this app (NP-337's Android
    * `openSettings` has no HealthKit equivalent — there is no deep link into
    * the per-app Health permission screen — so this is left undefined and the
@@ -79,7 +103,20 @@ export interface IosClientImpl {
   openSettings?: () => void;
 }
 
-export function createIosAdapter(impl: IosClientImpl): HealthClient {
+export interface CreateIosAdapterDeps {
+  /**
+   * Where finished attempts' HealthKit workout ids are kept. Defaults to
+   * the AsyncStorage-backed store — a parameter so tests hand it an
+   * in-memory map instead.
+   */
+  workoutIds?: WorkoutExportStore;
+}
+
+export function createIosAdapter(
+  impl: IosClientImpl,
+  deps: CreateIosAdapterDeps = {},
+): HealthClient {
+  const workoutIds = deps.workoutIds ?? createWorkoutExportStore();
   return {
     platform: "ios",
     isAvailable: () => impl.isAvailable(),
@@ -87,7 +124,8 @@ export function createIosAdapter(impl: IosClientImpl): HealthClient {
     /**
      * Asks HealthKit for `wanted` and answers what this adapter can claim is
      * granted. A WRITE entry is only reported granted when
-     * `isWriteAuthorized` actually confirms it. A READ entry is reported
+     * `isWriteAuthorized` actually confirms it — weight and workouts each
+     * against their OWN HealthKit permission. A READ entry is reported
      * granted once asked — the blind spot documented above — so the caller
      * (`lib/health/sync.ts`) proceeds to read, and a decline shows up as an
      * empty answer rather than a permission error.
@@ -99,11 +137,14 @@ export function createIosAdapter(impl: IosClientImpl): HealthClient {
       const granted: HealthPermission[] = [];
       for (const p of wanted) {
         if (p.direction === "write") {
-          if (p.metric === "weight" && (await impl.isWriteAuthorized("weight"))) {
+          if (
+            (p.metric === "weight" &&
+              (await impl.isWriteAuthorized("weight"))) ||
+            (p.metric === "workouts" &&
+              (await impl.isWriteAuthorized("workouts")))
+          ) {
             granted.push(p);
           }
-          // Workouts write is NP-186 — never reported granted here, because
-          // this adapter has no writer for it yet.
           continue;
         }
         granted.push(p);
@@ -138,7 +179,29 @@ export function createIosAdapter(impl: IosClientImpl): HealthClient {
           ...(sample.clientId ? { clientId: sample.clientId } : {}),
         });
       },
-      // writeWorkout intentionally absent — NP-186.
+      async writeWorkout(workout: WorkoutWrite): Promise<void> {
+        if (!(await impl.isWriteAuthorized("workouts"))) {
+          throw new HealthPermissionError("ios", "workouts", "write");
+        }
+        // HealthKit cannot match a retry the way Health Connect's
+        // `clientRecordId` does, so the adapter does: an attempt that
+        // already has its HealthKit workout resolves without writing again.
+        if (workout.clientId) {
+          const existing = await workoutIds.getHealthKitId(workout.clientId);
+          if (existing) return;
+        }
+        const healthKitId = await impl.writeWorkout({
+          startISO: workout.startISO,
+          endISO: workout.endISO,
+          ...(workout.energyKcal != null
+            ? { energyKcal: workout.energyKcal }
+            : {}),
+          ...(workout.clientId ? { clientId: workout.clientId } : {}),
+        });
+        if (workout.clientId && healthKitId) {
+          await workoutIds.setHealthKitId(workout.clientId, healthKitId);
+        }
+      },
     },
   };
 }
