@@ -1100,7 +1100,21 @@ export default function FoodSearchModal({
     addingRef.current = true
     setAdding(true)
     try {
-      const { foodId, variants: importedVariants } = await importExternalIfNeeded(selectedFood)
+      const { foodId, variants: importedVariants, error: importError } = await importExternalIfNeeded(selectedFood)
+
+      // A barcode scan that only resolved to a preview (quality-rejected OFF
+      // data, or an import that threw) hands back the same synthetic id it
+      // was given — `importExternalIfNeeded` already says so via `error`. The
+      // sibling save-to-My-Foods handler aborts on exactly this signal
+      // (`isExternal` after import); this one used to log anyway with
+      // `foodId: undefined`, which is a silent "successful" scan that never
+      // actually links to a food — the Add button did something, just not the
+      // thing it looked like. Stop here and say so, matching what re-scanning
+      // or searching by name would have to do anyway.
+      if (!isObjectIdString(foodId)) {
+        showToast(importError ? `Could not add this item: ${importError}` : 'Could not add this item. Try searching for it by name.')
+        return
+      }
 
       // After import the imported food's variants[] is authoritative — match by name
       // to find the equivalent variantId (single-variant external foods just take [0]).
