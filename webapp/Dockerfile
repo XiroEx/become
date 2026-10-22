@@ -7,7 +7,10 @@
 # backed by the workspace env var `_BUILD_SECRET_NPMRC`.
 
 FROM node:20-alpine AS base
-RUN apk add --no-cache libc6-compat dumb-init
+# ffmpeg extracts the demo-clip thumbnails (lib/exerciseThumbnails.ts) — the
+# capture runs in the route, so the runtime stage needs the binary, not just
+# the builder. It rides the base image so both stages have it.
+RUN apk add --no-cache libc6-compat dumb-init ffmpeg
 WORKDIR /app
 
 # --- deps ---

@@ -16,6 +16,7 @@ import connectDB from '@/lib/mongodb'
 import Exercise from '@/models/Exercise'
 import ExerciseVideo from '@/models/ExerciseVideo'
 import { getBlobStore, exerciseVideoKey } from '@/lib/blobStorage'
+import { exerciseThumbnailKey, refreshExerciseThumbnail } from '@/lib/exerciseThumbnails'
 import { invalidateExerciseCache } from '@/lib/hydrateExercises'
 import { upsertRetryingStaleIndex } from '@/lib/exerciseVideoIndex'
 import { MAX_VIDEO_BYTES as MAX_BYTES } from '@/lib/videoUpload'
@@ -175,6 +176,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     invalidateExerciseCache()
 
+    // Best-effort thumbnail: one frame at the trim in-point, stored beside
+    // the clip (lib/exerciseThumbnails.ts). Not awaited — a failure here must
+    // never fail the upload, and the exercise-thumbnails cron backfills
+    // whatever this misses.
+    refreshExerciseThumbnail(slug).catch((err) => {
+      console.warn('Exercise thumbnail generation failed (cron will backfill):', slug, err)
+    })
+
     return NextResponse.json({
       videoUrl: publicUrl,
       storageKey: key,
@@ -210,10 +219,19 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       } catch (err) {
         console.warn('Failed to delete blob (continuing):', err)
       }
+      // The thumbnail describes the file that is going away — it lives beside
+      // the clip, so it is derivable from the same key. Best-effort, like the
+      // video delete above.
+      try {
+        await getBlobStore().delete(exerciseThumbnailKey(exercise.slug, key))
+      } catch (err) {
+        console.warn('Failed to delete thumbnail blob (continuing):', err)
+      }
     }
 
     exercise.videoUrl = undefined
     exercise.videoStorageKey = null
+    exercise.thumbnailUrl = null
     exercise.videoWidth = null
     exercise.videoHeight = null
     exercise.videoFraming = undefined
@@ -236,7 +254,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
           // the URL readable in the admin list while excluding the row from the
           // name-keyed fallback that would otherwise re-surface the video we
           // just deleted.
-          $set: { slug, exerciseName: exercise.name, isPlaceholder: true, storageKey: null, status: 'retired' },
+          $set: { slug, exerciseName: exercise.name, isPlaceholder: true, storageKey: null, status: 'retired', thumbnailUrl: null },
           $unset: { framing: '', trim: '' },
         }
       )
