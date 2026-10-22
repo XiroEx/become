@@ -402,7 +402,7 @@ describe("Workout tab: acceptance criteria tests", () => {
 
   // Tab Root Integration & Header Links
   describe("Workout Tab Root (ProgrammingIndexRoute)", () => {
-    it("renders header links to History, Workouts, Programs, Generate, Calendar, Search, and Saved", async () => {
+    it("renders header links to History, Workouts, Programs, Generate, and Calendar (Search and Saved hidden for now)", async () => {
       mockApiFetch.mockImplementation(async (path: string) => {
         if (path.startsWith("/api/workouts/in-progress")) {
           return { workout: null, planned: null };
@@ -425,7 +425,7 @@ describe("Workout tab: acceptance criteria tests", () => {
         return {};
       });
 
-      const { getByTestId, getByText } = render(<ProgrammingIndexRoute />);
+      const { getByTestId, getByText, queryByTestId } = render(<ProgrammingIndexRoute />);
 
       expect(getByText("Workout")).toBeTruthy();
 
@@ -433,13 +433,9 @@ describe("Workout tab: acceptance criteria tests", () => {
       fireEvent.press(getByTestId("programming-open-calendar"));
       expect(mockPush).toHaveBeenCalledWith("/(tabs)/calendar");
 
-      // Search link -> pushes /(tabs)/programming/search
-      fireEvent.press(getByTestId("programming-open-search"));
-      expect(mockPush).toHaveBeenCalledWith("/(tabs)/programming/search");
-
-      // Saved link -> pushes /(tabs)/programming/saved
-      fireEvent.press(getByTestId("programming-open-saved"));
-      expect(mockPush).toHaveBeenCalledWith("/(tabs)/programming/saved");
+      // Search and Saved icons are removed from the Workout tab header for now.
+      expect(queryByTestId("programming-open-search")).toBeNull();
+      expect(queryByTestId("programming-open-saved")).toBeNull();
 
       // History chip
       fireEvent.press(getByTestId("workout-open-history"));
