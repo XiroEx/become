@@ -27,6 +27,8 @@
 // app/api/exercises/[slug]/video (best-effort on upload, clearing on delete).
 
 import { spawn } from 'node:child_process'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import fs from 'node:fs'
 import path from 'node:path'
 import Exercise from '@/models/Exercise'
@@ -181,25 +183,40 @@ export async function readVideoBytes(source: ThumbnailVideoSource): Promise<Buff
 }
 
 /**
- * One frame as JPEG, `THUMBNAIL_WIDTH_PX` wide. Piped in and out — the clip
- * is never written to disk. Needs the `ffmpeg` binary in the image
- * (webapp/Dockerfile installs it into the runtime stage); without it this
- * rejects and the row lands in the report's `failed` list for the next run.
+ * One frame as JPEG, `THUMBNAIL_WIDTH_PX` wide. The clip goes to a temp file
+ * and ffmpeg reads the PATH, not stdin: an MP4 whose index (the `moov` atom)
+ * sits at the end — most phone recordings — cannot be demuxed from a pipe,
+ * which is not seekable ("partial file" / "Invalid data", 2 of the first 3
+ * production captures, 2026-10-22). The JPEG still comes back on stdout and
+ * the temp file is removed on every outcome. Needs the `ffmpeg` binary in the
+ * image (webapp/Dockerfile); without it this rejects and the row lands in the
+ * report's `failed` list for the next run.
  */
-export function captureFrameWithFfmpeg(video: Buffer, seekSeconds: number): Promise<Buffer> {
+export async function captureFrameWithFfmpeg(video: Buffer, seekSeconds: number): Promise<Buffer> {
+  const dir = await mkdtemp(path.join(tmpdir(), 'become-thumb-'))
+  const input = path.join(dir, 'clip')
+  try {
+    await writeFile(input, video)
+    return await runFfmpeg(input, seekSeconds)
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => {})
+  }
+}
+
+function runFfmpeg(input: string, seekSeconds: number): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const child = spawn('ffmpeg', [
       '-hide_banner', '-loglevel', 'error',
       '-ss', String(seekSeconds),
-      '-i', 'pipe:0',
+      '-i', input,
       '-frames:v', '1',
       '-vf', `scale=${THUMBNAIL_WIDTH_PX}:-2`,
       '-q:v', '4',
       '-f', 'image2',
       'pipe:1',
-    ], { stdio: ['pipe', 'pipe', 'pipe'] })
-    const { stdin, stdout, stderr } = child
-    if (!stdin || !stdout || !stderr) {
+    ], { stdio: ['ignore', 'pipe', 'pipe'] })
+    const { stdout, stderr } = child
+    if (!stdout || !stderr) {
       child.kill('SIGKILL')
       reject(new Error('ffmpeg stdio unavailable'))
       return
@@ -226,7 +243,6 @@ export function captureFrameWithFfmpeg(video: Buffer, seekSeconds: number): Prom
       const detail = Buffer.concat(err).toString('utf8').trim().slice(0, 200)
       reject(new Error(`ffmpeg exited ${code ?? 'unknown'}${detail ? `: ${detail}` : ''}`))
     })
-    stdin.end(video)
   })
 }
 

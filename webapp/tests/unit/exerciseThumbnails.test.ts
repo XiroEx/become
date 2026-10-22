@@ -182,7 +182,11 @@ test('the capture is one ffmpeg frame through pipes, never a shell string', () =
   assert.match(LIB, /'-frames:v', '1'/)
   assert.match(LIB, /scale=\$\{THUMBNAIL_WIDTH_PX\}:-2/)
   assert.match(LIB, /'-f', 'image2'/)
-  assert.match(LIB, /'-i', 'pipe:0'/)
+  // A file path, not stdin: an MP4 with its moov atom at the end cannot be
+  // demuxed from a pipe (2 of the first 3 production captures failed so).
+  assert.match(LIB, /'-i', input/)
+  assert.ok(!/'-i', 'pipe:0'/.test(LIB), 'ffmpeg must not read the clip from stdin')
+  assert.match(LIB, /await rm\(dir, \{ recursive: true, force: true \}\)/)
   assert.match(LIB, /pipe:1/)
   // A wedged ffmpeg must not eat the run.
   assert.match(LIB, /THUMBNAIL_FFMPEG_TIMEOUT_MS/)
