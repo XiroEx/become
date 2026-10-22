@@ -1,9 +1,9 @@
 // Fonts are already in, everywhere except the test that is ABOUT loading them.
 //
-// `app/_layout.tsx` renders nothing until `useGeistFonts()` reports ready
-// (NP-160), and on a device that is a promise: `expo-font` registers the eight
-// Geist faces asynchronously. Every suite that renders the root layout would
-// otherwise have to await a state change that has nothing to do with what it is
+// `app/_layout.tsx` renders nothing until `useGeistFonts()` reports ready.
+// On a device that is a promise: `expo-font` registers the app's faces
+// asynchronously. Every suite that renders the root layout would otherwise
+// have to await a state change that has nothing to do with what it is
 // testing, so the default here is "loaded".
 //
 // A Node-module mock in `__mocks__/` next to `node_modules` is applied

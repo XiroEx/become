@@ -176,9 +176,12 @@ import { lightHaptic } from "@/lib/feedback/haptics";
 import { becomingStageTokens, rgbOf, skiaRgbOf } from "@/lib/theme/tokens";
 import { ForcedThemeMode } from "@/lib/theme/useThemeTokens";
 
-// The tick labels and "started" read 12px at any zoom; the face is the app's
-// semibold Geist, registered from the bundle like every other face (NP-160).
-const TICK_FONT = require("../../../assets/fonts/Geist-SemiBold.ttf");
+// The tick labels and "started" read 12px at any zoom; the face is Arimo Bold
+// — the sans bold, which is where a browser snaps semibold with Arial —
+// registered from the bundle like every other file-backed face. Skia draws
+// from a file, not from a system family name, so this is the bundled face on
+// both platforms (iOS UI text draws the system ArialMT / Arial-BoldMT).
+const TICK_FONT = require("../../../assets/fonts/Arimo-Bold.ttf");
 const TICK_FONT_SIZE = 12;
 
 const INK = becomingStageTokens.ink;

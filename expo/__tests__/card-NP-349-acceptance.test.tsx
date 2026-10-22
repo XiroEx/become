@@ -66,7 +66,7 @@ import {
   serifItalic,
 } from "@/lib/becoming/stageWords";
 import { resetIntroSession } from "@/lib/becoming/storage";
-import { GEIST_FACES, SERIF_FONT_FAMILY, geistFontFamily, serifFontFamilyFor } from "@/lib/theme/fonts";
+import { ANDROID_SANS_FACES, IOS_SANS_FACES, MONO_FACES, SERIF_FONT_FAMILY, appFontFamily, serifFontFamilyFor } from "@/lib/theme/fonts";
 import { becomingStageTokens, rgbOf } from "@/lib/theme/tokens";
 import { journeyWith, yearOfWeeks } from "../test-support/becomingFixtures";
 
@@ -88,8 +88,8 @@ const LIVE = WEEKS.length - 1;
 const HORIZON = WEEKS.length;
 const SIGNALS = journeySignals(WEEKS, { unit: JOURNEY.unit, direction: JOURNEY.target?.direction ?? null });
 const QUOTE = `“${JOURNEY.identity}”`;
-/** The eight faces NP-160 bundles: a serif line must be none of them. */
-const EVERY_GEIST_FACE = [...Object.values(GEIST_FACES.sans), ...Object.values(GEIST_FACES.mono)];
+/** The app faces: iOS Arial, Android Arimo, and Geist Mono. A serif line must be none of them. */
+const EVERY_APP_FACE = [...Object.values(IOS_SANS_FACES), ...Object.values(ANDROID_SANS_FACES), ...Object.values(MONO_FACES)];
 
 type Instance = ReturnType<RenderResult["getByTestId"]>;
 
@@ -137,11 +137,11 @@ function openHud(props: Partial<JourneyStageProps> = {}) {
   return { u, hud: u.getByTestId("journey-hud") };
 }
 
-/** A serif line: the platform serif, italic — and not one of the eight Geist faces. */
+/** A serif line: the platform serif, italic — and not one of the app faces. */
 function expectSerifItalic(s: Record<string, unknown>) {
   expect(s.fontFamily).toBe(SERIF_FONT_FAMILY);
   expect(s.fontStyle).toBe("italic");
-  expect(EVERY_GEIST_FACE).not.toContain(s.fontFamily);
+  expect(EVERY_APP_FACE).not.toContain(s.fontFamily);
 }
 
 let reduceRead: jest.SpyInstance;
@@ -178,12 +178,12 @@ describe("the intro title's quote is the web's: serif italic, 16 on 24, 75% whit
     expect(quote.props.numberOfLines).toBe(3);
   });
 
-  it("is the one line of the block in serif: the kicker and the title stay in Geist", () => {
+  it("is the one line of the block in serif: the kicker and the title stay in the sans", () => {
     const { title } = openTitle();
     const kicker = within(title).getByText("The Becoming");
     const headline = within(title).getByTestId("journey-title-headline");
-    expect(flat(kicker).fontFamily).toBe(GEIST_FACES.sans[600]);
-    expect(flat(headline).fontFamily).toBe(GEIST_FACES.sans[700]);
+    expect(flat(kicker).fontFamily).toBe("Arial-BoldMT");
+    expect(flat(headline).fontFamily).toBe("Arial-BoldMT");
     expect(flat(kicker).fontStyle).toBeUndefined();
     expect(flat(headline).fontStyle).toBeUndefined();
   });
@@ -214,11 +214,11 @@ describe("the overview HUD's identity is the web's: serif italic, 15 snug, 85% w
     expect(line.props.numberOfLines).toBe(2);
   });
 
-  it("the aggregate under it stays in Geist — 11px, tabular, 6 below — as on the web", () => {
+  it("the aggregate under it stays in the sans — 11px, tabular, 6 below — as on the web", () => {
     const { hud } = openHud();
     const agg = within(hud).getByTestId("journey-aggregate");
     const s = flat(agg);
-    expect(s.fontFamily).toBe(GEIST_FACES.sans[400]);
+    expect(s.fontFamily).toBe("ArialMT");
     expect(s.fontStyle).toBeUndefined();
     expect(s.fontSize).toBe(11);
     expect(s.marginTop).toBe(6);
@@ -272,7 +272,7 @@ describe("one serif, four places", () => {
     expectSerifItalic(flat(horizon.getByTestId("horizon-card-identity")));
   });
 
-  it("the face is the platform's serif — Georgia on iOS, the system serif on Android — never a Geist face", () => {
+  it("the face is the platform's serif — Georgia on iOS, the system serif on Android — never an app sans or mono face", () => {
     // The stack the web's `font-serif` is: `ui-serif, Georgia, …, serif`. Georgia is
     // its first NAMED face and iOS ships it (New York has no public name); `serif`
     // is React Native's name for Android's system serif, where Chrome lands too.
@@ -281,14 +281,14 @@ describe("one serif, four places", () => {
     expect(serifFontFamilyFor("web")).toBe("serif");
     expect(SERIF_FONT_FAMILY).toBe(serifFontFamilyFor(Platform.OS));
     expect(SERIF_FONT_FAMILY).toMatch(/^(Georgia|serif)$/);
-    expect(EVERY_GEIST_FACE).not.toContain(SERIF_FONT_FAMILY);
-    expect(EVERY_GEIST_FACE).not.toContain("Georgia");
-    expect(EVERY_GEIST_FACE).not.toContain("serif");
+    expect(EVERY_APP_FACE).not.toContain(SERIF_FONT_FAMILY);
+    expect(EVERY_APP_FACE).not.toContain("Georgia");
+    expect(EVERY_APP_FACE).not.toContain("serif");
   });
 
-  it("the app's Text lets the serif through: the Geist face it resolves sits UNDER the caller's family", () => {
-    // `components/Text.tsx` is `[{ fontFamily: geistFontFamily(...) }, style]`: the
-    // caller's family comes later in the array, so it wins — the Geist face is
+  it("the app's Text lets the serif through: the sans face it resolves sits UNDER the caller's family", () => {
+    // `components/Text.tsx` is `[{ fontFamily: appFontFamily(...) }, style]`: the
+    // caller's family comes later in the array, so it wins — the sans face is
     // still resolved (regular sans) but never drawn on a serif line.
     const u = render(
       <Text testID="t" style={serifItalic(16, 24)}>
@@ -298,7 +298,7 @@ describe("one serif, four places", () => {
     const s = flat(u.getByTestId("t"));
     expect(s.fontFamily).toBe(SERIF_FONT_FAMILY);
     expect(s.fontStyle).toBe("italic");
-    expect(geistFontFamily(undefined, serifItalic(16, 24))).toBe(GEIST_FACES.sans[400]);
+    expect(appFontFamily(undefined, serifItalic(16, 24))).toBe("ArialMT");
     expect(serifItalic(16, 24)).toEqual({ fontFamily: SERIF_FONT_FAMILY, fontStyle: "italic", fontSize: 16, lineHeight: 24 });
   });
 });
@@ -306,7 +306,7 @@ describe("one serif, four places", () => {
 // ─── 4. the title ────────────────────────────────────────────────────────────
 
 describe("the intro title is the web's `text-4xl font-black tracking-tight`, in the web's measure", () => {
-  it("is 36 on a 40 line, tracked −0.9, weight 900 → the heaviest Geist bundled, centred, 8 under the kicker, unclamped", () => {
+  it("is 36 on a 40 line, tracked −0.9, weight 900 → the platform bold, centred, 8 under the kicker, unclamped", () => {
     const { title } = openTitle();
     const h = within(title).getByTestId("journey-title-headline");
     expect(h.props.children).toBe("Who am I becoming?");
@@ -315,9 +315,9 @@ describe("the intro title is the web's `text-4xl font-black tracking-tight`, in 
     expect(s.lineHeight).toBe(40);
     expect(s.letterSpacing).toBeCloseTo(-0.9, 10);
     expect(s.fontWeight).toBe("900");
-    // NP-160 snaps 900 to the heaviest face bundled: Bold.
-    expect(s.fontFamily).toBe(GEIST_FACES.sans[700]);
-    expect(geistFontFamily(undefined, { fontWeight: "900" })).toBe(GEIST_FACES.sans[700]);
+    // The sans snaps 900 to the platform bold, like a browser with Arial.
+    expect(s.fontFamily).toBe("Arial-BoldMT");
+    expect(appFontFamily(undefined, { fontWeight: "900" })).toBe("Arial-BoldMT");
     expect(s.textAlign).toBe("center");
     expect(s.marginTop).toBe(8);
     // Nothing stops it taking a second line, as the web's does at 390.
