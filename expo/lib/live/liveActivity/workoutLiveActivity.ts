@@ -68,6 +68,45 @@ export interface WorkoutLiveActivityFactory {
 /** One live workout, one activity: the handle a session's start/update/end calls share. */
 export interface WorkoutLiveActivityHandle {
   instance: WorkoutLiveActivityInstance | null;
+  /**
+   * Why the last start/update/end did nothing — readable on-device for
+   * debugging the sim-works-phone-silent case. Null after a clean start.
+   * Never throws, never shown to the member.
+   */
+  lastFailure?: WorkoutLiveActivityFailureReason | null;
+}
+
+/** Machine-readable reason a start/update/end became a silent no-op. */
+export type WorkoutLiveActivityFailureReason =
+  | "factory-null"
+  | "already-running"
+  | "start-threw"
+  | "start-null"
+  | "update-failed"
+  | "end-failed";
+
+function reportFailure(
+  handle: WorkoutLiveActivityHandle,
+  reason: WorkoutLiveActivityFailureReason | null,
+): void {
+  handle.lastFailure = reason;
+}
+
+function warnFailure(
+  reason: WorkoutLiveActivityFailureReason,
+  detail?: unknown,
+): void {
+  try {
+    // Prefix is the grep hook: device logs (Xcode/TestFlight) can filter it
+    // while the workout itself stays best-effort and silent to the member.
+    if (detail !== undefined) {
+      console.warn(`[WorkoutLiveActivity] ${reason}`, detail);
+    } else {
+      console.warn(`[WorkoutLiveActivity] ${reason}`);
+    }
+  } catch {
+    /* logging must never break a workout */
+  }
 }
 
 /** A fresh handle per live workout session. */
@@ -163,11 +202,27 @@ export function startWorkoutLiveActivity(
   props: WorkoutLiveActivityProps,
   factory: WorkoutLiveActivityFactory | null = loadWorkoutLiveActivityFactory(),
 ): void {
-  if (!factory || handle.instance) return;
+  if (!factory) {
+    reportFailure(handle, "factory-null");
+    warnFailure("factory-null");
+    return;
+  }
+  if (handle.instance) {
+    reportFailure(handle, "already-running");
+    return;
+  }
   try {
     handle.instance = factory.start(props);
-  } catch {
+    if (handle.instance) {
+      reportFailure(handle, null);
+    } else {
+      reportFailure(handle, "start-null");
+      warnFailure("start-null");
+    }
+  } catch (err) {
     handle.instance = null;
+    reportFailure(handle, "start-threw");
+    warnFailure("start-threw", err);
   }
 }
 
@@ -185,8 +240,9 @@ export async function updateWorkoutLiveActivity(
   if (!instance) return;
   try {
     await instance.update(props);
-  } catch {
-    /* best-effort: the in-app screen is still the source of truth */
+  } catch (err) {
+    reportFailure(handle, "update-failed");
+    warnFailure("update-failed", err);
   }
 }
 
@@ -204,7 +260,8 @@ export async function endWorkoutLiveActivity(
   handle.instance = null;
   try {
     await instance.end(props);
-  } catch {
-    /* best-effort: ending is cleanup, not a step the member is waiting on */
+  } catch (err) {
+    reportFailure(handle, "end-failed");
+    warnFailure("end-failed", err);
   }
 }
