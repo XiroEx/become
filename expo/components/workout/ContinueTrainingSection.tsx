@@ -13,6 +13,7 @@ import {
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { workoutIndexFromDayLabel } from "@/lib/schedule/scheduleSlots";
+import { hitSlopToMinTarget } from "@/lib/a11y/touchTarget";
 import { formatStartLabel } from "@/lib/workout/formatStartLabel";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { subscribeProgramUpdates } from "@/lib/programs/programEvents";
@@ -92,6 +93,10 @@ export function ContinueTrainingSection({
       // Default: routes to quick workout session or Workout Now
       router.push("/(tabs)/programming?quick=true");
     }
+  };
+
+  const handleOpenPreview = (program: ActiveProgramSummary) => {
+    router.push(`/(tabs)/programming/${program.programId}`);
   };
 
   const handleOpenProgram = (program: ActiveProgramSummary) => {
@@ -214,7 +219,7 @@ export function ContinueTrainingSection({
               accessibilityLabel={`Continue ${program.programName}, ${
                 isPaused ? "Paused" : `${progress}% complete`
               }`}
-              onPress={() => handleOpenProgram(program)}
+              onPress={() => handleOpenPreview(program)}
               className="relative overflow-hidden bg-card border border-border rounded-2xl p-4 pl-5 active:opacity-95 shadow-sm"
             >
               <View
@@ -272,7 +277,14 @@ export function ContinueTrainingSection({
                     </Text>
                   </View>
 
-                  <View
+                  <Pressable
+                    testID={`continue-program-play-${program.programId}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      isPaused ? "Paused — open program" : "Start workout"
+                    }
+                    onPress={() => handleOpenProgram(program)}
+                    hitSlop={hitSlopToMinTarget(40, 40)}
                     className={`h-10 w-10 rounded-full items-center justify-center ${
                       isPaused ? "bg-amber-500" : "bg-emerald-600"
                     }`}
@@ -282,7 +294,7 @@ export function ContinueTrainingSection({
                     ) : (
                       <Play size={18} color={colors["primary-foreground"]} fill={colors["primary-foreground"]} />
                     )}
-                  </View>
+                  </Pressable>
                 </View>
               </View>
 
