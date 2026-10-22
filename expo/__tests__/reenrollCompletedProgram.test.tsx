@@ -42,8 +42,14 @@ jest.mock("@become/api-client", () => {
 });
 
 import { fireEvent, renderRouter, screen } from "expo-router/testing-library";
+import { router } from "expo-router";
+import { act } from "@testing-library/react-native";
 import * as SecureStore from "expo-secure-store";
-import { ApiError } from "@become/api-client";
+// NOTE: no `import { ApiError }` here on purpose. A static reference to the
+// mocked module's exports in THIS file breaks router bootstrap under
+// renderRouter (the list stub never mounts — every test in the file times
+// out), while omitting it passes deterministically. The refusal below is
+// built from a lazy requireActual instead, which is the identical class.
 import { appRouteMap, savedJwt } from "../test-support/appRoutes";
 /* eslint-enable import/first */
 
@@ -122,10 +128,18 @@ async function renderScheduleRoute(hasSchedule: boolean) {
     return { user: { _id: "u1", email: "jon@example.com" } };
   });
   await SecureStore.setItemAsync("become.session", savedJwt());
-  return renderRouter(
+  // Start on the tab root and PUSH to the detail: a dynamic segment as the
+  // initial URL renders an empty stack under renderRouter (the same reason
+  // navigation-shell starts at the list and pushes), so deep-linking here
+  // would assert against a screen that never mounted.
+  renderRouter(
     appRouteMap({ real: ["(app)/(tabs)/programming/[id]/schedule"] }) as never,
-    { initialUrl: "/(tabs)/programming/p1/schedule" },
+    { initialUrl: "/(tabs)/programming" },
   );
+  await screen.findByTestId("screen:(app)/(tabs)/programming/index");
+  act(() => {
+    router.push("/(tabs)/programming/p1/schedule" as never);
+  });
 }
 
 describe("schedule.tsx mode selection", () => {
@@ -163,7 +177,15 @@ describe("enroll failure renders an error", () => {
         if (path === "/api/programs/active") return { activePrograms: [] };
         if (path.startsWith("/api/schedule")) return { schedules: [] };
         if (path === "/api/programs/enroll") {
-          throw new ApiError(500, { error: "Enrollment failed" });
+          // Lazy so the test file keeps no static binding on the mocked
+          // module (see the note on the imports): the identical class the
+          // route's classifyApiError reads in production.
+          const { ApiError: EnrollApiError } = jest.requireActual(
+            "@become/api-client",
+          ) as {
+            ApiError: new (status: number, body: unknown) => Error;
+          };
+          throw new EnrollApiError(500, { error: "Enrollment failed" });
         }
         if (path.startsWith("/api/programs/")) return DETAIL;
         return {
@@ -177,8 +199,12 @@ describe("enroll failure renders an error", () => {
       await SecureStore.setItemAsync("become.session", savedJwt());
       renderRouter(
         appRouteMap({ real: ["(app)/(tabs)/programming/[id]/index"] }) as never,
-        { initialUrl: "/(tabs)/programming/p1" },
+        { initialUrl: "/(tabs)/programming" },
       );
+      await screen.findByTestId("screen:(app)/(tabs)/programming/index");
+      act(() => {
+        router.push("/(tabs)/programming/p1" as never);
+      });
 
       // Not enrolled → the Start button opens the enrol modal.
       fireEvent.press(await screen.findByTestId("program-detail-start"));
