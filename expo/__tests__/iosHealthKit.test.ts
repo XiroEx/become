@@ -69,9 +69,10 @@ describe("the maintained module (NP-185)", () => {
 
 function fakeModule(
   overrides: Partial<HealthKitModule> = {},
-): { module: HealthKitModule; initCalls: unknown[]; saveCalls: unknown[] } {
+): { module: HealthKitModule; initCalls: unknown[]; saveCalls: unknown[]; workoutCalls: unknown[] } {
   const initCalls: unknown[] = [];
   const saveCalls: unknown[] = [];
+  const workoutCalls: unknown[] = [];
   const module: HealthKitModule = {
     initHealthKit: (permissions, cb) => {
       initCalls.push(permissions);
@@ -85,10 +86,14 @@ function fakeModule(
       saveCalls.push(options);
       cb("", null);
     },
+    saveWorkout: (options, cb) => {
+      workoutCalls.push(options);
+      cb("", "hk-workout-uuid-1");
+    },
     getStepCount: (_options, cb) => cb("", { value: 0, startDate: "", endDate: "" }),
     ...overrides,
   };
-  return { module, initCalls, saveCalls };
+  return { module, initCalls, saveCalls, workoutCalls };
 }
 
 describe("createHealthKitImpl", () => {
@@ -118,6 +123,16 @@ describe("createHealthKitImpl", () => {
     ]);
   });
 
+  it("requestAuthorization asks for the Workout permission on a workouts write, and nothing on a workouts read", async () => {
+    const { module, initCalls } = fakeModule();
+    const impl = createHealthKitImpl(module);
+    await impl.requestAuthorization([
+      { metric: "workouts", direction: "write" },
+      { metric: "workouts", direction: "read" },
+    ]);
+    expect(initCalls).toEqual([{ permissions: { read: [], write: ["Workout"] } }]);
+  });
+
   it("isWriteAuthorized reads SharingAuthorized (2) as true", async () => {
     const { module } = fakeModule({
       getAuthStatus: (_p, cb) => cb("", { permissions: { read: [2], write: [2] } }),
@@ -132,6 +147,21 @@ describe("createHealthKitImpl", () => {
     });
     const impl = createHealthKitImpl(module);
     expect(await impl.isWriteAuthorized("weight")).toBe(false);
+  });
+
+  it("isWriteAuthorized answers the workouts permission separately from weight's", async () => {
+    const seen: unknown[] = [];
+    const { module } = fakeModule({
+      getAuthStatus: (permissions, cb) => {
+        seen.push(permissions);
+        cb("", { permissions: { read: [], write: [2] } });
+      },
+    });
+    const impl = createHealthKitImpl(module);
+    expect(await impl.isWriteAuthorized("workouts")).toBe(true);
+    expect(seen).toEqual([
+      { permissions: { read: [], write: ["Workout"] } },
+    ]);
   });
 
   it("queryWeightKg converts grams to kilograms and carries the sample id", async () => {
@@ -210,6 +240,57 @@ describe("createHealthKitImpl", () => {
     await expect(
       impl.writeWeightKg({ valueKg: 75, atISO: "2026-05-27T08:00:00Z" }),
     ).rejects.toThrow("write failed");
+  });
+
+  it("writeWorkout saves TraditionalStrengthTraining with the right start and end, and answers the HealthKit id", async () => {
+    const { module, workoutCalls } = fakeModule();
+    const impl = createHealthKitImpl(module);
+    const healthKitId = await impl.writeWorkout({
+      startISO: "2026-05-27T17:00:00Z",
+      endISO: "2026-05-27T18:02:00Z",
+    });
+    expect(healthKitId).toBe("hk-workout-uuid-1");
+    expect(workoutCalls).toEqual([
+      {
+        type: "TraditionalStrengthTraining",
+        startDate: "2026-05-27T17:00:00Z",
+        endDate: "2026-05-27T18:02:00Z",
+      },
+    ]);
+  });
+
+  it("writeWorkout sends energy as small calories when known, and omits it when not", async () => {
+    const { module, workoutCalls } = fakeModule();
+    const impl = createHealthKitImpl(module);
+    await impl.writeWorkout({
+      startISO: "2026-05-27T17:00:00Z",
+      endISO: "2026-05-27T18:02:00Z",
+      energyKcal: 0.32,
+    });
+    // 0.32 kcal crosses the bridge as 320 small calories: the native side
+    // only honours the `calorie` unit string, not `kilocalorie`.
+    expect(workoutCalls).toEqual([
+      {
+        type: "TraditionalStrengthTraining",
+        startDate: "2026-05-27T17:00:00Z",
+        endDate: "2026-05-27T18:02:00Z",
+        energyBurned: 320,
+        energyBurnedUnit: "calorie",
+      },
+    ]);
+  });
+
+  it("writeWorkout rejects when HealthKit's callback reports an error", async () => {
+    const { module } = fakeModule({
+      saveWorkout: (_options, cb) => cb("workout failed", ""),
+    });
+    const impl = createHealthKitImpl(module);
+    await expect(
+      impl.writeWorkout({
+        startISO: "2026-05-27T17:00:00Z",
+        endISO: "2026-05-27T18:02:00Z",
+      }),
+    ).rejects.toThrow("workout failed");
   });
 
   it("wired through createIosAdapter end to end: read, write, round trip", async () => {

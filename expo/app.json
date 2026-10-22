@@ -22,7 +22,7 @@
         "NSMicrophoneUsageDescription": "Become uses the microphone only to follow along as you speak your affirmation out loud.",
         "NSSpeechRecognitionUsageDescription": "Become uses speech recognition only to follow along as you speak your affirmation out loud.",
         "NSHealthShareUsageDescription": "Become reads weight and steps from Apple Health so a weigh-in recorded there appears in Become, if you turn that on in Settings.",
-        "NSHealthUpdateUsageDescription": "Become writes a weigh-in you log here back to Apple Health, if you turn that on in Settings."
+        "NSHealthUpdateUsageDescription": "Become writes a weigh-in you log here and a workout you finish back to Apple Health, if you turn that on in Settings."
       },
       "privacyManifests": {
         "NSPrivacyTracking": false,
