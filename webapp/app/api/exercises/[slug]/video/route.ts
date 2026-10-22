@@ -231,7 +231,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     exercise.videoUrl = undefined
     exercise.videoStorageKey = null
-    exercise.thumbnailUrl = null
+    exercise.thumbnailUrl = undefined
     exercise.videoWidth = null
     exercise.videoHeight = null
     exercise.videoFraming = undefined
