@@ -219,6 +219,7 @@
           ]
         }
       ],
+      "./plugins/withWidgetAssets",
       [
         "expo-widgets",
         {
