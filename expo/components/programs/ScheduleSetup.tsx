@@ -24,6 +24,12 @@ export interface ScheduleSetupProps {
   durationWeeks?: number;
   initialStartDate?: string;
   existingSchedule?: ScheduleDoc | null;
+  /**
+   * Force the create/setup wizard even when a stale schedule doc exists — a
+   * re-enrolled program keeps last season's Schedule doc while its enrolment
+   * has `hasSchedule !== true`. Only `hasSchedule === true` earns VIEW.
+   */
+  forceSetup?: boolean;
   onConfirm: (settings: {
     trainingDays: number[];
     startDate: string;
@@ -87,6 +93,7 @@ export function ScheduleSetup({
   durationWeeks = 4,
   initialStartDate,
   existingSchedule = null,
+  forceSetup = false,
   onConfirm,
   onSkip,
   onRecreate,
@@ -146,7 +153,9 @@ export function ScheduleSetup({
   // (webapp/app/dashboard/workout/[programId]/schedule/ScheduleSetupClient.tsx):
   // header, three stat tiles, an Upcoming Workouts list, "View Full
   // Calendar", "Edit Training Days" and a red-outline "Recreate Schedule".
-  if (existingSchedule && !isRecreating) {
+  // `forceSetup` (a stale doc from a previous enrolment) skips this and falls
+  // through to the wizard below, prefilled from the old settings.
+  if (existingSchedule && !isRecreating && !forceSetup) {
     const scheduledWorkouts = existingSchedule.scheduledWorkouts ?? [];
     const todayKey = localDateKey(new Date());
     const upcomingWorkouts = scheduledWorkouts

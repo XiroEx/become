@@ -68,6 +68,18 @@ export default function ScheduleSetupRoute() {
       : undefined;
   }, [activeFetch.data?.activePrograms, id]);
 
+  // A re-enrolled (or never-scheduled) program has a stale schedule doc but
+  // `hasSchedule !== true`: show SETUP prefilled from the old settings, not
+  // the view of last season's slots. Only `hasSchedule === true` earns VIEW.
+  // (A completed enrolment is filtered out of /api/programs/active entirely,
+  // so a missing entry also means setup.)
+  const forceSetup = useMemo(() => {
+    const match = activeFetch.data?.activePrograms?.find(
+      (p) => p.programId === id,
+    );
+    return match?.hasSchedule !== true;
+  }, [activeFetch.data?.activePrograms, id]);
+
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -129,13 +141,14 @@ export default function ScheduleSetupRoute() {
       testID="schedule-setup-route"
     >
       <ScheduleSetup
-        key={`${id}-${program?.training_days_per_week ?? "loading"}-${existingSchedule ? "view" : "create"}`}
+        key={`${id}-${program?.training_days_per_week ?? "loading"}-${existingSchedule && !forceSetup ? "view" : "create"}`}
         programId={id}
         programName={program?.name ?? "Program"}
         trainingDaysPerWeek={program?.training_days_per_week ?? 4}
         durationWeeks={program?.duration_weeks ?? 4}
         initialStartDate={enrolledStartDate}
         existingSchedule={existingSchedule}
+        forceSetup={forceSetup}
         onConfirm={onConfirm}
         onSkip={onSkip}
         onViewCalendar={onViewCalendar}

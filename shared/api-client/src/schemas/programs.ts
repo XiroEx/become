@@ -436,6 +436,8 @@ export const ActiveProgramSummarySchema = z
     progress: z.number().optional(),
     status: ActiveProgramStatusSchema.optional(),
     lastWorkoutDate: z.string().nullable().optional(),
+    /** False (or absent) until POST /api/schedule builds the schedule. */
+    hasSchedule: z.boolean().optional(),
   })
   .passthrough();
 

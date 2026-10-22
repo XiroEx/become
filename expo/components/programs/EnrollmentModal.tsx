@@ -15,6 +15,7 @@ export interface EnrollmentModalProps {
   onConfirm: (startDate: string) => void | Promise<void>;
   onClose: () => void;
   loading?: boolean;
+  error?: string | null;
   testID?: string;
 }
 
@@ -49,6 +50,7 @@ export function EnrollmentModal({
   onConfirm,
   onClose,
   loading = false,
+  error = null,
   testID = "enroll-modal",
 }: EnrollmentModalProps) {
   const [selectedDate, setSelectedDate] = useState<string>(() => {
@@ -85,6 +87,12 @@ export function EnrollmentModal({
             className="text-muted text-center text-xs"
           >
             Est. completion: {completionText}
+          </Text>
+        ) : null}
+
+        {error ? (
+          <Text testID={`${testID}-error`} className="text-destructive text-center text-sm">
+            {error}
           </Text>
         ) : null}
 
