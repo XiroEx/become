@@ -59,6 +59,14 @@ export interface WorkoutLiveActivityProps {
    * PR #2159).
    */
   weightLabel?: string;
+  /**
+   * A `file://` URI of the current exercise's still frame, cached in the
+   * App Group the widget extension shares (`group.io.redbtn.become` — see
+   * `exerciseFrameCache.ts`). The extension cannot play video, so it draws
+   * this still; with no frame cached yet the layout draws the Become arrow
+   * tile instead. Always omitted, never null (PR #2159, same as above).
+   */
+  imageUri?: string;
 }
 
 /** The name `createLiveActivity` registers under, and the one this module starts. */
