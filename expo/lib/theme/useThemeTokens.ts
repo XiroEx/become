@@ -108,8 +108,16 @@ const ThemeModeOverride = createContext<ThemeMode | null>(null);
  * every Tailwind class beneath it resolve to `mode`'s palette, whatever the
  * system scheme is.
  */
-export function scopedClassVars(mode: ThemeMode) {
-  return vars(
+const scopedVarsCache: Partial<Record<ThemeMode, ReturnType<typeof vars>>> = {};
+
+export function scopedClassVars(mode: ThemeMode): ReturnType<typeof vars> {
+  // One object per mode: NativeWind keeps the variables inside its own
+  // structure (they are not plain `--name` keys), so a test can only
+  // recognise the scope by identity — and the style need not be rebuilt
+  // on every render either.
+  const cached = scopedVarsCache[mode];
+  if (cached) return cached;
+  const built = vars(
     Object.fromEntries(
       Object.entries(getTokens(mode)).map(([name, triplet]) => [
         `--${name}`,
@@ -117,6 +125,8 @@ export function scopedClassVars(mode: ThemeMode) {
       ]),
     ),
   );
+  scopedVarsCache[mode] = built;
+  return built;
 }
 
 export interface ForcedThemeModeProps {

@@ -7,7 +7,7 @@ import { act, fireEvent, render, within } from "@testing-library/react-native";
 import { View } from "react-native";
 import { colorScheme } from "nativewind";
 import { buildWorkoutFlow } from "@become/core";
-import { getTokens } from "@/lib/theme/tokens";
+import { scopedClassVars } from "@/lib/theme/useThemeTokens";
 import {
   LiveWorkoutClient,
   type LiveWorkoutViewModel,
@@ -172,11 +172,6 @@ describe("(id: live-panel-gradient) the panel is a see-through gradient, never a
   });
 });
 
-function flattenStyle(style: unknown): Record<string, unknown> {
-  if (Array.isArray(style)) return Object.assign({}, ...style.map(flattenStyle));
-  if (style && typeof style === "object") return style as Record<string, unknown>;
-  return {};
-}
 
 describe("(id: live-dark-palette) the Live overlay reads the dark palette on any phone", () => {
   function renderLiveStep() {
@@ -229,13 +224,13 @@ describe("(id: live-dark-palette) the Live overlay reads the dark palette on any
     });
     try {
       const screen = renderLiveStep();
+      const darkVars = scopedClassVars("dark");
       const scoped = screen.UNSAFE_getAllByType(View).find(
-        (v) => "--foreground" in flattenStyle(v.props.style),
+        (v) => Array.isArray(v.props.style) && v.props.style.includes(darkVars),
       );
       expect(scoped).toBeTruthy();
-      expect(flattenStyle(scoped?.props.style)["--foreground"]).toBe(
-        getTokens("dark").foreground,
-      );
+      // The light palette must not be what the Live subtree carries.
+      expect(scoped?.props.style).not.toContain(scopedClassVars("light"));
     } finally {
       act(() => {
         colorScheme.set("dark");
