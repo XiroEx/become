@@ -878,7 +878,8 @@ export function FoodSearchSheet({
       // padding too, leaving it flush against the screen edge. Rendering
       // the title ourselves, padded like every other row, keeps the
       // full-bleed body AND a padded title.
-      sheetStyle={{ height: "85%", maxHeight: "90%", paddingHorizontal: 0 }}
+      // The 90% fixed height lives in `BottomSheet` itself.
+      sheetStyle={{ paddingHorizontal: 0 }}
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}

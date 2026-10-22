@@ -1137,7 +1137,6 @@ export function ScheduleMealsDrawer({
         title="Schedule meals"
         testID="schedule-meals-drawer"
         accessibilityLabel="Schedule meals"
-        sheetStyle={{ maxHeight: "90%" }}
         headerLeading={
           <View
             style={{

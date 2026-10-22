@@ -8,6 +8,7 @@ import {
   ScrollView,
   TextInput,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { ArrowUp, Sparkles, X } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -139,6 +140,12 @@ export function CoachChat({
 }: CoachChatProps) {
   const { colors, scrim } = useThemeTokens();
   const insets = useSafeAreaInsetsOrZero();
+  // Fixed at 90% of the window height, like every `BottomSheet` drawer.
+  const { height: windowHeight } = useWindowDimensions();
+  const sheetHeight = Math.min(
+    Math.round(windowHeight * 0.9),
+    windowHeight - insets.top - 24,
+  );
   // Flat fallback for the header tile / send button when no gradient is
   // given — rendered through the same `LinearGradient` with both stops
   // equal, so there is exactly one code path for "tile colour" below.
@@ -302,7 +309,8 @@ export function CoachChat({
             /* swallow */
           }}
           style={{
-            height: "88%",
+            height: sheetHeight,
+            maxHeight: sheetHeight,
             backgroundColor: colors.card,
             borderTopLeftRadius: 24,
             borderTopRightRadius: 24,

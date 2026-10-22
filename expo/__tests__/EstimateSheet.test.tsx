@@ -522,24 +522,27 @@ describe("EstimateSheet describe sheet matches web (NP-263)", () => {
     expect(src).toMatch(/keyboardShouldPersistTaps="handled"/);
   });
 
-  it("CARD: after taking a photo the sheet grows near-full-screen and can shrink for the keyboard, instead of being capped at a fixed 520px body", () => {
+  it("CARD: after taking a photo the sheet is the fixed 90% height and can shrink for the keyboard, instead of being capped at a fixed 520px body", () => {
     // Regression for the photo flow leaving the sheet parked over the
     // bottom half of the screen with the note field hidden behind the
-    // keyboard and unable to scroll into view. Same shape as Quick Add's
-    // NP-316 fix: bound the BottomSheet itself near full screen via
-    // `sheetStyle`, and let the KeyboardAvoidingView + ScrollView fill it
-    // with `flex: 1` rather than a fixed height.
+    // keyboard and unable to scroll into view. The 90% fixed height lives
+    // in `BottomSheet` itself — a per-caller `sheetStyle` cap plus a
+    // `flex: 1` ScrollView inside a content-sized sheet collapsed the sheet
+    // down to only its grab handle — so this sheet sets no height of its
+    // own and lets the KeyboardAvoidingView + ScrollView fill it with
+    // `flex: 1` rather than a fixed height.
     const fs = jest.requireActual("fs");
     const path = jest.requireActual("path");
     const src = fs.readFileSync(
       path.resolve(__dirname, "..", "components/nutrition/EstimateSheet.tsx"),
       "utf8",
     );
-    expect(src).toMatch(/sheetStyle=\{\{\s*maxHeight:\s*["']90%["']\s*\}\}/);
+    expect(src).not.toMatch(/maxHeight:\s*["']90%["']/);
+    expect(src).not.toMatch(/height:\s*["']8\d%["']/);
     expect(src).not.toMatch(/maxHeight:\s*520/);
     // The KeyboardAvoidingView and the ScrollView it wraps both need to be
-    // allowed to fill/shrink (flex: 1) — a fixed height on either defeats
-    // the sheetStyle cap above.
+    // allowed to fill/shrink (flex: 1) inside the fixed 90% sheet — a fixed
+    // height on either defeats it.
     const kavBlock = src.slice(
       src.indexOf("<KeyboardAvoidingView"),
       src.indexOf("<ScrollView"),

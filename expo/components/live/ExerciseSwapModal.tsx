@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import type { ReactNode } from "react";
-import { Modal, View, Pressable, ScrollView, TextInput } from "react-native";
+import { Modal, View, Pressable, ScrollView, TextInput, useWindowDimensions } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Text } from "@/components/Text";
 import { Button } from "@/components/Button";
 import type { z } from "zod";
@@ -40,6 +41,20 @@ import { showUpgradeSheet } from "@/lib/entitlements/upgradeSheet";
 import { Search, X, ChevronDown, ChevronUp, Sparkles, Plus } from "lucide-react-native";
 
 export type SwapScope = "session" | "program";
+
+/**
+ * `useSafeAreaInsets` throws without a `SafeAreaProvider` above it in the
+ * tree; the real app always has one, but bare-mounted tests may not. Falling
+ * back to zero insets there keeps this a no-op in tests while fixing the
+ * real device (the same pattern as `BottomSheet`).
+ */
+function useSafeAreaInsetsOrZero() {
+  try {
+    return useSafeAreaInsets();
+  } catch {
+    return { top: 0, bottom: 0, left: 0, right: 0 };
+  }
+}
 
 export interface ExerciseSwapModalProps {
   visible: boolean;
@@ -278,6 +293,15 @@ export function ExerciseSwapModal({
 }: ExerciseSwapModalProps) {
   const { colors, scrim } = useThemeTokens();
   const { token } = useAuth();
+  // Fixed at 90% of the window height, like every `BottomSheet` drawer —
+  // a content-sized sheet plus a filling ScrollView collapses to the grab
+  // handle, so the height lives here and the list below fills it.
+  const insets = useSafeAreaInsetsOrZero();
+  const { height: windowHeight } = useWindowDimensions();
+  const sheetHeight = Math.min(
+    Math.round(windowHeight * 0.9),
+    windowHeight - insets.top - 24,
+  );
 
   const [selectedBells, setSelectedBells] = useState<Record<string, BellCount>>({});
   const [internalAlts, setInternalAlts] = useState<AlternativeCandidate[]>([]);
@@ -853,7 +877,8 @@ export function ExerciseSwapModal({
             padding: 16,
             borderTopLeftRadius: 20,
             borderTopRightRadius: 20,
-            maxHeight: "85%",
+            height: sheetHeight,
+            maxHeight: sheetHeight,
           }}
         >
           {/* Drag Handle */}
@@ -996,7 +1021,7 @@ export function ExerciseSwapModal({
             </Text>
           ) : (
             <ScrollView
-              style={{ maxHeight: 420 }}
+              style={{ flex: 1 }}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
               onScroll={handleSwapScroll}

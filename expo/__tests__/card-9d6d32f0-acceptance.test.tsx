@@ -70,14 +70,17 @@ const WORKOUT: LiveWorkoutViewModel = {
 };
 
 describe("(id: 9d6d32f1) Live video renders fullscreen behind the UI, panel overlays the bottom", () => {
-  it("the clip's wrapper is an inert absolute inset-0 layer, not a boxed-at-top card", () => {
+  it("the clip's wrapper is a full-screen Pressable that toggles the chrome, not a boxed-at-top card", () => {
     const { getByTestId } = render(
       <LiveWorkoutClient workout={WORKOUT} initialView="live" />,
     );
     const media = getByTestId("live-workout-live-media");
-    // `pointerEvents=\"none\"`: the web parity requirement that the
-    // background clip never steals taps from the chrome above it.
-    expect(media.props.pointerEvents).toBe("none");
+    // The web's `onClick={handleVideoTap}`: tapping the clip (or the empty
+    // space, which falls through to it) hides the chrome above it.
+    expect(media.props.accessibilityRole).toBe("button");
+    expect(media.props.accessibilityLabel).toBe(
+      "Show or hide workout controls",
+    );
     expect(media.props.style).toEqual({
       position: "absolute",
       top: 0,
