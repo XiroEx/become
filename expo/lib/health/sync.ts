@@ -355,8 +355,8 @@ export async function exportWorkoutToHealth(
   }
   const write = deps.client?.write;
   // No `write` at all (no writer on this platform) and `write` present but
-  // missing `writeWorkout` (iOS before NP-186) answer the same way: there is
-  // nowhere for this workout to go.
+  // missing `writeWorkout` (a platform whose workout half has not landed)
+  // answer the same way: there is nowhere for this workout to go.
   if (!write?.writeWorkout) return { written: false, reason: "no-writer" };
   if (Date.parse(workout.endISO) <= Date.parse(workout.startISO)) {
     // Health Connect refuses a session that ends before it starts, and a

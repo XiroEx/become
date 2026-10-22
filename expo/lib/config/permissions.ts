@@ -162,8 +162,8 @@ export const PERMISSION_BEARING_MODULES: readonly PermissionBearingModule[] = [
   {
     module: "react-native-health",
     infoPlistKey: "NSHealthUpdateUsageDescription",
-    what: "write a weigh-in back to Apple Health",
-    card: "NP-185",
+    what: "write a weigh-in or a finished workout back to Apple Health",
+    card: "NP-185 / NP-186",
   },
   {
     module: "@kingstinct/react-native-healthkit",
@@ -174,8 +174,8 @@ export const PERMISSION_BEARING_MODULES: readonly PermissionBearingModule[] = [
   {
     module: "@kingstinct/react-native-healthkit",
     infoPlistKey: "NSHealthUpdateUsageDescription",
-    what: "write a weigh-in back to Apple Health",
-    card: "NP-185",
+    what: "write a weigh-in or a finished workout back to Apple Health",
+    card: "NP-185 / NP-186",
   },
 ];
 

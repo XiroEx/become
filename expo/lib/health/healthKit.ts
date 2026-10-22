@@ -101,6 +101,24 @@ export interface HealthKitModule {
     },
     callback: (error: string, result: unknown) => void,
   ) => void;
+  /**
+   * `saveWorkout` (`RCTAppleHealthKit+Methods_Workout.m` `workout_save:`).
+   * The callback's result is the saved workout's own UUID string. The native
+   * side passes `metadata: nil`, so there is no marker a write can carry —
+   * de-duplication across retries lives in `lib/health/workoutIds.ts`, not
+   * here.
+   */
+  saveWorkout: (
+    options: {
+      type: string;
+      startDate: string;
+      endDate: string;
+      energyBurned?: number;
+      energyBurnedUnit?: string;
+      duration?: number;
+    },
+    callback: (error: string, result: string) => void,
+  ) => void;
   getStepCount: (
     options: { date?: string },
     callback: (error: string, result: HealthValue) => void,
@@ -122,10 +140,20 @@ export function loadHealthKitModule(): HealthKitModule | null {
 }
 
 /** The HealthKit permission name behind one of Become's `HealthPermission`s. */
+const PERMISSION_WORKOUT = "Workout";
+
+/** The HealthKit workout type Become writes: every native workout is strength. */
+export const BECOME_HEALTHKIT_WORKOUT_TYPE = "TraditionalStrengthTraining";
+
 function toHealthKitPermission(p: HealthPermission): string | null {
   if (p.metric === "weight") return PERMISSION_WEIGHT;
   if (p.metric === "steps") return PERMISSION_STEP_COUNT;
-  // Workouts is NP-186 — nothing here asks HealthKit for it yet.
+  // Workouts are write-only: nothing ever reads a session back out of
+  // HealthKit, so a read asks for nothing. The write asks for `Workout`,
+  // its own permission — separate from the weight one.
+  if (p.metric === "workouts") {
+    return p.direction === "write" ? PERMISSION_WORKOUT : null;
+  }
   return null;
 }
 
@@ -247,6 +275,31 @@ export function createHealthKitImpl(module: HealthKitModule): IosClientImpl {
           cb,
         ),
       );
+    },
+
+    async writeWorkout({ startISO, endISO, energyKcal }): Promise<string> {
+      // `react-native-health` only honours the unit strings its native
+      // `hkUnitFromOptions` knows — `calorie` is one, `kilocalorie` is not —
+      // so kilocalories cross the bridge as small calories (x1000). Energy
+      // is optional: Become does not estimate burn, so most writes omit it
+      // and HealthKit records the session without an energy total.
+      const result = await promisify<string>((cb) =>
+        module.saveWorkout(
+          {
+            type: BECOME_HEALTHKIT_WORKOUT_TYPE,
+            startDate: startISO,
+            endDate: endISO,
+            ...(energyKcal != null && energyKcal > 0
+              ? {
+                  energyBurned: energyKcal * 1000,
+                  energyBurnedUnit: "calorie",
+                }
+              : {}),
+          },
+          cb,
+        ),
+      );
+      return result;
     },
     // openSettings: HealthKit has no deep link into its own per-app
     // permission screen — left undefined, same as the file comment in

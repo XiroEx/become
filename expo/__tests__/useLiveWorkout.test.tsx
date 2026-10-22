@@ -1,3 +1,4 @@
+/* eslint-disable import/first */
 import { renderHook, act, waitFor } from "@testing-library/react-native";
 import { apiFetch } from "@become/api-client";
 import { useLiveWorkout } from "@/lib/live/useLiveWorkout";
@@ -22,9 +23,17 @@ jest.mock("@become/api-client", () => {
 });
 const mockApiFetch = apiFetch as unknown as jest.Mock;
 
+jest.mock("@/lib/health/sync", () => {
+  const actual = jest.requireActual("@/lib/health/sync");
+  return { __esModule: true, ...actual, mirrorWorkoutToHealth: jest.fn() };
+});
+import { mirrorWorkoutToHealth } from "@/lib/health/sync";
+const mockMirrorWorkoutToHealth = mirrorWorkoutToHealth as unknown as jest.Mock;
+
 describe("useLiveWorkout", () => {
   beforeEach(() => {
     mockApiFetch.mockReset();
+    mockMirrorWorkoutToHealth.mockReset();
   });
 
   it("(id: e015c85e) A workout started on the web and resumed natively shows the same completed sets, swaps and elapsed time, and the other way round", async () => {
@@ -288,6 +297,22 @@ describe("useLiveWorkout", () => {
       { setNumber: 1, reps: 5, weight: 225, completed: true },
       { setNumber: 2, reps: 5, weight: 225, completed: true },
     ]);
+
+    // NP-186: the completing save mirrors the finished workout to the
+    // platform health store — once, with the session's start/end and the
+    // attempt's client id (the adapter turns a retry into a no-op).
+    expect(mockMirrorWorkoutToHealth).toHaveBeenCalledTimes(1);
+    const mirrored = mockMirrorWorkoutToHealth.mock.calls[0]![0] as {
+      title: string;
+      startISO: string;
+      endISO: string;
+      clientId: string;
+    };
+    expect(mirrored.title).toBe("Upper Body");
+    expect(Date.parse(mirrored.endISO)).toBeGreaterThan(
+      Date.parse(mirrored.startISO),
+    );
+    expect(mirrored.clientId).toMatch(/^become-workout-/);
   });
 
   it("(id: e015c861) Two quick taps on Finish produce one save", async () => {
@@ -663,3 +688,4 @@ describe("useLiveWorkout", () => {
     expect(exercises?.[1]?.restSec).toBe(45);
   });
 });
+/* eslint-enable import/first */

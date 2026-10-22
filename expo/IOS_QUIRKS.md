@@ -88,7 +88,7 @@ needs no key on iOS; nothing is saved to the library so there is no
 pins the whole set — add a key with the module that needs it, or the suite
 fails.
 
-## HealthKit (NP-185)
+## HealthKit (NP-185 weight, NP-186 workouts)
 
 `react-native-health` is the maintained module and its own Expo config plugin
 (`"react-native-health"` in `expo.plugins`), the same shape
@@ -117,11 +117,15 @@ weigh-in this module writes is tagged with a metadata key
 (`BECOME_WRITE_METADATA_KEY`, `lib/health/healthKit.ts`) and a read filters on
 it before the sample ever reaches `lib/health/sync.ts`.
 
-**Workouts write is NP-186, not this card.** `HealthWriteClient.writeWorkout`
-is optional (`lib/health/types.ts`) precisely so an iOS adapter can expose
-`write.writeWeight` without inventing a workout writer it does not have yet;
-`exportWorkoutToHealth` answers `reason: "no-writer"` for that case, the same
-answer a platform with no `write` at all gets.
+**Workouts write is NP-186, same file.** `HealthWriteClient.writeWorkout`
+stays optional (`lib/health/types.ts`) so a platform whose workout half has
+not landed still answers `reason: "no-writer"` from `exportWorkoutToHealth`
+instead of throwing. On iOS the writer checks its OWN `Workout` update
+permission (separate from weight's), writes `TraditionalStrengthTraining`
+with start/end and energy when known, and keeps the returned HealthKit UUID
+under the attempt's client id (`lib/health/workoutIds.ts`) — HealthKit's
+`saveWorkout` takes no client marker, so a retry resolves against that
+stored id instead of writing a second workout.
 
 ## Safe area
 

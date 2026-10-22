@@ -77,6 +77,7 @@ import {
   buildQuickHistory,
   quickHistorySlugs,
 } from "@/lib/quickSession/quickHistory";
+import { mirrorWorkoutToHealth, workoutClientId } from "@/lib/health/sync";
 
 export { quickScope };
 
@@ -798,6 +799,7 @@ export function useQuickLiveWorkout(
       setSaveError(null);
       try {
         const active = activeSecondsNow();
+        const startedAt = sessionStartRef.current ?? Date.now();
         await postSave(grid, true, title);
         await updateQuickSession(sessionId, { title }, store);
         await clearQuickProgress(sessionId, store);
@@ -810,6 +812,16 @@ export function useQuickLiveWorkout(
         setFinishedElapsedSeconds(active);
         setActiveSeconds(active);
         setFinishing(false);
+        // A completed quick session is a completed Become workout: mirror
+        // it the same way the program path does (`useLiveWorkout`). Only
+        // here — after the save actually reached the server — never on an
+        // autosave, and never on a save that stayed queued offline.
+        void mirrorWorkoutToHealth({
+          title,
+          startISO: new Date(startedAt).toISOString(),
+          endISO: new Date().toISOString(),
+          clientId: workoutClientId(sessionId),
+        });
         return true;
       } catch (cause) {
         setSaveError(
