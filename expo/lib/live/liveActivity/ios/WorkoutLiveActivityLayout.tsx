@@ -28,11 +28,17 @@
  */
 import { Button, HStack, Image, Spacer, Text, VStack } from "@expo/ui/swift-ui";
 import {
+  aspectRatio,
+  background,
   buttonStyle,
+  clipped,
   controlSize,
+  cornerRadius,
   font,
   frame,
   padding,
+  resizable,
+  shapes,
 } from "@expo/ui/swift-ui/modifiers";
 import type { LiveActivityLayout } from "expo-widgets";
 import type { WorkoutLiveActivityProps } from "@/lib/live/liveActivity/workoutLiveActivity";
@@ -46,7 +52,9 @@ import type { WorkoutLiveActivityProps } from "@/lib/live/liveActivity/workoutLi
  *   • every region is padded (the banner 16 × 14, the expanded regions 6 – 10);
  *   • the Become arrow (`BecomeArrow`, a template image in the widget
  *     extension's asset catalog — `plugins/withWidgetAssets.js`) is the badge
- *     on the banner and in the compact, minimal and expanded islands;
+ *     in the compact and minimal islands, and the placeholder inside the
+ *     banner / expanded exercise tile — the tile draws the cached still
+ *     (`props.imageUri`) when one exists;
  *   • the expanded island puts the words in the WIDE bottom region, one copy
  *     of each, and keeps the narrow leading/trailing slots for the mark and
  *     the rest countdown;
@@ -108,6 +116,44 @@ export function WorkoutLiveActivityLayout(
     </HStack>
   ) : null;
 
+  // THE EXERCISE TILE. Live Activities cannot play video, so the Lock
+  // Screen draws the current exercise's STILL frame when one is cached
+  // (`props.imageUri`, a `file://` URI in the shared App Group — see
+  // `exerciseFrameCache.ts`), else the Become arrow centred on a translucent
+  // tile. Both are the same 44 pt rounded-10 tile so the layout never shifts
+  // when a frame lands. Drawn in the banner and the expanded island's leading
+  // slot (the compact/minimal islands keep the bare arrow — no room there);
+  // the expanded slot adds the region's own outer padding.
+  const exerciseTile = (padded: boolean) =>
+    props.imageUri ? (
+      <Image
+        uiImage={props.imageUri}
+        modifiers={[
+          resizable(),
+          aspectRatio({ contentMode: "fill", ratio: 1 }),
+          frame({ width: 44, height: 44 }),
+          ...(padded ? [padding({ leading: 10, top: 6 })] : []),
+          clipped(),
+          cornerRadius(10),
+        ]}
+      />
+    ) : (
+      <VStack
+        alignment="center"
+        spacing={0}
+        modifiers={[
+          frame({ width: 44, height: 44 }),
+          ...(padded ? [padding({ leading: 10, top: 6 })] : []),
+          background(
+            { type: "material", material: "regular" },
+            shapes.roundedRectangle({ cornerRadius: 10 }),
+          ),
+        ]}
+      >
+        <Image assetName="BecomeArrow" />
+      </VStack>
+    );
+
   const banner = (
     <VStack
       alignment="leading"
@@ -118,7 +164,7 @@ export function WorkoutLiveActivityLayout(
       ]}
     >
       <HStack spacing={12}>
-        <Image assetName="BecomeArrow" />
+        {exerciseTile(false)}
         <VStack alignment="leading" spacing={2}>
           <Text modifiers={[font({ size: 12, weight: "medium" })]}>
             {props.workoutTitle}
@@ -178,9 +224,7 @@ export function WorkoutLiveActivityLayout(
     <Image assetName="BecomeArrow" />
   );
 
-  const expandedLeading = (
-    <Image assetName="BecomeArrow" modifiers={[padding({ leading: 10, top: 6 })]} />
-  );
+  const expandedLeading = exerciseTile(true);
 
   const expandedTrailing = resting ? (
     <Text
