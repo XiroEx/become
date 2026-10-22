@@ -1289,10 +1289,20 @@ export function LiveWorkoutClient({
   // A weight-tracked set ALWAYS gets the Lock Screen steppers — starting from
   // 0 when nothing is typed and there is no last-done weight to prefill
   // (device review 2026-10-22: a fresh dumbbell set showed no buttons).
+  //
+  // Quick sessions never PREFILL (their history is reference-only, the
+  // "Last:" line), so after the prefill the member's last logged weight for
+  // the exercise is the starting point — a dumbbell curl starts at last
+  // time's 25 lb, not 0 (device review 2026-10-22).
+  const startingWeightFor = (
+    ex: (typeof workout.exercises)[number] | undefined,
+    setIndex: number,
+  ): number =>
+    ex?.prefill?.[setIndex]?.weight ??
+    (ex ? exerciseHistory?.[ex.name]?.weight : undefined) ??
+    0;
   const activityWeight: number | null = activityWeightTracked
-    ? (activityRow?.weight ??
-      activityExercise?.prefill?.[activitySetIndex]?.weight ??
-      0)
+    ? (activityRow?.weight ?? startingWeightFor(activityExercise, activitySetIndex))
     : null;
   const activityWeightStep = weightUnit === "kg" ? 2.5 : 5;
   // The typing path, not the logging path: adjusting the weight must not
@@ -1302,7 +1312,7 @@ export function LiveWorkoutClient({
       const ex = workout.exercises[activityExerciseIndex];
       if (!ex || !setInputsFor(ex.trackingType).weight) return;
       const prev = gridRef.current[ex.slug]?.[activitySetIndex];
-      const base = prev?.weight ?? ex.prefill?.[activitySetIndex]?.weight ?? 0;
+      const base = prev?.weight ?? startingWeightFor(ex, activitySetIndex);
       const next = Math.max(0, Math.round((base + delta) * 10) / 10);
       const current: LiveSetState = prev ?? {
         reps: null,
@@ -1317,19 +1327,55 @@ export function LiveWorkoutClient({
         weight: next,
       });
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- startingWeightFor reads exerciseHistory, listed
     [
       workout.exercises,
       activityExerciseIndex,
       activitySetIndex,
       handleLiveSetChange,
+      exerciseHistory,
     ],
   );
+  // "Log set" without touching − / + logs the weight the Lock Screen SHOWS:
+  // an empty input is seeded with it first (the typing path), and the
+  // completion runs on the next tick so it reads the seeded grid.
+  const logActivitySet = useCallback(() => {
+    const ex = workout.exercises[activityExerciseIndex];
+    const prev = ex ? gridRef.current[ex.slug]?.[activitySetIndex] : undefined;
+    if (ex && setInputsFor(ex.trackingType).weight && prev?.weight == null) {
+      const seed = startingWeightFor(ex, activitySetIndex);
+      if (seed > 0) {
+        handleLiveSetChange(activityExerciseIndex, activitySetIndex, {
+          ...(prev ?? {
+            reps: null,
+            weight: null,
+            durationSec: null,
+            distance: null,
+            speed: null,
+            completed: false,
+          }),
+          weight: seed,
+        });
+        setTimeout(handleCompleteStep, 0);
+        return;
+      }
+    }
+    handleCompleteStep();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- startingWeightFor reads exerciseHistory, listed
+  }, [
+    workout.exercises,
+    activityExerciseIndex,
+    activitySetIndex,
+    handleLiveSetChange,
+    handleCompleteStep,
+    exerciseHistory,
+  ]);
   useLiveActivityControls({
     weightStep: activityWeightStep,
     onAdjustWeight: adjustActivityWeight,
     // The on-screen Complete button's own path — rest, autosave and the
     // activity's rest phase follow from the normal completion.
-    onLogSet: handleCompleteStep,
+    onLogSet: logActivitySet,
     resting: rest.active,
   });
   useWorkoutLiveActivity({
