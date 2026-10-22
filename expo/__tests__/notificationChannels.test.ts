@@ -25,9 +25,11 @@ describe("getNotificationChannels", () => {
       expect(ids).toContain(tag);
     }
     // No channel id the server never sends — except the local-only rest
-    // timer channel (NP-082), which the server never sends by design.
+    // timer (NP-082) and live-workout (NP-200) channels, which the server
+    // never sends by design.
     for (const id of ids) {
       if (id === CHANNEL_IDS.restTimer) continue;
+      if (id === CHANNEL_IDS.liveWorkout) continue;
       expect(serverTags).toContain(id);
     }
   });
@@ -65,6 +67,15 @@ describe("getNotificationChannels", () => {
 
   it("daily-glance is default-importance with no sound + no vibrate", () => {
     const c = channels.find((ch) => ch.id === CHANNEL_IDS.dailyGlance);
+    expect(c?.importance).toBe("default");
+    expect(c?.sound).toBe(false);
+    expect(c?.vibrate).toBe(false);
+  });
+
+  it("live-workout is a local-only silent channel for the ongoing row", () => {
+    const c = channels.find((ch) => ch.id === CHANNEL_IDS.liveWorkout);
+    expect(c).toBeDefined();
+    expect(c?.name).toBe("Live Workout");
     expect(c?.importance).toBe("default");
     expect(c?.sound).toBe(false);
     expect(c?.vibrate).toBe(false);
