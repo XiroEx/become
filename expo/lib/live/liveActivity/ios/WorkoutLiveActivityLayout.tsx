@@ -26,8 +26,14 @@
  * `useRestTimer`, carried in unchanged — the same instant the in-app
  * countdown uses.
  */
-import { HStack, Image, Spacer, Text, VStack } from "@expo/ui/swift-ui";
-import { font, frame, padding } from "@expo/ui/swift-ui/modifiers";
+import { Button, HStack, Image, Spacer, Text, VStack } from "@expo/ui/swift-ui";
+import {
+  buttonStyle,
+  controlSize,
+  font,
+  frame,
+  padding,
+} from "@expo/ui/swift-ui/modifiers";
 import type { LiveActivityLayout } from "expo-widgets";
 import type { WorkoutLiveActivityProps } from "@/lib/live/liveActivity/workoutLiveActivity";
 
@@ -46,45 +52,98 @@ import type { WorkoutLiveActivityProps } from "@/lib/live/liveActivity/workoutLi
  *     the rest countdown;
  *   • wide content is pinned leading with a large `maxWidth` frame — the
  *     props cross the bridge as JSON, which has no `Infinity`.
+ *
+ * INTERACTIVITY (the Lock Screen steppers). When `props.weightLabel` is
+ * present the banner and the expanded bottom region also draw a control row —
+ * `−` / `+` steppers around the load and a `Log set` button while lifting
+ * (steppers only while resting, adjusting the next set). A press runs the
+ * extension's `LiveActivityUserInteraction` intent, which only emits
+ * `{ source, target }` to JS (`addUserInteractionListener` in
+ * `useLiveActivityControls.ts`); the app then edits the live grid or
+ * completes the set through the normal paths, and the next activity update
+ * redraws the number. Timed / bodyweight-only sets (no `weightLabel`) draw
+ * no controls.
  */
 export function WorkoutLiveActivityLayout(
   props: WorkoutLiveActivityProps,
 ): LiveActivityLayout {
   "widget";
   const resting = props.phase === "rest" && props.restEndsAtMs !== null;
+  // The − / + / Log set row, under the exercise block in the banner and the
+  // expanded bottom region. Only for weight-tracked sets (`weightLabel`
+  // present) — timed / bodyweight-only work shows no controls. While resting
+  // the countdown above keeps ticking and the steppers adjust the NEXT set's
+  // weight, so there is no Log button.
+  //
+  // `systemImage` on a Button is ignored without a `label` (the `@expo/ui`
+  // Button docs), so the icon-only steppers carry their glyph as a child
+  // `Image` instead and only the Log button uses `label` + `systemImage`.
+  const showControls = !!props.weightLabel;
+  const weightControls = showControls ? (
+    <HStack spacing={8} modifiers={[padding({ top: 10 })]}>
+      <Button
+        target="weight-down"
+        modifiers={[buttonStyle("bordered"), controlSize("small")]}
+      >
+        <Image systemName="minus" />
+      </Button>
+      <Text modifiers={[font({ size: 14, weight: "semibold" })]}>
+        {props.weightLabel}
+      </Text>
+      <Button
+        target="weight-up"
+        modifiers={[buttonStyle("bordered"), controlSize("small")]}
+      >
+        <Image systemName="plus" />
+      </Button>
+      <Spacer />
+      {resting ? null : (
+        <Button
+          target="log-set"
+          label="Log set"
+          systemImage="checkmark"
+          modifiers={[buttonStyle("bordered"), controlSize("small")]}
+        />
+      )}
+    </HStack>
+  ) : null;
 
   const banner = (
-    <HStack
-      spacing={12}
+    <VStack
+      alignment="leading"
+      spacing={0}
       modifiers={[
         padding({ horizontal: 16, vertical: 14 }),
         frame({ maxWidth: 10000, alignment: "leading" }),
       ]}
     >
-      <Image assetName="BecomeArrow" />
-      <VStack alignment="leading" spacing={2}>
-        <Text modifiers={[font({ size: 12, weight: "medium" })]}>
-          {props.workoutTitle}
-        </Text>
-        <Text modifiers={[font({ size: 18, weight: "semibold" })]}>
-          {props.exerciseName}
-        </Text>
-        <Text modifiers={[font({ size: 12 })]}>
-          {resting ? `${props.setLabel} · Resting` : props.setLabel}
-        </Text>
-      </VStack>
-      <Spacer />
-      {resting ? (
-        <Text
-          timerInterval={{
-            lower: new Date(),
-            upper: new Date(props.restEndsAtMs as number),
-          }}
-          countsDown
-          modifiers={[font({ size: 28, weight: "bold" })]}
-        />
-      ) : null}
-    </HStack>
+      <HStack spacing={12}>
+        <Image assetName="BecomeArrow" />
+        <VStack alignment="leading" spacing={2}>
+          <Text modifiers={[font({ size: 12, weight: "medium" })]}>
+            {props.workoutTitle}
+          </Text>
+          <Text modifiers={[font({ size: 18, weight: "semibold" })]}>
+            {props.exerciseName}
+          </Text>
+          <Text modifiers={[font({ size: 12 })]}>
+            {resting ? `${props.setLabel} · Resting` : props.setLabel}
+          </Text>
+        </VStack>
+        <Spacer />
+        {resting ? (
+          <Text
+            timerInterval={{
+              lower: new Date(),
+              upper: new Date(props.restEndsAtMs as number),
+            }}
+            countsDown
+            modifiers={[font({ size: 28, weight: "bold" })]}
+          />
+        ) : null}
+      </HStack>
+      {weightControls}
+    </VStack>
   );
 
   const compactLeading = (
@@ -158,6 +217,7 @@ export function WorkoutLiveActivityLayout(
       {resting ? (
         <Text modifiers={[font({ size: 12 })]}>Resting</Text>
       ) : null}
+      {weightControls}
     </VStack>
   );
 

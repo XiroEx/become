@@ -51,6 +51,14 @@ export interface WorkoutLiveActivityProps {
   restEndsAtMs: number | null;
   /** The rest's total length in seconds, for a progress read-out. Null when not resting. */
   restTotalSec: number | null;
+  /**
+   * The current set's load, e.g. `"135 lbs"` — drawn beside the Lock Screen
+   * − / + controls and adjusted by them. Omitted when the set has no load
+   * (timed / bodyweight-only work shows no controls). Always omitted, never
+   * null: ActivityKit refuses to persist a dictionary containing null (see
+   * PR #2159).
+   */
+  weightLabel?: string;
 }
 
 /** The name `createLiveActivity` registers under, and the one this module starts. */
