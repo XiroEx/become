@@ -213,7 +213,7 @@ describe("BecomeWidget — signed in", () => {
       caption: "Chapter 2 · Foundation · 1/10",
       state: "todo",
       progress: undefined,
-    });
+    }) as Extract<IosWidgetProps, { signedIn: true }>;
     expect(headlineUnit).toBeUndefined();
     expect(progress).toBeUndefined();
     expect("headlineUnit" in mindLike).toBe(false);
