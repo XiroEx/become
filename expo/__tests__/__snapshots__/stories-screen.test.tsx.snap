@@ -673,6 +673,12 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
           onResponderTerminate={[Function]}
           onResponderTerminationRequest={[Function]}
           onStartShouldSetResponder={[Function]}
+          style={
+            {
+              "height": 28,
+              "width": 48,
+            }
+          }
           testID="toggle-feature"
         >
           <View
