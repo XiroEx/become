@@ -18,7 +18,6 @@
  */
 import { useEffect } from "react";
 import { Platform } from "react-native";
-import { WORKOUT_LIVE_ACTIVITY_NAME } from "@/lib/live/liveActivity/workoutLiveActivity";
 
 /** The `target` identifiers the Lock Screen layout stamps on its buttons. */
 export const LIVE_ACTIVITY_WEIGHT_UP = "weight-up";
@@ -97,8 +96,9 @@ export function useLiveActivityControls(
         // `source` is the name passed to `createLiveActivity`; anything else
         // is another widget's button. An absent source is accepted — the
         // targets below are this activity's own.
-        const source = event?.source;
-        if (source && source !== WORKOUT_LIVE_ACTIVITY_NAME) return;
+        // Not filtered on `source`: what expo-widgets reports there for a
+        // Live Activity is its own naming, and a mismatch would drop every
+        // press silently. The three targets are unique to this activity.
         const target = event?.target;
         if (target === LIVE_ACTIVITY_WEIGHT_UP) {
           onAdjustWeight(weightStep);

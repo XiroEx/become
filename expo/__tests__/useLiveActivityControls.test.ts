@@ -85,15 +85,15 @@ describe("useLiveActivityControls", () => {
     expect(onAdjustWeight).toHaveBeenCalledWith(5);
   });
 
-  it("ignores another widget's buttons and unknown targets", () => {
+  it("ignores unknown targets", () => {
     const { subscribe, fire } = subscribable();
     const onAdjustWeight = jest.fn();
     const onLogSet = jest.fn();
     renderHook(() =>
       useLiveActivityControls({ ...baseOptions(), subscribe, onAdjustWeight, onLogSet }),
     );
-    fire({ source: "SomeOtherWidget", target: LIVE_ACTIVITY_WEIGHT_UP });
     fire({ source: WORKOUT_LIVE_ACTIVITY_NAME, target: "something-else" });
+    fire({ source: "SomeOtherWidget", target: "refresh" });
     expect(onAdjustWeight).not.toHaveBeenCalled();
     expect(onLogSet).not.toHaveBeenCalled();
   });
