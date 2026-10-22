@@ -36,7 +36,10 @@ jest.mock("expo-router", () => ({
 }));
 
 const REPO_ROOT = path.resolve(__dirname, "../..");
-const NOW_MS = Date.UTC(2026, 9, 1, 12, 0, 0);
+// Relative to the real clock: a fixed date here made FUTURE_DATE (and the fake
+// JWT's exp) slide into the past, and the "Manage billing" cases started failing
+// once 2026-10-21 went by.
+const NOW_MS = Date.now();
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FUTURE_DATE = new Date(NOW_MS + 20 * DAY_MS).toISOString();
 const PAST_DATE = new Date(NOW_MS - 20 * DAY_MS).toISOString();
