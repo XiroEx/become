@@ -194,8 +194,8 @@ describe("drawIosWidgets", () => {
     const nutrition = signedInProps(rec.pushed, "nutrition");
     expect(nutrition.url).toBe("become://dashboard/nutrition");
     expect(nutrition.rings).toEqual([
-      ["Cal", 1180, 0.59, "cal"],
-      ["Protein", 120, 0.75, "g"],
+      { label: "Cal", value: 1180, pct: 0.59, unit: "cal" },
+      { label: "Protein", value: 120, pct: 0.75, unit: "g" },
     ]);
 
     // Today's row now, the prompt at local midnight — never yesterday's
