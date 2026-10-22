@@ -341,6 +341,7 @@ test('(id: 9d6d293a) Existing unit tests pass and response contract is unchanged
       'completedWorkouts',
       'currentDay',
       'currentPhase',
+      'hasSchedule',
       'lastWorkoutDate',
       'programId',
       'programName',
