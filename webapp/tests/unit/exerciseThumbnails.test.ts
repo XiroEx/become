@@ -240,7 +240,7 @@ test('the upload route hooks a best-effort capture and clears on delete', () => 
   assert.match(UPLOAD_ROUTE, /refreshExerciseThumbnail\(slug\)\.catch\(/)
   assert.ok(!/await refreshExerciseThumbnail/.test(UPLOAD_ROUTE), 'the upload must not wait for the capture')
   // Deleting the video deletes the frame that described it.
-  assert.match(UPLOAD_ROUTE, /exercise\.thumbnailUrl = null/)
+  assert.match(UPLOAD_ROUTE, /exercise\.thumbnailUrl = undefined/)
   assert.match(UPLOAD_ROUTE, /getBlobStore\(\)\.delete\(exerciseThumbnailKey\(exercise\.slug, key\)\)/)
   assert.match(UPLOAD_ROUTE, /status: 'retired', thumbnailUrl: null/)
 })
