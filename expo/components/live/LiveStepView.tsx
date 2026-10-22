@@ -342,11 +342,10 @@ function LiveStepContent({
   // starts while hidden still shows — the rest overlay is drawn by
   // `LiveWorkoutClient`, outside this chrome. Reset on every step so a new
   // set never opens on a bare clip.
-  const [chromeHidden, setChromeHidden] = useState(false);
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- reset on step change (outside React)
-  useEffect(() => {
-    setChromeHidden(false);
-  }, [stepIndex]);
+  // Remembers the step the chrome was hidden on, so it comes back on its own
+  // the moment the step changes (no reset effect needed).
+  const [hiddenOnStep, setHiddenOnStep] = useState<number | null>(null);
+  const chromeHidden = hiddenOnStep === stepIndex;
 
   // THE RED PULSING DOT (the web's `animate-pulse` on the elapsed timer).
   // Plain `Animated`, not moti/Reanimated, so `lib/a11y/reducedMotion`'s
@@ -543,7 +542,7 @@ function LiveStepContent({
         testID={`${testID}-live-media`}
         accessibilityRole="button"
         accessibilityLabel="Show or hide workout controls"
-        onPress={() => setChromeHidden((hidden) => !hidden)}
+        onPress={() => setHiddenOnStep(chromeHidden ? null : stepIndex)}
         style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }}
       >
         <FramedVideo
