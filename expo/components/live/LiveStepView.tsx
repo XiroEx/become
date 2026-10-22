@@ -56,7 +56,7 @@ import {
   type BellChoices,
   type BellCount,
 } from "@/lib/live/bellCount";
-import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { ForcedThemeMode, useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { formatElapsed, overallProgressPercent } from "@/lib/live/liveProgress";
 import { hitSlopToMinTarget, minTouchTarget } from "@/lib/a11y/touchTarget";
 import { WRAPPABLE_TEXT } from "@/lib/a11y/dynamicType";
@@ -102,8 +102,6 @@ export const LIVE_PANEL_SPACING = {
   panelMaxHeight: "72%",
 } as const;
 
-/** How tall the fade from the clip into the panel is (the web's gradient). */
-const PANEL_SCRIM_HEIGHT = 64;
 /** How tall the fade behind the floating top bar is (the web's `from-black/60`). */
 const TOP_SCRIM_HEIGHT = 128;
 
@@ -273,11 +271,30 @@ export function lastSetLine(
  * is what left Live with a set-number column, a bordered card, a wrapping
  * pick grid and a second `Last:` line the web never shows.
  *
- * Colours are theme tokens, never the web's white-on-black literals: the web
- * live page is a dark page in both modes, native is not, so a light phone
- * reads this screen in light mode (NP-288 checked both).
+ * Colours are theme tokens read inside a pinned-dark subtree (the web's
+ * live page is a dark page in both modes), never the web's white-on-black
+ * literals — a light phone reads this screen in dark chrome, as on the web.
+ *
+ * THE LIVE VIEW, pinned to dark like the web.
+ *
+ * The web's live page is `fixed inset-0 bg-black` with white text in both
+ * modes, so everything inside the `${testID}-live` root renders under
+ * `ForcedThemeMode mode="dark"` — theme tokens inside resolve to dark (light
+ * text, dark scrims and pills) whatever the phone's mode is. `useThemeTokens`
+ * is therefore read inside the forced subtree, in `LiveStepContent` below.
+ * Track is untouched: `TrackWorkoutView` never mounts here.
  */
-export function LiveStepView({
+export function LiveStepView(props: LiveStepViewProps) {
+  return (
+    <View testID={`${props.testID}-live`} style={{ flex: 1 }}>
+      <ForcedThemeMode mode="dark">
+        <LiveStepContent {...props} />
+      </ForcedThemeMode>
+    </View>
+  );
+}
+
+function LiveStepContent({
   exercises,
   grid,
   workoutFlow,
@@ -320,6 +337,16 @@ export function LiveStepView({
   const step = workoutFlow[safeIndex];
   const exercise = step ? exercises[step.exerciseIndex] : undefined;
   const [inputsOpen, setInputsOpen] = useState(true);
+  // TAP-TO-HIDE (the web's `isFullscreen`): tapping the clip hides every
+  // overlay so only the video is left; tapping again shows them. A rest that
+  // starts while hidden still shows — the rest overlay is drawn by
+  // `LiveWorkoutClient`, outside this chrome. Reset on every step so a new
+  // set never opens on a bare clip.
+  const [chromeHidden, setChromeHidden] = useState(false);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- reset on step change (outside React)
+  useEffect(() => {
+    setChromeHidden(false);
+  }, [stepIndex]);
 
   // THE RED PULSING DOT (the web's `animate-pulse` on the elapsed timer).
   // Plain `Animated`, not moti/Reanimated, so `lib/a11y/reducedMotion`'s
@@ -352,7 +379,7 @@ export function LiveStepView({
 
   if (!step || !exercise) {
     return (
-      <View testID={`${testID}-live`} style={{ gap: 12 }}>
+      <View style={{ gap: 12 }}>
         <Text
           testID={`${testID}-live-empty`}
           className="text-muted-foreground text-sm"
@@ -501,18 +528,22 @@ export function LiveStepView({
   );
 
   return (
-    <View testID={`${testID}-live`} style={{ flex: 1 }}>
+    <>
       {/* THE CLIP, FULL-SCREEN (NP-381) — the web's `absolute inset-0`
           background, which is what the `live` video surface has always
           described itself as ("full-screen background, typically portrait on a
           phone", `lib/videoFraming.ts`). It used to be a 16:9 rounded card in
           the layout flow with everything else stacked under it, which is the
           "lot more spacing" Jon saw: the same screen, spread down the phone
-          instead of layered on one clip. Nothing on it is tappable, so touches
-          pass straight through to the chrome above. */}
-      <View
+          instead of layered on one clip. The clip is a full-screen Pressable
+          (the web's `onClick={handleVideoTap}`): tapping it toggles the
+          chrome above, unless the member is resting — the rest overlay is
+          drawn by `LiveWorkoutClient` and always wins. */}
+      <Pressable
         testID={`${testID}-live-media`}
-        pointerEvents="none"
+        accessibilityRole="button"
+        accessibilityLabel="Show or hide workout controls"
+        onPress={() => setChromeHidden((hidden) => !hidden)}
         style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }}
       >
         <FramedVideo
@@ -527,12 +558,15 @@ export function LiveStepView({
           videoTrim={exercise.videoTrim}
           testID={`${testID}-live-${exercise.slug}-video`}
         />
-      </View>
+      </Pressable>
 
+      {/* Tap-to-hide: while the chrome is hidden nothing is rendered over the
+          clip, so any tap lands back on the media Pressable above. */}
+      {chromeHidden ? null : (
+        <>
       {/* The web's `bg-linear-to-b from-black/60 to-transparent` behind the
-          floating top bar — a wash of the PAGE colour rather than the web's
-          literal black, so the exit button and the timer stay legible on a
-          light phone too (NP-288's rule). */}
+          floating top bar — a wash of the (dark-pinned) background, so the
+          exit button and the timer stay legible over the clip. */}
       <LinearGradient
         testID={`${testID}-live-top-scrim`}
         pointerEvents="none"
@@ -552,8 +586,7 @@ export function LiveStepView({
       {/* TOP BAR — the web's floating immersive chrome: exit / Track|Live /
           red-dot timer, `flex items-center justify-between px-4 py-3`. The
           exit button is the web's `h-9 w-9 rounded-full bg-white/10` —
-          drawn with a theme tint rather than the literal white, so a light
-          phone still reads this bar in light mode (NP-288). */}
+          drawn with a theme tint rather than the literal white. */}
       <View
         testID={`${testID}-live-topbar`}
         style={{
@@ -747,31 +780,33 @@ export function LiveStepView({
           pad must never cover the CTA. */}
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
+        pointerEvents="box-none"
         style={{ flex: 1 }}
       >
         {/* The clip, uncovered: this is the web's video area between the top
             chrome and the panel. It gives up its height first (flexShrink)
-            when the panel needs room. */}
+            when the panel needs room. `box-none` would do the same work, but
+            this spacer is already `none` — touches fall through to the media
+            Pressable beneath. */}
         <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 0 }} pointerEvents="none" />
 
-        {/* The web fades its panel into the clip (`bg-linear-to-t
-            from-black/80 via-black/40 to-transparent`). Native fades into the
-            PAGE colour instead and then goes solid under the text, because
-            this screen is light on a light phone (NP-288) and 4px type over a
-            moving clip is not readable in either mode. */}
+        {/* One gradient BEHIND the panel content — the web's `bg-linear-to-t
+            from-black/80 via-black/40 to-transparent`, read bottom-up:
+            transparent at the top, 0.4 of the (dark-pinned) background in
+            the middle, 0.8 at the bottom. It never reaches 1.0 anywhere, so
+            the clip always shows through; there is no opaque panel colour
+            and no BlurView. */}
         <LinearGradient
-          testID={`${testID}-live-panel-scrim`}
-          pointerEvents="none"
-          colors={[tint("background", 0), tint("background", 0.92)]}
-          style={{ height: PANEL_SCRIM_HEIGHT, marginBottom: -1 }}
-        />
-
-        <View
           testID={`${testID}-live-panel`}
+          colors={[
+            tint("background", 0),
+            tint("background", 0.4),
+            tint("background", 0.8),
+          ]}
+          locations={[0, 0.5, 1]}
           style={{
             flexShrink: 1,
             maxHeight: LIVE_PANEL_SPACING.panelMaxHeight,
-            backgroundColor: colors.background,
             // No SafeAreaView above this screen in Live (NP-365), so the
             // panel's own bottom padding carries the home-indicator inset on
             // top of its ordinary spacing.
@@ -1114,8 +1149,10 @@ export function LiveStepView({
               </Text>
             ) : null}
           </View>
-        </View>
+        </LinearGradient>
       </KeyboardAvoidingView>
-    </View>
+        </>
+      )}
+    </>
   );
 }

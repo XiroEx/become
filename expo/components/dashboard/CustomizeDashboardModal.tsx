@@ -6,7 +6,9 @@ import {
   Modal as RNModal,
   FlatList,
   ScrollView,
+  useWindowDimensions,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Text } from "@/components/Text";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { minTouchTarget, hitSlopToMinTarget } from "@/lib/a11y/touchTarget";
@@ -875,6 +877,20 @@ function useSafeAuth() {
   }
 }
 
+/**
+ * `useSafeAreaInsets` throws without a `SafeAreaProvider` above it in the
+ * tree; the real app always has one, but bare-mounted tests may not. Falling
+ * back to zero insets there keeps this a no-op in tests while fixing the
+ * real device (the same pattern as `BottomSheet`).
+ */
+function useSafeAreaInsetsOrZero() {
+  try {
+    return useSafeAreaInsets();
+  } catch {
+    return { top: 0, bottom: 0, left: 0, right: 0 };
+  }
+}
+
 export interface CustomizeDashboardModalProps {
   visible: boolean;
   layout: DashboardTile[];
@@ -898,6 +914,14 @@ function CustomizerBody({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const counter = useRef(0);
+
+  // Fixed at 90% of the window height, like every `BottomSheet` drawer.
+  const insets = useSafeAreaInsetsOrZero();
+  const { height: windowHeight } = useWindowDimensions();
+  const sheetHeight = Math.min(
+    Math.round(windowHeight * 0.9),
+    windowHeight - insets.top - 24,
+  );
 
   const canSave = rows.length >= 1 && rows.length <= MAX_TILES && !saving;
 
@@ -1143,8 +1167,8 @@ function CustomizerBody({
         onAccessibilityEscape={onClose}
         onPress={() => {}}
         style={{
-          maxHeight: "90%",
-          height: "85%",
+          height: sheetHeight,
+          maxHeight: sheetHeight,
           backgroundColor: colors.background,
           borderTopLeftRadius: 24,
           borderTopRightRadius: 24,

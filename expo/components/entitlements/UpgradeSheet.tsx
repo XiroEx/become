@@ -419,7 +419,6 @@ export function UpgradeSheet({
       onClose={onClose}
       testID="upgrade-sheet"
       accessibilityLabel={`Upgrade to ${tierName}`}
-      sheetStyle={{ maxHeight: "90%" }}
     >
       <ScrollView contentContainerStyle={{ paddingBottom: 8 }}>
         <View className="flex-row items-center gap-2">
