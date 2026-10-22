@@ -26,30 +26,55 @@
  * `useRestTimer`, carried in unchanged — the same instant the in-app
  * countdown uses.
  */
-import { HStack, Spacer, Text, VStack } from "@expo/ui/swift-ui";
-import { font } from "@expo/ui/swift-ui/modifiers";
+import { HStack, Image, Spacer, Text, VStack } from "@expo/ui/swift-ui";
+import { font, frame, padding } from "@expo/ui/swift-ui/modifiers";
 import type { LiveActivityLayout } from "expo-widgets";
 import type { WorkoutLiveActivityProps } from "@/lib/live/liveActivity/workoutLiveActivity";
 
+/**
+ * Device review, 2026-10-22 (George's iPhone 15 Pro): the banner sat flush to
+ * its top and bottom edges with an empty band on the left, the long-press
+ * (expanded) island squeezed the workout title into a three-line column and
+ * said "Set 1 of 1" twice, and the minimal island was a 🏋️ emoji. So:
+ *
+ *   • every region is padded (the banner 16 × 14, the expanded regions 6 – 10);
+ *   • the Become arrow (`BecomeArrow`, a template image in the widget
+ *     extension's asset catalog — `plugins/withWidgetAssets.js`) is the badge
+ *     on the banner and in the compact, minimal and expanded islands;
+ *   • the expanded island puts the words in the WIDE bottom region, one copy
+ *     of each, and keeps the narrow leading/trailing slots for the mark and
+ *     the rest countdown;
+ *   • wide content is pinned leading with a large `maxWidth` frame — the
+ *     props cross the bridge as JSON, which has no `Infinity`.
+ */
 export function WorkoutLiveActivityLayout(
   props: WorkoutLiveActivityProps,
 ): LiveActivityLayout {
   "widget";
   const resting = props.phase === "rest" && props.restEndsAtMs !== null;
 
-  const banner = resting ? (
-    <VStack alignment="leading" spacing={4}>
-      <Text modifiers={[font({ size: 12, weight: "medium" })]}>
-        {props.workoutTitle}
-      </Text>
-      <HStack spacing={8}>
-        <VStack alignment="leading" spacing={2}>
-          <Text modifiers={[font({ size: 18, weight: "semibold" })]}>
-            {props.exerciseName}
-          </Text>
-          <Text modifiers={[font({ size: 12 })]}>{props.setLabel}</Text>
-        </VStack>
-        <Spacer />
+  const banner = (
+    <HStack
+      spacing={12}
+      modifiers={[
+        padding({ horizontal: 16, vertical: 14 }),
+        frame({ maxWidth: 10000, alignment: "leading" }),
+      ]}
+    >
+      <Image assetName="BecomeArrow" />
+      <VStack alignment="leading" spacing={2}>
+        <Text modifiers={[font({ size: 12, weight: "medium" })]}>
+          {props.workoutTitle}
+        </Text>
+        <Text modifiers={[font({ size: 18, weight: "semibold" })]}>
+          {props.exerciseName}
+        </Text>
+        <Text modifiers={[font({ size: 12 })]}>
+          {resting ? `${props.setLabel} · Resting` : props.setLabel}
+        </Text>
+      </VStack>
+      <Spacer />
+      {resting ? (
         <Text
           timerInterval={{
             lower: new Date(),
@@ -58,25 +83,12 @@ export function WorkoutLiveActivityLayout(
           countsDown
           modifiers={[font({ size: 28, weight: "bold" })]}
         />
-      </HStack>
-      <Text modifiers={[font({ size: 11, weight: "medium" })]}>Resting</Text>
-    </VStack>
-  ) : (
-    <VStack alignment="leading" spacing={4}>
-      <Text modifiers={[font({ size: 12, weight: "medium" })]}>
-        {props.workoutTitle}
-      </Text>
-      <Text modifiers={[font({ size: 18, weight: "semibold" })]}>
-        {props.exerciseName}
-      </Text>
-      <Text modifiers={[font({ size: 12 })]}>{props.setLabel}</Text>
-    </VStack>
+      ) : null}
+    </HStack>
   );
 
   const compactLeading = (
-    <Text modifiers={[font({ size: 13, weight: "semibold" })]}>
-      {props.exerciseName}
-    </Text>
+    <Image assetName="BecomeArrow" modifiers={[padding({ leading: 4 })]} />
   );
 
   const compactTrailing = resting ? (
@@ -86,10 +98,12 @@ export function WorkoutLiveActivityLayout(
         upper: new Date(props.restEndsAtMs as number),
       }}
       countsDown
-      modifiers={[font({ size: 13, weight: "semibold" })]}
+      modifiers={[font({ size: 13, weight: "semibold" }), padding({ trailing: 4 })]}
     />
   ) : (
-    <Text modifiers={[font({ size: 13 })]}>{props.setLabel}</Text>
+    <Text modifiers={[font({ size: 13 }), padding({ trailing: 4 })]}>
+      {props.setLabel}
+    </Text>
   );
 
   const minimal = resting ? (
@@ -102,20 +116,11 @@ export function WorkoutLiveActivityLayout(
       modifiers={[font({ size: 11, weight: "semibold" })]}
     />
   ) : (
-    <Text modifiers={[font({ size: 11, weight: "semibold" })]}>
-      {"🏋️"}
-    </Text>
+    <Image assetName="BecomeArrow" />
   );
 
   const expandedLeading = (
-    <VStack alignment="leading" spacing={2}>
-      <Text modifiers={[font({ size: 12, weight: "medium" })]}>
-        {props.workoutTitle}
-      </Text>
-      <Text modifiers={[font({ size: 16, weight: "semibold" })]}>
-        {props.exerciseName}
-      </Text>
-    </VStack>
+    <Image assetName="BecomeArrow" modifiers={[padding({ leading: 10, top: 6 })]} />
   );
 
   const expandedTrailing = resting ? (
@@ -125,18 +130,35 @@ export function WorkoutLiveActivityLayout(
         upper: new Date(props.restEndsAtMs as number),
       }}
       countsDown
-      modifiers={[font({ size: 20, weight: "bold" })]}
+      modifiers={[font({ size: 22, weight: "bold" }), padding({ trailing: 10, top: 6 })]}
     />
   ) : (
-    <Text modifiers={[font({ size: 14, weight: "semibold" })]}>
+    <Text
+      modifiers={[font({ size: 14, weight: "semibold" }), padding({ trailing: 10, top: 6 })]}
+    >
       {props.setLabel}
     </Text>
   );
 
   const expandedBottom = (
-    <Text modifiers={[font({ size: 12 })]}>
-      {resting ? "Resting" : props.setLabel}
-    </Text>
+    <VStack
+      alignment="leading"
+      spacing={2}
+      modifiers={[
+        padding({ horizontal: 10, bottom: 8 }),
+        frame({ maxWidth: 10000, alignment: "leading" }),
+      ]}
+    >
+      <Text modifiers={[font({ size: 12, weight: "medium" })]}>
+        {props.workoutTitle}
+      </Text>
+      <Text modifiers={[font({ size: 18, weight: "semibold" })]}>
+        {props.exerciseName}
+      </Text>
+      {resting ? (
+        <Text modifiers={[font({ size: 12 })]}>Resting</Text>
+      ) : null}
+    </VStack>
   );
 
   return {
