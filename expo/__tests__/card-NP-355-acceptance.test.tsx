@@ -75,9 +75,11 @@ describe("NP-355: Workout tab spacing, typography & layout parity", () => {
         src.indexOf("{/* Quick Links Hub"),
       );
       expect(headerSection).toContain('testID="workout-open-history"');
-      expect(headerSection).toContain('testID="programming-open-search"');
-      expect(headerSection).toContain('testID="programming-open-saved"');
       expect(headerSection).toContain('testID="programming-open-calendar"');
+      // Search and Saved (favorite) icons are hidden from the Workout tab
+      // header for now.
+      expect(headerSection).not.toContain('testID="programming-open-search"');
+      expect(headerSection).not.toContain('testID="programming-open-saved"');
 
       // Verify Quick Links section has Workouts, Programs, Generate and NOT History
       const quickLinksSection = src.slice(

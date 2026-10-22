@@ -1185,10 +1185,16 @@ export default function CalendarIndexRoute() {
         date={workoutNowDate ?? undefined}
         testID="calendar-workout-now-sheet"
       />
-      {/* Quick-session Manage sheet (NP-115): move / skip / delete. */}
+      {/* Quick-session Manage sheet (NP-115): move / skip / delete.
+          Hidden (not just covered) while the delete confirm gate is up —
+          two native <Modal>s visible at once is what made "Delete Session"
+          look dead: iOS can fail to present the second modal over an
+          already-presented one, so the confirm below never actually showed
+          and the tap appeared to do nothing. The sheet's data (`quickMenu`)
+          stays put so cancelling the confirm brings it right back. */}
       <QuickSessionMenu
         key={quickMenu?.sessionId ?? "no-quick"}
-        visible={quickMenu !== null}
+        visible={quickMenu !== null && confirmKind !== "quick-delete"}
         session={quickMenu}
         pending={quickPending}
         datePickerOpen={quickDateOpen}
