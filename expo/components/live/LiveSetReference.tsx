@@ -139,7 +139,7 @@ export function LiveSetReference({
       {last ? (
         <Text
           testID={`${tid}-last`}
-          className="text-muted-foreground text-sm"
+          className="text-foreground/60 text-sm"
         >{`Last: ${last}`}</Text>
       ) : null}
       {prLine ? (

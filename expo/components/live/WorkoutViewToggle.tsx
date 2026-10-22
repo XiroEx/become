@@ -76,7 +76,12 @@ export function WorkoutViewToggle({
               ? translucent
                 ? "text-background"
                 : "text-primary-foreground"
-              : "text-muted-foreground"
+              : translucent
+                ? // The web's inactive segment is dim on the floating pill
+                  // (`text-white/60`); the solid Track header keeps the
+                  // muted token.
+                  "text-foreground/60"
+                : "text-muted-foreground"
           }`}
         >
           {label}

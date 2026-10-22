@@ -129,9 +129,11 @@ export interface LiveStepInputsProps {
  * column and its own `Last:` line) and Live rendering it is what made the two
  * apps' live screens look nothing alike. Track still uses it, unchanged.
  *
- * Colours stay theme tokens — the web live page is black in both modes, native
- * is not (NP-288's rule) — so this is the web's LAYOUT and COPY on the native
- * palette.
+ * Colours are the web's own translucent washes on the scoped dark palette —
+ * `bg-foreground/10` with `text-foreground/70` chips, `text-foreground/60`
+ * labels, the `live` Input well — because Live is dark-pinned with
+ * `scopeClassColors`, where the foreground token is near-white (NP-288's
+ * no-literal-white rule still holds for this file).
  */
 export function LiveStepInputs({
   setIndex,
@@ -203,10 +205,13 @@ export function LiveStepInputs({
 
   const label = (id: string, text: string, trailing?: React.ReactNode) => (
     <View testID={`${tid}-${id}-label-row`} style={LIVE_LABEL_ROW}>
+      {/* The web's `text-white/60`: the foreground at 0.6, via the scoped
+          dark palette — `text-muted-foreground` would read light-mode grey
+          on a light phone without the pin. */}
       <Text
         testID={`${tid}-${id}-label`}
         style={WRAPPABLE_TEXT}
-        className="text-muted-foreground text-xs"
+        className="text-foreground/60 text-xs"
       >
         {text}
       </Text>
@@ -237,7 +242,7 @@ export function LiveStepInputs({
             )}
             <Input
               testID={`${tid}-weight`}
-              variant="prominent"
+              variant="live"
               style={CENTERED}
               accessibilityLabel={weightLabel}
               keyboardType="decimal-pad"
@@ -248,7 +253,7 @@ export function LiveStepInputs({
             {total ? (
               <Text
                 testID={`${tid}-helper`}
-                className="text-muted-foreground text-[10px] text-center mt-1"
+                className="text-foreground/60 text-[10px] text-center mt-1"
               >
                 {total}
               </Text>
@@ -261,7 +266,7 @@ export function LiveStepInputs({
             {label("reps", "Reps")}
             <Input
               testID={`${tid}-reps`}
-              variant="prominent"
+              variant="live"
               style={CENTERED}
               accessibilityLabel="Reps"
               keyboardType="number-pad"
@@ -294,16 +299,16 @@ export function LiveStepInputs({
                   })
                 }
                 hitSlop={hitSlopToMinTarget(32, 18)}
-                className="rounded-full bg-muted px-2 py-0.5"
+                className="rounded-full bg-foreground/10 px-2 py-0.5"
               >
-                <Text className="text-muted-foreground text-[10px] font-semibold">
+                <Text className="text-foreground/70 text-[10px] font-semibold">
                   {durationUnit === "sec" ? "min" : "sec"}
                 </Text>
               </Pressable>,
             )}
             <Input
               testID={`${tid}-duration`}
-              variant="prominent"
+              variant="live"
               style={CENTERED}
               accessibilityLabel={`Time (${durationUnit})`}
               keyboardType="decimal-pad"
@@ -329,7 +334,7 @@ export function LiveStepInputs({
             {label("distance", distanceLabel)}
             <Input
               testID={`${tid}-distance`}
-              variant="prominent"
+              variant="live"
               style={CENTERED}
               accessibilityLabel={distanceLabel}
               keyboardType="decimal-pad"
@@ -351,7 +356,7 @@ export function LiveStepInputs({
             {label("speed", "Speed (mph)")}
             <Input
               testID={`${tid}-speed`}
-              variant="prominent"
+              variant="live"
               style={CENTERED}
               accessibilityLabel="Speed (mph)"
               keyboardType="decimal-pad"
@@ -370,7 +375,7 @@ export function LiveStepInputs({
       {intervalHint ? (
         <Text
           testID={`${tid}-interval-hint`}
-          className="text-muted-foreground text-[10px] text-center"
+          className="text-foreground/60 text-[10px] text-center"
         >
           Log time or just tap Done to move on
         </Text>
@@ -395,9 +400,9 @@ export function LiveStepInputs({
               accessibilityLabel={quickPickLabel(pick, weightUnit)}
               onPress={() => onChange({ ...state, weight: pick })}
               hitSlop={hitSlopToMinTarget(56, 34)}
-              className="rounded-full bg-muted px-4 py-2"
+              className="rounded-full bg-foreground/10 px-4 py-2"
             >
-              <Text className="text-foreground text-sm font-medium">
+              <Text className="text-foreground/70 text-sm font-medium">
                 {String(pick)}
               </Text>
             </Pressable>
