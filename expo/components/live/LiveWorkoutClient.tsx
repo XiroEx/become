@@ -26,6 +26,10 @@ import type { VideoFramingOverride } from "@/lib/videoFraming";
 import type { VideoTrimOverride } from "@/lib/videoTrim";
 import { useRestTimer } from "@/lib/live/useRestTimer";
 import { useWorkoutLiveActivity } from "@/lib/live/liveActivity/useWorkoutLiveActivity";
+import {
+  exerciseFrameUri,
+  prefetchExerciseFrame,
+} from "@/lib/live/liveActivity/exerciseFrameCache";
 import { useLiveActivityControls } from "@/lib/live/liveActivity/useLiveActivityControls";
 import { useWorkoutNotification } from "@/lib/live/liveActivity/useWorkoutNotification";
 import {
@@ -1305,6 +1309,35 @@ export function LiveWorkoutClient({
     ? (activityRow?.weight ?? startingWeightFor(activityExercise, activitySetIndex))
     : null;
   const activityWeightStep = weightUnit === "kg" ? 2.5 : 5;
+  // THE EXERCISE STILL FRAME (the Live Activity tile). The extension cannot
+  // play video, so it draws this cached `file://` still when one is ready —
+  // else the Become arrow tile. Resolved from the current exercise's
+  // `thumbnailUrl` (hydrated onto the view model, no new network call per
+  // set); the next exercise is prefetched so its tile is usually warm on
+  // advance. The cached file lives outside React (App Group container) and
+  // resolves async, so the URI arrives in an effect.
+  const activityThumbnail = activityExercise?.thumbnailUrl ?? null;
+  const activityNextThumbnail =
+    workout.exercises[activityExerciseIndex + 1]?.thumbnailUrl ?? null;
+  const [activityFrameUri, setActivityFrameUri] = useState<
+    string | undefined
+  >(undefined);
+  useEffect(() => {
+    if (!activityThumbnail) return;
+    let alive = true;
+    void exerciseFrameUri(activityThumbnail).then((uri) => {
+      if (!alive) return;
+      /* eslint-disable-next-line react-hooks/set-state-in-effect -- the cached
+         still lives outside React (App Group file) and resolves async. */
+      setActivityFrameUri(uri);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [activityThumbnail]);
+  useEffect(() => {
+    if (activityNextThumbnail) prefetchExerciseFrame(activityNextThumbnail);
+  }, [activityNextThumbnail]);
   // The typing path, not the logging path: adjusting the weight must not
   // self-tick the set, start a rest or save — exactly what typing does.
   const adjustActivityWeight = useCallback(
@@ -1392,6 +1425,8 @@ export function LiveWorkoutClient({
     ...(activityWeight !== null
       ? { weightLabel: loadLabel(activityWeight, weightUnit) }
       : {}),
+    // Omitted, never null — ActivityKit refuses a dictionary with null.
+    ...(activityFrameUri !== undefined ? { imageUri: activityFrameUri } : {}),
     ...(workoutLiveActivityHandle !== undefined
       ? { handle: workoutLiveActivityHandle }
       : {}),

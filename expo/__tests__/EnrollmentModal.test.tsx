@@ -100,4 +100,31 @@ describe("EnrollmentModal", () => {
     fireEvent.press(getByTestId("enroll-modal-confirm"));
     expect(onConfirm).not.toHaveBeenCalled();
   });
+
+  it("renders the enrol refusal when error is set, and nothing when it is not", () => {
+    const onConfirm = jest.fn();
+    const onClose = jest.fn();
+
+    const { getByTestId, queryByTestId, rerender } = render(
+      <EnrollmentModal
+        visible={true}
+        initialDate="2026-10-05"
+        onConfirm={onConfirm}
+        onClose={onClose}
+        error="Enrollment failed"
+      />,
+    );
+    expect(getByTestId("enroll-modal-error")).toBeTruthy();
+
+    rerender(
+      <EnrollmentModal
+        visible={true}
+        initialDate="2026-10-05"
+        onConfirm={onConfirm}
+        onClose={onClose}
+        error={null}
+      />,
+    );
+    expect(queryByTestId("enroll-modal-error")).toBeNull();
+  });
 });

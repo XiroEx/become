@@ -179,7 +179,19 @@ describe("ScheduleSetupRoute", () => {
         return Promise.resolve(PROGRAM_FIXTURE);
       }
       if (path === "/api/programs/active") {
-        return Promise.resolve({ activePrograms: [] });
+        return Promise.resolve({
+          activePrograms: [
+            {
+              programId: "prog-1",
+              programName: "Strength Foundations",
+              startDate: "2026-10-05T00:00:00.000Z",
+              status: "in-progress",
+              // VIEW mode only renders when the active entry confirms a
+              // schedule exists — a stale/absent entry means SETUP.
+              hasSchedule: true,
+            },
+          ],
+        });
       }
       if (path.includes("/api/schedule") && method === "GET") {
         return Promise.resolve({

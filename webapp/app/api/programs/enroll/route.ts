@@ -64,8 +64,40 @@ export async function POST(request: NextRequest) {
 
     if (existingProgress) {
       const activeProgram = existingProgress.activePrograms?.find(
-        (p: { programId: string }) => p.programId === programId
+        (p: { programId: string; status?: string }) => p.programId === programId
       )
+      // Re-enrolling in a COMPLETED program restarts it in place: same entry,
+      // fresh counters, the member's exercise swaps kept, history untouched
+      // (the old Schedule doc and workout logs stay — /api/programs/active
+      // only counts logs on/after the enrolment's startDate).
+      if (activeProgram && activeProgram.status === 'completed') {
+        await UserProgress.updateOne(
+          { userId: payload.userId, 'activePrograms.programId': programId },
+          {
+            $set: {
+              'activePrograms.$.startDate': programStartDate,
+              'activePrograms.$.currentPhase': 1,
+              'activePrograms.$.currentDay': 'Day 1',
+              'activePrograms.$.completedWorkouts': 0,
+              'activePrograms.$.totalWorkouts': totalWorkouts,
+              'activePrograms.$.status': 'in-progress',
+              'activePrograms.$.hasSchedule': false,
+            },
+            $unset: { 'activePrograms.$.lastWorkoutDate': 1 },
+          }
+        )
+        const refreshed = await UserProgress.findOne({
+          userId: payload.userId,
+          'activePrograms.programId': programId,
+        }).lean()
+        const restarted = refreshed?.activePrograms?.find(
+          (p: { programId: string }) => p.programId === programId
+        )
+        return NextResponse.json({
+          message: 'Successfully enrolled in program',
+          activeProgram: restarted
+        })
+      }
       return NextResponse.json({ 
         message: 'Already enrolled in this program',
         alreadyEnrolled: true,

@@ -1,0 +1,185 @@
+name: Exercise thumbnails
+
+# THE schedule that puts a real frame on every demo clip. There is exactly
+# one, and this is it.
+#
+# Prod today: ~90 exercises hold a demo video and EVERY stored `thumbnailUrl`
+# is the app-icon placeholder `/icons/icon-192.png`. `webapp/lib/
+# exerciseThumbnails.ts` extracts one frame per clip (at its trim in-point)
+# and writes it onto Exercise AND ExerciseVideo;
+# `webapp/app/api/cron/exercise-thumbnails` is the door, and this is what
+# calls it. The admin upload route also hooks a best-effort capture on every
+# upload — this is the backfill for everything that hook misses, plus every
+# clip that predates it.
+#
+# WHY HERE, AND WHY ONLY HERE
+#
+# Production (become.redbtn.io, `main`) and beta (become-beta.redbtn.io,
+# `beta`) are two RedRun workspaces over ONE MongoDB, and the thumbnails are
+# fields on rows in that database. A second schedule on beta would therefore
+# be a second runner over the same rows — each capture is an ffmpeg run plus
+# two downloads and an upload, so a duplicate runner is duplicate work, not
+# merely noise. So this names the PRODUCTION host explicitly, and it is the
+# only schedule in the repo that calls this endpoint. If a RedRun workspace
+# schedule is ever added for it, DELETE THIS FILE in the same change.
+#
+# GitHub only runs `schedule:` from the repository's DEFAULT branch, which is
+# a second, structural reason this cannot end up running twice: a copy of this
+# file on `beta` is inert until it reaches `main`. So the schedule starts when
+# this merges to `main`, not when it merges to `beta` — and GitHub disables
+# scheduled workflows in a repository with 60 days of no activity, so a
+# long-quiet repo needs the schedule re-enabled by hand.
+#
+# CADENCE: daily, which is deliberately cheap rather than a latency promise.
+# One run takes a bounded batch (the bound lives in
+# `webapp/lib/exerciseThumbnails.ts`, not here), and each capture is seconds
+# of ffmpeg plus storage round-trips. A run with nothing left to do writes
+# nothing at all, so most days are free.
+#
+# The minute is deliberately not :00. GitHub queues every cron in the world
+# at the top of the hour and the delay there is routinely tens of minutes —
+# and not shared with the catalog sync (23 5), the purge (40 4), the resweep
+# (17 */6) or the food queue (23 5,17).
+
+on:
+  schedule:
+    - cron: '37 6 * * *'
+  workflow_dispatch:
+    inputs:
+      dryRun:
+        description: 'Plan the batch and write nothing'
+        type: boolean
+        default: false
+      limit:
+        description: 'Captures to take this run (smaller only; the route caps it)'
+        type: string
+        default: ''
+
+# Never two at once. Captures are keyed deterministically beside their clip,
+# so an overlap would be safe rather than harmful — but two runners would
+# still each take a batch, and the budget is the thing this job is careful
+# with.
+concurrency:
+  group: exercise-thumbnails
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Call the production thumbnail capture
+        env:
+          # Same value as redsecrets `admin.cronSecret` (the CRON_SECRET the
+          # notify cron uses), already provisioned as the repository secret
+          # BECOME_CRON_SECRET for the other schedules. No new credential.
+          CRON_SECRET: ${{ secrets.BECOME_CRON_SECRET }}
+          # Interpolated into env, never into the shell line — an input is
+          # attacker-controllable text and must not be pasted into `run:`.
+          DRY_RUN: ${{ inputs.dryRun }}
+          LIMIT: ${{ inputs.limit }}
+          BASE_URL: https://become.redbtn.io
+        run: |
+          set -euo pipefail
+
+          if [ -z "${CRON_SECRET}" ]; then
+            echo "::error::BECOME_CRON_SECRET is missing — the capture cannot authenticate"
+            exit 1
+          fi
+
+          QUERY=""
+          if [ "${DRY_RUN}" = "true" ]; then
+            QUERY="?dryRun=1"
+          fi
+          # Digits only: anything else is dropped rather than forwarded.
+          if [ -n "${LIMIT}" ] && printf '%s' "${LIMIT}" | grep -Eq '^[0-9]+$'; then
+            if [ -z "${QUERY}" ]; then QUERY="?limit=${LIMIT}"; else QUERY="${QUERY}&limit=${LIMIT}"; fi
+          fi
+
+          URL="${BASE_URL}/api/cron/exercise-thumbnails${QUERY}"
+
+          # Generous timeout: the run stops CLAIMING at its own deadline but
+          # still awaits the captures already in flight, and each of those is
+          # a download plus an ffmpeg run plus an upload.
+          # The secret travels in a header, so it is never in a URL that could
+          # end up in an access log.
+          code=$(curl -sS --max-time 600 \
+            -o response.json -w '%{http_code}' \
+            -X POST "${URL}" \
+            -H "x-cron-secret: ${CRON_SECRET}")
+
+          echo "HTTP ${code}"
+          cat response.json || true
+          echo
+
+          if [ "${code}" != "200" ]; then
+            echo "::error::exercise-thumbnails endpoint answered HTTP ${code}"
+            exit 1
+          fi
+
+      - name: Report what it captured
+        if: always()
+        run: |
+          set -euo pipefail
+
+          if [ ! -s response.json ]; then
+            {
+              echo "### Exercise thumbnails"
+              echo
+              echo "No response body — the call failed before the endpoint answered."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          {
+            echo "### Exercise thumbnails"
+            echo
+
+            ran_at=$(jq -r '.ranAt // "unknown"' response.json)
+            applied=$(jq -r '.apply // false' response.json)
+            candidates=$(jq -r '.candidates // 0' response.json)
+            selected=$(jq -r '.selected // 0' response.json)
+            wrote=$(jq -r '.wroteCount // 0' response.json)
+            settled=$(jq -r '.settled // false' response.json)
+
+            echo "| ran at | applied | needing one | captured | records changed | settled |"
+            echo "|---|---|---|---|---|---|"
+            echo "| ${ran_at} | ${applied} | ${candidates} | ${selected} | ${wrote} | ${settled} |"
+            echo
+
+            if [ "$(jq -r '.candidates // 0' response.json)" = "0" ]; then
+              echo "Every real demo clip already has a thumbnail. That is the healthy state."
+            else
+              echo "Exercises written:"
+              echo
+              jq -r '(.wrote.exercises // [])[] | "- `\(.)`"' response.json
+              echo
+              echo "Video rows updated:"
+              echo
+              jq -r '(.wrote.videos // [])[] | "- \(.)"' response.json
+            fi
+
+            if [ "$(jq -r '(.failed // []) | length' response.json)" != "0" ]; then
+              echo
+              echo "Failed (retried on the next run):"
+              echo
+              jq -r '(.failed // [])[] | "- \(.)"' response.json
+            fi
+
+            if [ "$(jq -r '.deadlineHit // false' response.json)" = "true" ]; then
+              echo
+              echo "The run hit its deadline with work still queued — the next run takes the rest."
+            fi
+
+            # A bounded batch is the design, not a half-applied catalog: the
+            # backlog drains over days and every scheduled run takes the next
+            # twenty. So an apply that leaves work outstanding is reported,
+            # never failed — the only failure here is the endpoint not
+            # answering 200, handled above.
+            remaining=$(jq -r '((.candidates // 0) - ((.wrote.exercises // []) | length))' response.json)
+            if [ "${remaining}" != "0" ]; then
+              echo
+              echo "${remaining} clip(s) still need a thumbnail — the next run takes them."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

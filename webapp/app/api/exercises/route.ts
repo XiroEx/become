@@ -3,8 +3,10 @@ import { verifyAuth } from '@/lib/auth';
 import { requireAdmin } from '@/lib/adminAuth';
 import connectDB from '@/lib/mongodb';
 import Exercise from '@/models/Exercise';
+import Program from '@/models/Program';
 import { invalidateExerciseCache } from '@/lib/hydrateExercises';
 import { visibleExerciseFilter } from '@/lib/exerciseVisibility';
+import { compareNoVideoByUsage, countExerciseProgramUsage } from '@/lib/exerciseProgramUsage';
 import { escapeRegExp, findDuplicateSlugs, isBrokenExercise, isMissingVideo, matchesAuditSearch, type AuditableExercise } from '@/lib/exerciseAudit';
 import { withoutStockDemoVideo } from '@/lib/exerciseDemoVideo';
 import { expandQueryVariants } from '@/lib/exerciseAbbreviations';
@@ -67,8 +69,29 @@ export async function GET(request: NextRequest) {
           if (movement && !(e.movementPatterns ?? []).includes(movement)) return false;
           if (bodyRegion && e.bodyRegion !== bodyRegion) return false;
           return true;
-        })
-        .sort((a, b) => a.name.localeCompare(b.name));
+        });
+
+      // The No Video tab is the queue of clips waiting to be recorded, so it
+      // sorts most-used first: every program naming an exercise renders that
+      // workout without footage until its demo exists. `programCount` travels
+      // on each row so the portal can show it.
+      if (issue === 'noVideo') {
+        const programs = await Program.find({}, { phases: 1, _id: 0 }).lean();
+        const usage = countExerciseProgramUsage(programs);
+        flagged.sort(compareNoVideoByUsage(usage));
+        const total = flagged.length;
+        const skip = (page - 1) * limit;
+        const exercises = flagged.slice(skip, skip + limit);
+
+        return NextResponse.json({
+          exercises: exercises.map((e) => ({ ...withoutStockDemoVideo(e), programCount: usage.get(e.slug) ?? 0 })),
+          total,
+          page,
+          pages: Math.max(1, Math.ceil(total / limit)),
+        });
+      }
+
+      flagged.sort((a, b) => a.name.localeCompare(b.name));
 
       const total = flagged.length;
       const skip = (page - 1) * limit;
