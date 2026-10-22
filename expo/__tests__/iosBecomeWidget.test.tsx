@@ -21,7 +21,8 @@
  *
  *   • the server's strings are drawn verbatim — no re-wording, no re-derived
  *     state;
- *   • the bar appears exactly when `progress` is not null;
+ *   • the bar appears exactly when `progress` is present (an absent key draws
+ *     no bar — never a null, which the bridge cannot decode);
  *   • signed out is the prompt and the sign-in url — never a number, because
  *     a number on a signed-out tile is another member's day.
  */
@@ -134,7 +135,7 @@ function rendered(
 }
 
 function signedInProps(over: Partial<IosWidgetProps> = {}): IosWidgetProps {
-  return {
+  const props = {
     signedIn: true,
     title: "Streak",
     headline: "12",
@@ -146,6 +147,13 @@ function signedInProps(over: Partial<IosWidgetProps> = {}): IosWidgetProps {
     url: "become://dashboard/streaks",
     ...over,
   } as IosWidgetProps;
+  // An explicitly-undefined override is an omitted key, the way the timeline
+  // builder sends a row with no unit or no bar — never a null over the bridge.
+  if (props.signedIn === true) {
+    if (props.headlineUnit === undefined) delete props.headlineUnit;
+    if (props.progress === undefined) delete props.progress;
+  }
+  return props;
 }
 
 function nutritionProps(): IosWidgetProps {
@@ -157,10 +165,10 @@ function nutritionProps(): IosWidgetProps {
     state: "todo",
     progress: 0.59,
     rings: [
-      ["Cal", 1180, 0.59, "cal"],
-      ["Protein", 120, 0.75, "g"],
-      ["Carbs", 180, 0.75, "g"],
-      ["Fat", 40, 0.67, "g"],
+      { label: "Cal", value: 1180, unit: "cal", pct: 0.59 },
+      { label: "Protein", value: 120, unit: "g", pct: 0.75 },
+      { label: "Carbs", value: 180, unit: "g", pct: 0.75 },
+      { label: "Fat", value: 40, unit: "g", pct: 0.67 },
     ],
     url: "become://dashboard/nutrition",
   });
@@ -184,15 +192,38 @@ describe("BecomeWidget — signed in", () => {
     expect(found).toContain("2 days to 14");
   });
 
-  it("draws the bar exactly when progress is not null", () => {
+  it("draws the bar exactly when progress is present", () => {
     expect(bars(rendered(signedInProps({ progress: 0.85 })))).toEqual([0.85]);
-    expect(bars(rendered(signedInProps({ progress: null })))).toEqual([]);
+    expect(bars(rendered(signedInProps({ progress: undefined })))).toEqual([]);
   });
 
   it("omits the unit when there is none", () => {
-    const found = texts(rendered(signedInProps({ headlineUnit: null })));
+    const found = texts(rendered(signedInProps({ headlineUnit: undefined })));
     expect(found).toContain("12");
     expect(found).not.toContain("days");
+  });
+
+  it("renders a null-unit, null-progress row from omitted keys — headline, caption, no bar", () => {
+    // The exact shape the timeline builder sends for mind / becoming /
+    // training: no headlineUnit key, no progress key, no null anywhere.
+    const { headlineUnit, progress, ...mindLike } = signedInProps({
+      title: "Mind",
+      headline: "Ready",
+      headlineUnit: undefined,
+      caption: "Chapter 2 · Foundation · 1/10",
+      state: "todo",
+      progress: undefined,
+    }) as Extract<IosWidgetProps, { signedIn: true }>;
+    expect(headlineUnit).toBeUndefined();
+    expect(progress).toBeUndefined();
+    expect("headlineUnit" in mindLike).toBe(false);
+    expect("progress" in mindLike).toBe(false);
+    expect(JSON.stringify(mindLike)).not.toContain("null");
+    const found = texts(rendered(mindLike));
+    expect(found).toContain("Mind");
+    expect(found).toContain("Ready");
+    expect(found).toContain("Chapter 2 · Foundation · 1/10");
+    expect(bars(rendered(mindLike))).toEqual([]);
   });
 
   it("draws a state tint (done/todo/at-risk/none)", () => {
@@ -353,7 +384,7 @@ describe("BecomeWidget — medium (systemMedium)", () => {
     if (props.signedIn !== true) throw new Error("expected signed-in props");
     const targetless = {
       ...props,
-      rings: [["Carbs", 180, null, "g"] as [string, number, null, string]],
+      rings: [{ label: "Carbs", value: 180, unit: "g" }],
     };
     const found = texts(rendered(targetless, medium));
     expect(found).toContain("Carbs 180g");
@@ -398,7 +429,7 @@ describe("BecomeWidget — Lock Screen (accessory families)", () => {
 
   it("circular omits the unit when there is none", () => {
     const found = texts(
-      rendered(signedInProps({ headlineUnit: null }), {
+      rendered(signedInProps({ headlineUnit: undefined }), {
         widgetFamily: "accessoryCircular",
       }),
     );
@@ -450,7 +481,7 @@ describe("BecomeWidget — Lock Screen (accessory families)", () => {
 
   it("inline without a unit joins the words that are there", () => {
     const found = texts(
-      rendered(signedInProps({ headlineUnit: null }), {
+      rendered(signedInProps({ headlineUnit: undefined }), {
         widgetFamily: "accessoryInline",
       }),
     );

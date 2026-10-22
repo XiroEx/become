@@ -45,23 +45,51 @@ import { widgetSignInUri, widgetTapUri } from "@/lib/widgets/taps";
 export const IOS_WIDGET_SIGN_IN_PROMPT = "Open Become to sign in" as const;
 
 /**
+ * One macro ring for the iOS medium tile, as an OBJECT with an optional bar —
+ * never a tuple with a null inside it.
+ *
+ * The snapshot holds `WidgetSnapshotRing` tuples whose `pct` is null when the
+ * member has no target for that macro. A null prop value is what this file
+ * exists to keep off the bridge (`rowProps` below): the WidgetKit extension
+ * decodes props into non-optional types, so a null is a rejected timeline and
+ * a tile stuck on its previous entry. Hence the pct travels as an ABSENT key,
+ * not a null one — the layout draws the value line either way and the bar
+ * only when the key is there.
+ */
+export interface IosWidgetRing {
+  label: string;
+  value: number;
+  unit: string;
+  /** 0..1 for the mini-bar. Absent when the member has no target for it. */
+  pct?: number;
+}
+
+/**
  * Everything one iOS widget renders. Either today's numbers — copied from the
  * snapshot row as is, no re-wording, no re-derived state — or the sign-in
  * prompt. `url` is the tap target as a `become://` url the OS can fire.
  * `rings` is the nutrition row's macro rings (empty everywhere else); the
  * medium tile draws one mini-bar per ring.
+ *
+ * ABSENT, NEVER NULL. Every optional value is omitted when the row has none —
+ * `headlineUnit`, `progress` and a ring's `pct` simply are not keys — because
+ * the WidgetKit extension cannot decode a JSON null into its non-optional
+ * prop types and rejects the whole timeline (the tile then keeps drawing
+ * whatever it drew before, which reads as a stuck sign-in prompt). The layout
+ * (`BecomeWidget.tsx`) reads these with `typeof x === "number"` / truthiness,
+ * which treat an absent key exactly like the old null did.
  */
 export type IosWidgetProps =
   | {
       signedIn: true;
       title: string;
       headline: string;
-      headlineUnit: string | null;
+      headlineUnit?: string;
       caption: string;
       state: WidgetState;
-      /** 0..1 for the bar, or null when this widget has nothing to fill. */
-      progress: number | null;
-      rings: WidgetSnapshotRing[];
+      /** 0..1 for the bar. Absent when this widget has nothing to fill. */
+      progress?: number;
+      rings: IosWidgetRing[];
       url: string;
     }
   | {
@@ -101,17 +129,23 @@ export interface BuildIosTimelineArgs {
   refreshAfterSeconds?: number | null;
 }
 
-/** A row, verbatim, plus its tap target. */
+/** One macro ring, without the null: a missing target is an absent key. */
+function iosRing(ring: WidgetSnapshotRing): IosWidgetRing {
+  const [label, value, pct, unit] = ring;
+  return pct === null ? { label, value, unit } : { label, value, unit, pct };
+}
+
+/** A row, verbatim, plus its tap target — with absent keys, never nulls. */
 function rowProps(row: WidgetSnapshotRow): IosWidgetProps {
   return {
     signedIn: true,
     title: row.title,
     headline: row.headline,
-    headlineUnit: row.headlineUnit,
+    ...(row.headlineUnit !== null ? { headlineUnit: row.headlineUnit } : {}),
     caption: row.caption,
     state: row.state,
-    progress: row.progress,
-    rings: row.rings ?? [],
+    ...(row.progress !== null ? { progress: row.progress } : {}),
+    rings: (row.rings ?? []).map(iosRing),
     url: widgetTapUri(row.deepLink),
   };
 }

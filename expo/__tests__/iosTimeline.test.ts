@@ -149,13 +149,15 @@ describe("signed in with today's snapshot", () => {
       signedIn: true,
       title: "Nutrition",
       headline: "Rest day",
-      headlineUnit: null,
       caption: "Nothing scheduled — recover",
       state: "at-risk",
       progress: 0.857,
       rings: [],
       url: "become://dashboard/nutrition",
     });
+    // Absent, never null: the bridge cannot decode a JSON null.
+    if (first?.signedIn !== true) throw new Error("expected a signed-in row");
+    expect("headlineUnit" in first).toBe(false);
   });
 
   it("carries the nutrition rings through for the medium tile's macros", () => {
@@ -189,7 +191,94 @@ describe("signed in with today's snapshot", () => {
     const first = entriesOf(timeline, "nutrition")[0]?.props;
     expect(first).toMatchObject({ signedIn: true });
     if (first?.signedIn !== true) throw new Error("expected a signed-in row");
-    expect(first.rings).toEqual(rings);
+    expect(first.rings).toEqual([
+      { label: "Cal", value: 1180, unit: "cal", pct: 0.59 },
+      { label: "Protein", value: 120, unit: "g", pct: 0.75 },
+    ]);
+  });
+
+  it("sends no null anywhere for a null-unit, null-progress row — and keeps its words", () => {
+    // Mind / becoming / training carry headlineUnit: null (training also
+    // progress: null): exactly the rows whose timelines the extension was
+    // rejecting, leaving the stale sign-in prompt on the tile.
+    const timeline = buildIosTimeline({
+      snapshot: {
+        generatedAt: NOW.getTime(),
+        todayKey: TODAY_KEY,
+        rows: [
+          row({
+            key: "mind",
+            title: "Mind",
+            headline: "Ready",
+            headlineUnit: null,
+            caption: "Chapter 2 · Foundation · 1/10",
+            state: "todo",
+            progress: 0.1,
+            deepLink: "/dashboard/mind",
+          }),
+          row({
+            key: "training",
+            title: "Training",
+            headline: "Open",
+            headlineUnit: null,
+            caption: "No session scheduled today",
+            state: "none",
+            progress: null,
+            deepLink: "/dashboard/workout",
+          }),
+          row({
+            key: "nutrition",
+            title: "Nutrition",
+            headline: "820",
+            headlineUnit: "cal left",
+            caption: "P 120/160g",
+            state: "todo",
+            progress: 0.59,
+            rings: [["Carbs", 180, null, "g"]],
+            deepLink: "/dashboard/nutrition",
+          }),
+        ],
+      },
+      signedIn: true,
+      now: NOW,
+      todayKey: TODAY_KEY,
+      nextLocalMidnight: MIDNIGHT,
+    });
+    const assertNoNulls = (value: unknown, path: string): void => {
+      if (value === null) throw new Error(`null prop value at ${path}`);
+      if (value instanceof Date) return;
+      if (Array.isArray(value)) {
+        value.forEach((item, index) => assertNoNulls(item, `${path}[${index}]`));
+      } else if (typeof value === "object" && value !== null) {
+        for (const [key, item] of Object.entries(value)) {
+          assertNoNulls(item, `${path}.${key}`);
+        }
+      }
+    };
+    for (const key of ["mind", "training", "nutrition"] as const) {
+      for (const entry of entriesOf(timeline, key)) {
+        assertNoNulls(entry.props, `${key}.props`);
+      }
+    }
+    // The words survive the omission: headline and caption are still there.
+    const mind = entriesOf(timeline, "mind")[0]?.props;
+    expect(mind).toMatchObject({ signedIn: true });
+    if (mind?.signedIn !== true) throw new Error("expected a signed-in row");
+    expect(mind.headline).toBe("Ready");
+    expect(mind.caption).toBe("Chapter 2 · Foundation · 1/10");
+    expect("headlineUnit" in mind).toBe(false);
+    const training = entriesOf(timeline, "training")[0]?.props;
+    if (training?.signedIn !== true) {
+      throw new Error("expected a signed-in row");
+    }
+    expect(training.headline).toBe("Open");
+    expect("progress" in training).toBe(false);
+    // A ring without a target keeps its value line with no bar — and no null.
+    const nutrition = entriesOf(timeline, "nutrition")[0]?.props;
+    if (nutrition?.signedIn !== true) {
+      throw new Error("expected a signed-in row");
+    }
+    expect(nutrition.rings).toEqual([{ label: "Carbs", value: 180, unit: "g" }]);
   });
 });
 
