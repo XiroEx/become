@@ -186,8 +186,9 @@ describe("drawIosWidgets", () => {
     expect(streak.url).toBe("become://dashboard/streaks");
 
     const mind = signedInProps(rec.pushed, "mind");
-    expect(mind.headlineUnit).toBeNull();
-    expect(mind.progress).toBeNull();
+    // Absent, never null: the bridge cannot decode a JSON null.
+    expect("headlineUnit" in mind).toBe(false);
+    expect("progress" in mind).toBe(false);
 
     // The medium tile's macros travel with the timeline, not around it.
     const nutrition = signedInProps(rec.pushed, "nutrition");
@@ -257,21 +258,30 @@ describe("drawIosWidgets", () => {
   });
 
   it("one widget that throws does not cost the other four", async () => {
-    const rec = recording((name) => {
-      if (name === "NutritionWidget") throw new Error("extension gone");
-    });
-    const drawn = await drawIosWidgets({
-      snapshot: snapshot(),
-      signedIn: true,
-      todayKey: "2026-09-29",
-      now: NOW,
-      nextLocalMidnight: MIDNIGHT,
-      updaters: rec.updaters,
-    });
-    expect(drawn).toBe(4);
-    expect(Object.keys(rec.pushed).sort()).toEqual(
-      IOS_WIDGETS.filter((w) => w.name !== "NutritionWidget").map((w) => w.name).sort(),
-    );
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const rec = recording((name) => {
+        if (name === "NutritionWidget") throw new Error("extension gone");
+      });
+      const drawn = await drawIosWidgets({
+        snapshot: snapshot(),
+        signedIn: true,
+        todayKey: "2026-09-29",
+        now: NOW,
+        nextLocalMidnight: MIDNIGHT,
+        updaters: rec.updaters,
+      });
+      expect(drawn).toBe(4);
+      expect(Object.keys(rec.pushed).sort()).toEqual(
+        IOS_WIDGETS.filter((w) => w.name !== "NutritionWidget").map((w) => w.name).sort(),
+      );
+      // Not swallowed silently: the failing widget is named in a device log.
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining("NutritionWidget"),
+      );
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it("only claims a surface where there is a loader to draw with", () => {

@@ -225,9 +225,15 @@ export async function drawIosWidgets({
     try {
       updater.updateTimeline(timeline[definition.feedKey] ?? []);
       drawn += 1;
-    } catch {
-      // A widget the extension no longer knows, a timeline entry it rejects:
-      // the next open pushes again.
+    } catch (error) {
+      // A widget the extension no longer knows, or a timeline entry it
+      // rejects: the next open pushes again. Warned, not swallowed — a
+      // rejected push otherwise leaves a stale tile with no trace anywhere.
+      console.warn(
+        `[widgets] iOS timeline push failed for ${definition.name}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
     }
   }
   return drawn;

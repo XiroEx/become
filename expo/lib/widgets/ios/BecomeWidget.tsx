@@ -213,17 +213,17 @@ export function BecomeWidget(
         </HStack>
         <Text modifiers={[font({ size: 12 })]}>{props.caption}</Text>
         {props.rings.map((ring) => (
-          <HStack key={ring[0]} spacing={4}>
+          <HStack key={ring.label} spacing={4}>
             <Text modifiers={[font({ size: 11 })]}>
-              {`${ring[0]} ${ring[1]}${ring[3]}`}
+              {`${ring.label} ${ring.value}${ring.unit}`}
             </Text>
             <Spacer />
-            {ring[2] !== null ? (
-              <ProgressView value={ring[2]} />
+            {typeof ring.pct === "number" ? (
+              <ProgressView value={ring.pct} />
             ) : null}
           </HStack>
         ))}
-        {props.progress !== null ? (
+        {typeof props.progress === "number" ? (
           <ProgressView value={props.progress} />
         ) : null}
         <Text modifiers={[font({ size: 10 })]}>
@@ -253,7 +253,7 @@ export function BecomeWidget(
         {props.headlineUnit ? <Text>{props.headlineUnit}</Text> : null}
       </HStack>
       <Text modifiers={[font({ size: 12 })]}>{props.caption}</Text>
-      {props.progress !== null ? (
+      {typeof props.progress === "number" ? (
         <ProgressView value={props.progress} />
       ) : null}
       <Text modifiers={[font({ size: 10 })]}>
