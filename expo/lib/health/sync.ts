@@ -354,7 +354,10 @@ export async function exportWorkoutToHealth(
     return { written: false, reason: "switch-off" };
   }
   const write = deps.client?.write;
-  if (!write) return { written: false, reason: "no-writer" };
+  // No `write` at all (no writer on this platform) and `write` present but
+  // missing `writeWorkout` (iOS before NP-186) answer the same way: there is
+  // nowhere for this workout to go.
+  if (!write?.writeWorkout) return { written: false, reason: "no-writer" };
   if (Date.parse(workout.endISO) <= Date.parse(workout.startISO)) {
     // Health Connect refuses a session that ends before it starts, and a
     // zero-length workout is not worth a record.
@@ -424,7 +427,11 @@ export async function runHealthLaunchSync(
   deps: LaunchSyncDeps,
 ): Promise<ImportWeightResult> {
   const session = deps.session ?? currentHealthSyncSession();
-  const client = deps.client ?? getHealthClient();
+  // `??` would treat an explicit `client: null` (a caller's deliberate "there
+  // is no client to use") the same as `undefined` ("use the default") — the
+  // one case that mattered not at all while iOS's own `getHealthClient()`
+  // always answered null too, and matters once it does not (NP-185).
+  const client = deps.client !== undefined ? deps.client : getHealthClient();
   if (!client) {
     return { ...emptyResult(), reason: "unavailable" };
   }

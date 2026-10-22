@@ -427,13 +427,31 @@ describe("export (Become → Health)", () => {
     expect(workoutWrites).toHaveLength(0);
   });
 
-  it("says so, quietly, when the platform has no writer (iOS until NP-185)", async () => {
+  it("says so, quietly, when the platform has no writer at all", async () => {
     const { client } = fakeClient({ writer: false });
     expect(await exportWeighInToHealth({ client, session: ALL_ON }, weighIn)).toEqual(
       { written: false, reason: "no-writer" },
     );
     expect(
       await exportWeighInToHealth({ client: null, session: ALL_ON }, weighIn),
+    ).toEqual({ written: false, reason: "no-writer" });
+  });
+
+  // iOS (NP-185) writes weight but not workouts yet (NP-186 is separate):
+  // `write` exists, `write.writeWorkout` does not. That answers the same as
+  // having no writer at all, never a throw.
+  it("exportWorkoutToHealth answers no-writer when write exists but writeWorkout does not (iOS before NP-186)", async () => {
+    const client: HealthClient = {
+      platform: "ios",
+      readWeight: async () => [],
+      readSteps: async () => [],
+      write: {
+        writeWeight: async () => {},
+        // writeWorkout intentionally absent.
+      },
+    };
+    expect(
+      await exportWorkoutToHealth({ client, session: ALL_ON }, workout),
     ).toEqual({ written: false, reason: "no-writer" });
   });
 

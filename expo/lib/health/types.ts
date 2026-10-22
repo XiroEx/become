@@ -86,12 +86,17 @@ export interface WorkoutWrite {
 
 /**
  * The half of the platform store Become WRITES to. Optional on `HealthClient`
- * because a platform adapter may not have it yet: Android does (NP-199), iOS
- * gets it with NP-185 / NP-186.
+ * because a platform adapter may not have it yet: Android does both halves
+ * (NP-199). iOS gets `writeWeight` with NP-185; `writeWorkout` is OPTIONAL on
+ * this interface because NP-185 is weight-only — HealthKit's workout write
+ * (NP-186) is a separate card. `exportWorkoutToHealth` (`lib/health/sync.ts`)
+ * answers `reason: "no-writer"` for a platform whose `write` exists but whose
+ * `writeWorkout` does not, the same answer it gives a platform with no `write`
+ * at all.
  */
 export interface HealthWriteClient {
   writeWeight: (sample: WeightWrite) => Promise<void>;
-  writeWorkout: (workout: WorkoutWrite) => Promise<void>;
+  writeWorkout?: (workout: WorkoutWrite) => Promise<void>;
 }
 
 export interface HealthClient {
