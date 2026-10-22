@@ -42,6 +42,7 @@ import {
   BillingStatusResponseSchema,
   CheckoutResponseSchema,
   PortalResponseSchema,
+  SchemaValidationError,
   apiFetch,
   type BillingPlan,
   type BillingPlansResponse,
@@ -50,6 +51,11 @@ import {
 } from "@become/api-client";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { sessionStore, type TokenStore } from "@/lib/auth/secureStoreToken";
+import {
+  recordCheckoutFailure,
+  truncateReason,
+} from "@/lib/diagnostics/deviceDiagnostics";
+import type { AsyncStorageLike } from "@/lib/query/persistor";
 
 /**
  * What the sheet knows about checkout right now. The same union as
@@ -125,6 +131,12 @@ export interface BillingDeps {
   plan?: BillingPlan;
   /** Whether to request a trial (NP-129). Advisory; server enforces eligibility. */
   trial?: boolean;
+  /**
+   * Where checkout failure reasons are recorded for the Settings Diagnostics
+   * block. Defaults to AsyncStorage; pass an in-memory store in tests, or
+   * explicit null to skip recording.
+   */
+  diagnosticsStorage?: AsyncStorageLike | null;
 }
 
 function baseUrlOf(deps: BillingDeps): string {
@@ -205,17 +217,39 @@ export function dismissLabel(state: CheckoutState): string {
  *
  * Resolves false when the handover itself failed, which the sheet reads as a
  * retryable error rather than a closed shop.
+ *
+ * Deliberately NEVER `expo-web-browser` (see the file header): an in-app
+ * browser is still "inside the app" under App Review 3.1.1(a), and the
+ * upgrade-sheet suite fails the build if that import ever appears on this
+ * path — even though the package is a dependency. So a refused handover is
+ * only REPORTED (`open-failed: <message>`), never retried in-app.
  */
 export async function openExternally(
   url: string,
   deps: BillingDeps = {},
 ): Promise<boolean> {
+  return (await openExternallyDetailed(url, deps)).opened;
+}
+
+/**
+ * `openExternally` with the machine reason: `{ opened: false,
+ * reason: "open-failed: <message>" }` when `Linking.openURL` rejects (the
+ * TestFlight case — the production route answers 200 while the phone shows
+ * the error state), so the sheet can render it under the friendly sentence.
+ */
+export async function openExternallyDetailed(
+  url: string,
+  deps: BillingDeps = {},
+): Promise<{ opened: boolean; reason?: string }> {
   const open = deps.openUrl ?? Linking.openURL;
   try {
     await open(url);
-    return true;
-  } catch {
-    return false;
+    return { opened: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const reason = `open-failed: ${truncateReason(message || "unknown", 120) || "unknown"}`;
+    void recordCheckoutFailure(reason, Date.now(), deps.diagnosticsStorage);
+    return { opened: false, reason };
   }
 }
 
@@ -299,7 +333,26 @@ export type CheckoutStart =
   /** Stripe's hosted page. Open it with `openExternally`, never in-app. */
   | { kind: "url"; url: string }
   /** A refusal (or a failure), already mapped onto a sheet state. */
-  | { kind: "state"; state: CheckoutState; portalPath?: string };
+  | { kind: "state"; state: CheckoutState; portalPath?: string; reason?: string };
+
+/**
+ * The machine reason carried with an `error` state, rendered by the sheet as
+ * small muted `Reason: …` under the friendly sentence and recorded for the
+ * Settings Diagnostics block:
+ *
+ *   - `network` — the request never got an answer (fetch threw).
+ *   - `schema` — a 2xx the shared schema rejected.
+ *   - `http-<status>-<code>` — a refused checkout the state machine files as
+ *     retryable (e.g. `http-502-checkout_failed`).
+ *   - `open-failed: <message>` — Stripe answered, the browser refused (from
+ *     `openExternallyDetailed`, not from here).
+ */
+export type CheckoutFailureReason = string;
+
+/** `http-<status>-<code>` for an ApiError the state machine files as `error`. */
+export function checkoutHttpReason(status: number, body: unknown): string {
+  return `http-${status}-${readBodyString(body, "error") ?? "unknown"}`;
+}
 
 /**
  * Start a Stripe Checkout session for this member.
@@ -340,13 +393,33 @@ export async function startCheckout(
       // The route hands back the path to send them to; follow it rather than
       // assuming one.
       const portalPath = readBodyString(err.body, "portal");
-      return portalPath ? { kind: "state", state, portalPath } : { kind: "state", state };
+      if (state !== "error") {
+        return portalPath ? { kind: "state", state, portalPath } : { kind: "state", state };
+      }
+      // Retryable refusal: carry the machine reason so the sheet (and the
+      // Settings Diagnostics block) can say more than "something broke".
+      const reason: CheckoutFailureReason = checkoutHttpReason(err.status, err.body);
+      void recordCheckoutFailure(reason, Date.now(), deps.diagnosticsStorage);
+      return { kind: "state", state, reason };
     }
-    // A dropped connection, or a 2xx with nowhere to go (the schema rejected
-    // it). Both are a retry, and NEITHER is "upgrades aren't open yet" — that
-    // answer is sticky for the life of the sheet and this one is over in a
-    // second.
-    return { kind: "state", state: "error" };
+    if (
+      err instanceof SchemaValidationError ||
+      (typeof err === "object" &&
+        err !== null &&
+        (err as { name?: unknown }).name === "SchemaValidationError")
+    ) {
+      // A 2xx with nowhere to go (the schema rejected it). NEITHER this nor
+      // the dropped connection below is "upgrades aren't open yet" — that
+      // answer is sticky for the life of the sheet and this one is over in a
+      // second.
+      const reason: CheckoutFailureReason = "schema";
+      void recordCheckoutFailure(reason, Date.now(), deps.diagnosticsStorage);
+      return { kind: "state", state: "error", reason };
+    }
+    // A dropped connection. A retry, and explicitly NOT "not for sale".
+    const reason: CheckoutFailureReason = "network";
+    void recordCheckoutFailure(reason, Date.now(), deps.diagnosticsStorage);
+    return { kind: "state", state: "error", reason };
   }
 }
 
