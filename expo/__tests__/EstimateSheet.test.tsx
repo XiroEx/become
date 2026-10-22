@@ -522,10 +522,10 @@ describe("EstimateSheet describe sheet matches web (NP-263)", () => {
     expect(src).toMatch(/keyboardShouldPersistTaps="handled"/);
   });
 
-  it("CARD: after taking a photo the sheet is the fixed 90% height and can shrink for the keyboard, instead of being capped at a fixed 520px body", () => {
+  it("CARD: after taking a photo the sheet is the fixed 80% height and can shrink for the keyboard, instead of being capped at a fixed 520px body", () => {
     // Regression for the photo flow leaving the sheet parked over the
     // bottom half of the screen with the note field hidden behind the
-    // keyboard and unable to scroll into view. The 90% fixed height lives
+    // keyboard and unable to scroll into view. The 80% fixed height lives
     // in `BottomSheet` itself — a per-caller `sheetStyle` cap plus a
     // `flex: 1` ScrollView inside a content-sized sheet collapsed the sheet
     // down to only its grab handle — so this sheet sets no height of its
@@ -541,7 +541,7 @@ describe("EstimateSheet describe sheet matches web (NP-263)", () => {
     expect(src).not.toMatch(/height:\s*["']8\d%["']/);
     expect(src).not.toMatch(/maxHeight:\s*520/);
     // The KeyboardAvoidingView and the ScrollView it wraps both need to be
-    // allowed to fill/shrink (flex: 1) inside the fixed 90% sheet — a fixed
+    // allowed to fill/shrink (flex: 1) inside the fixed 80% sheet — a fixed
     // height on either defeats it.
     const kavBlock = src.slice(
       src.indexOf("<KeyboardAvoidingView"),
@@ -771,5 +771,80 @@ describe("EstimateSheet review polish (NP-322)", () => {
     expect(noticeIdx).toBeGreaterThan(-1);
     expect(addMoreIdx).toBeGreaterThan(noticeIdx);
     expect(saveIdx).toBeGreaterThan(addMoreIdx);
+  });
+});
+
+describe("EstimateSheet direct capture (camera hang fix)", () => {
+  it("an auto-capture camera source opens the camera directly, skipping the chooser", async () => {
+    mockCapture.mockResolvedValue({ status: "captured", image: IMAGE });
+    const { getByTestId, queryByTestId } = renderSheet({
+      initialAutoCaptureSource: "camera",
+    });
+    await waitFor(() => {
+      expect(mockCapture).toHaveBeenCalledWith("camera");
+    });
+    await waitFor(() => {
+      expect(getByTestId("estimate-sheet-compose")).toBeTruthy();
+    });
+    // The chooser (Take photo / Upload photo / Describe it instead) is never
+    // shown — a camera entry point goes straight to the camera.
+    expect(queryByTestId("estimate-sheet-chooser")).toBeNull();
+  });
+
+  it("hides its own modal while the camera is presenting, then restores it — the iOS double-present hang", async () => {
+    // iOS cannot present the camera over this sheet's own modal: launching
+    // from the visible sheet left the picker's promise pending forever and
+    // the button stuck on "Opening camera…". Hold the picker open and watch
+    // the sheet get out of the way first.
+    let resolveCapture!: (r: { status: "cancelled" }) => void;
+    mockCapture.mockReturnValue(
+      new Promise((resolve) => {
+        resolveCapture = resolve as (r: { status: "cancelled" }) => void;
+      }),
+    );
+    const { getByTestId } = renderSheet();
+    fireEvent.press(getByTestId("estimate-sheet-take-photo"));
+    // The sheet's own modal hides so the OS can present the picker.
+    await waitFor(() => {
+      expect(getByTestId("estimate-sheet").props.visible).toBe(false);
+    });
+    // Backing out of the camera restores the sheet on the chooser with the
+    // spinner reset — the button is tappable again.
+    resolveCapture({ status: "cancelled" });
+    await waitFor(() => {
+      expect(getByTestId("estimate-sheet").props.visible).toBe(true);
+    });
+    expect(getByTestId("estimate-sheet-chooser")).toBeTruthy();
+    expect(getByTestId("estimate-sheet-take-photo").props.disabled).toBe(false);
+  });
+
+  it("a throw from capture shows an error, not a stuck spinner", async () => {
+    mockCapture.mockRejectedValue(new Error("boom"));
+    const { getByTestId } = renderSheet();
+    fireEvent.press(getByTestId("estimate-sheet-take-photo"));
+    await waitFor(() => {
+      expect(getByTestId("estimate-sheet-error")).toBeTruthy();
+    });
+    // The sheet is back and the button is tappable — no endless spinner.
+    expect(getByTestId("estimate-sheet").props.visible).toBe(true);
+    expect(getByTestId("estimate-sheet-take-photo").props.disabled).toBe(false);
+  });
+
+  it("a permission denial shows the Settings way out and resets the spinner", async () => {
+    mockCapture.mockResolvedValue({
+      status: "permission-denied",
+      source: "camera",
+      canAskAgain: true,
+      message: "Become needs your camera to take that photo.",
+    });
+    const { getByTestId } = renderSheet();
+    fireEvent.press(getByTestId("estimate-sheet-take-photo"));
+    await waitFor(() => {
+      expect(getByTestId("estimate-sheet-denial")).toBeTruthy();
+    });
+    // Back on the chooser, sheet restored, button tappable again.
+    expect(getByTestId("estimate-sheet-chooser")).toBeTruthy();
+    expect(getByTestId("estimate-sheet").props.visible).toBe(true);
+    expect(getByTestId("estimate-sheet-take-photo").props.disabled).toBe(false);
   });
 });

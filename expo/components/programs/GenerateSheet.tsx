@@ -478,7 +478,7 @@ export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: G
       // NP-369: the web dialog's container padding is 24px (`p-6`) on every
       // side; the shared `BottomSheet` primitive's own `p-5` is 20px, so this
       // sheet overrides it rather than widening every other sheet in the app.
-      // (The 90% fixed height lives in `BottomSheet` itself.)
+      // (The 80% fixed height lives in `BottomSheet` itself.)
       sheetStyle={{ paddingLeft: 24, paddingRight: 24, paddingTop: 24 }}
       // The web header is a purple wand-icon badge plus a ✕ close button
       // beside the title (NP-295); the sheet had neither.

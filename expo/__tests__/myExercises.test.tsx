@@ -523,14 +523,14 @@ describe("(NP-276) native parity — the create sheet fits the safe area; list s
     );
 
     // Bounded, not an unbounded centred `Modal`: the sheet's own card is the
-    // fixed 90% of the window height and the form scrolls inside it — this
+    // fixed 80% of the window height and the form scrolls inside it — this
     // is what keeps the title, Cancel and Create reachable on a phone screen
     // shorter than the form (the card's BLOCKER).
     const sheetStyle = screen.getByTestId("my-exercises-create-modal-sheet")
       .props.style as { height: number; maxHeight: number };
     expect(sheetStyle.height).toBe(sheetStyle.maxHeight);
     expect(sheetStyle.maxHeight).toBe(
-      Math.round(Dimensions.get("window").height * 0.9),
+      Math.round(Dimensions.get("window").height * 0.8),
     );
     expect(screen.getByTestId("my-exercises-create-form-scroll")).toBeTruthy();
     expect(screen.getByTestId("my-exercises-create-form-name")).toBeTruthy();

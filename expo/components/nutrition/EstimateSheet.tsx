@@ -24,6 +24,7 @@ import { showUpgradeSheet } from "@/lib/entitlements/upgradeSheet";
 import { showAiConsentPrompt } from "@/lib/ai/aiConsentPrompt";
 import {
   captureImage,
+  CAPTURE_FAILED_MESSAGE,
   type CapturedImage,
   type CaptureSource,
   type PermissionDeniedCapture,
@@ -110,8 +111,9 @@ export interface EstimateSheetProps {
   /**
    * When set, the sheet opens straight into this capture source instead of
    * showing the chooser first (NP-263) — the web's "Upload photo" opens the
-   * photo library directly, so the native Upload menu's equivalent button
-   * must too, rather than re-presenting Take photo / Upload photo / Describe.
+   * photo library directly and its camera input captures straight from the
+   * camera, so the native camera / Upload menu's equivalent buttons must
+   * too, rather than re-presenting Take photo / Upload photo / Describe.
    */
   initialAutoCaptureSource?: CaptureSource | null;
   captureImpl?: typeof captureImage;
@@ -119,6 +121,16 @@ export interface EstimateSheetProps {
 }
 
 const STANDARD_MEALS = ["breakfast", "lunch", "dinner", "snack"];
+
+/**
+ * How long the sheet waits after hiding itself before presenting the camera
+ * or photo library. iOS cannot present a second view controller over this
+ * sheet's own modal — launching the picker while the sheet is still on
+ * screen leaves its promise unresolved forever ("Opening camera…" stuck).
+ * The slide-down dismiss takes ~300ms; launching only after it has landed
+ * is what makes the camera actually open.
+ */
+const SHEET_DISMISS_MS = 300;
 
 /**
  * De-dupe tag options case-insensitively, keeping the first-seen casing and
@@ -223,6 +235,12 @@ export function EstimateSheet({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [errorHint, setErrorHint] = useState<string | null>(null);
   const [capturing, setCapturing] = useState(false);
+  // True while the native camera / photo library is presenting. The sheet's
+  // own modal is hidden for that window (see `captureFrom`) — iOS cannot
+  // present the picker over it, and the hidden sheet is also what makes a
+  // direct-launch entry point land straight on the camera with no chooser
+  // flash. Restored in `captureFrom`'s finally, on every outcome.
+  const [captureHidden, setCaptureHidden] = useState(false);
   const [denial, setDenial] = useState<PermissionDeniedCapture | null>(null);
   const [addMoreOpen, setAddMoreOpen] = useState(false);
   const [correctText, setCorrectText] = useState("");
@@ -511,6 +529,15 @@ export function EstimateSheet({
     async (source: CaptureSource, note = "") => {
       setCapturing(true);
       setDenial(null);
+      // Hide this sheet's own modal BEFORE presenting the picker: iOS
+      // refuses to present the camera / photo library over an already
+      // presented modal, so launching from the visible sheet leaves the
+      // picker's promise pending forever and the button stuck on
+      // "Opening camera…". The beat after hiding lets the dismiss land;
+      // the finally below restores the sheet on cancel, denial and throw
+      // alike, so the spinner can never stick.
+      setCaptureHidden(true);
+      await new Promise((resolve) => setTimeout(resolve, SHEET_DISMISS_MS));
       try {
         const result = await captureImpl(source);
         if (result.status === "cancelled") return;
@@ -531,7 +558,15 @@ export function EstimateSheet({
         // same (`setComposeNote(describeText)` before opening the picker).
         setComposeNote(note);
         setPhase("compose");
+      } catch {
+        // `captureImage` never rejects by contract, but a throwing double
+        // (or a future native edge) must surface as an error screen, never
+        // a stuck "Opening camera…".
+        setErrorMessage(CAPTURE_FAILED_MESSAGE);
+        setErrorHint(null);
+        setPhase("error");
       } finally {
+        setCaptureHidden(false);
         setCapturing(false);
       }
     },
@@ -714,7 +749,7 @@ export function EstimateSheet({
   return (
     <>
       <BottomSheet
-        visible={visible && !addMoreOpen}
+        visible={visible && !addMoreOpen && !captureHidden}
         onClose={onClose}
         // The header below replaces the generic title row entirely.
         accessibilityLabel={headerTitle}

@@ -5,6 +5,7 @@ import { TagSection } from "@/components/nutrition/TagSection";
 import { ScheduleMealsDrawer } from "@/components/nutrition/ScheduleMealsDrawer";
 import NutritionIndexRoute from "@/app/(app)/(tabs)/nutrition/index";
 import { apiFetch } from "@become/api-client";
+import { captureImage } from "@/lib/media/capture";
 
 const TODAY_MOCK = "2026-06-15";
 const FUTURE_MOCK = "2026-12-25";
@@ -43,7 +44,22 @@ jest.mock("@become/api-client", () => {
   return { __esModule: true, ...actual, apiFetch: jest.fn() };
 });
 
+jest.mock("@/lib/media/capture", () => {
+  const actual = jest.requireActual("@/lib/media/capture");
+  return { __esModule: true, ...actual, captureImage: jest.fn() };
+});
+
 const mockApiFetch = apiFetch as unknown as jest.Mock;
+const mockCapture = captureImage as unknown as jest.Mock;
+
+const IMAGE = {
+  uri: "file:///cache/photo.jpg",
+  width: 800,
+  height: 600,
+  dataUrl: "data:image/jpeg;base64,AAA",
+  mimeType: "image/jpeg" as const,
+  fileName: "photo.jpg",
+};
 
 const emptyDay = {
   date: TODAY_MOCK,
@@ -66,6 +82,7 @@ describe("NP-320 Acceptance Tests: Nutrition Day Parity", () => {
     mockApiFetch.mockReset();
     mockApiFetch.mockImplementation(async (url: string) => defaultApiHandler(url));
     mockPush.mockReset();
+    mockCapture.mockReset();
   });
 
   describe("TagSection Parity", () => {
@@ -288,6 +305,50 @@ describe("NP-320 Acceptance Tests: Nutrition Day Parity", () => {
       fireEvent.press(getByTestId("nutrition-upload-button"));
       expect(getByTestId("nutrition-upload-photo")).toBeTruthy();
       expect(getByTestId("nutrition-upload-describe")).toBeTruthy();
+    });
+
+    it("Take photo goes straight to the camera — the chooser is never shown", async () => {
+      mockParams = { date: TODAY_MOCK };
+      mockCapture.mockResolvedValue({ status: "captured", image: IMAGE });
+      const { getByTestId, queryByTestId } = render(<NutritionIndexRoute />);
+
+      await waitFor(() => {
+        expect(getByTestId("nutrition-camera-button")).toBeTruthy();
+      });
+
+      fireEvent.press(getByTestId("nutrition-camera-button"));
+      fireEvent.press(getByTestId("nutrition-camera-take-photo"));
+
+      // The camera entry point launches the camera directly (the web's
+      // capture="environment" input) instead of opening the chooser.
+      await waitFor(() => {
+        expect(mockCapture).toHaveBeenCalledWith("camera");
+      });
+      await waitFor(() => {
+        expect(getByTestId("estimate-sheet-compose")).toBeTruthy();
+      });
+      expect(queryByTestId("estimate-sheet-chooser")).toBeNull();
+    });
+
+    it("Upload photo opens the OS photo library directly — the chooser is never shown", async () => {
+      mockParams = { date: TODAY_MOCK };
+      mockCapture.mockResolvedValue({ status: "captured", image: IMAGE });
+      const { getByTestId, queryByTestId } = render(<NutritionIndexRoute />);
+
+      await waitFor(() => {
+        expect(getByTestId("nutrition-upload-button")).toBeTruthy();
+      });
+
+      fireEvent.press(getByTestId("nutrition-upload-button"));
+      fireEvent.press(getByTestId("nutrition-upload-photo"));
+
+      await waitFor(() => {
+        expect(mockCapture).toHaveBeenCalledWith("library");
+      });
+      await waitFor(() => {
+        expect(getByTestId("estimate-sheet-compose")).toBeTruthy();
+      });
+      expect(queryByTestId("estimate-sheet-chooser")).toBeNull();
     });
   });
 });

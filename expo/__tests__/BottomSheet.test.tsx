@@ -70,13 +70,13 @@ describe("BottomSheet", () => {
   // NP-271: an uncapped sheet grew past the top of the screen for tall
   // content (e.g. the recipe editor mid-edit), pushing its own title under
   // the status bar with no way back — and on Android, its footer under the
-  // gesture/navigation bar. The sheet is a FIXED 90% of the window height
+  // gesture/navigation bar. The sheet is a FIXED 80% of the window height
   // (capped further only so it never touches the top inset) and pads its
   // bottom past the bottom inset, so it can never cover either system bar;
   // callers whose content is taller than that scroll inside their own
   // `ScrollView` rather than off the top of the screen.
   describe("safe-area cap (NP-271)", () => {
-    it("is a fixed 90% of the window height, capped below the top inset, and pads past the bottom inset", () => {
+    it("is a fixed 80% of the window height, capped below the top inset, and pads past the bottom inset", () => {
       const { getByTestId } = render(
         <BottomSheet testID="s" visible onClose={() => {}} title="Edit recipe">
           <Text>x</Text>
@@ -84,10 +84,10 @@ describe("BottomSheet", () => {
       );
       const style = getByTestId("s-sheet").props.style as Record<string, unknown>;
       const windowHeight = Dimensions.get("window").height;
-      // 90% of the window, but never past the top inset + the 24px gap this
+      // 80% of the window, but never past the top inset + the 24px gap this
       // component leaves above it (top inset 47 here).
       const expected = Math.min(
-        Math.round(windowHeight * 0.9),
+        Math.round(windowHeight * 0.8),
         windowHeight - 47 - 24,
       );
       expect(style.height).toBe(expected);
@@ -97,9 +97,9 @@ describe("BottomSheet", () => {
       expect(style.overflow).toBe("hidden");
     });
 
-    it("sets height to exactly 90% of the window height", () => {
+    it("sets height to exactly 80% of the window height", () => {
       // A window where the top-inset cap does not bind (1000 - 47 - 24 =
-      // 929 > 900), so the 90% rule is what decides.
+      // 929 > 800), so the 80% rule is what decides.
       const spy = jest
         .spyOn(Dimensions, "get")
         .mockImplementation(
@@ -115,8 +115,8 @@ describe("BottomSheet", () => {
           string,
           unknown
         >;
-        expect(style.height).toBe(900);
-        expect(style.maxHeight).toBe(900);
+        expect(style.height).toBe(800);
+        expect(style.maxHeight).toBe(800);
       } finally {
         spy.mockRestore();
       }
