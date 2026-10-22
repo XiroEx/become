@@ -16,9 +16,16 @@ import { fireEvent, render, waitFor } from "@testing-library/react-native";
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
+const mockReplace = jest.fn();
+const mockCanGoBack = jest.fn(() => true);
 let mockParams: Record<string, string> = {};
 jest.mock("expo-router", () => ({
-  useRouter: () => ({ push: mockPush, replace: jest.fn(), back: mockBack }),
+  useRouter: () => ({
+    push: mockPush,
+    replace: mockReplace,
+    back: mockBack,
+    canGoBack: mockCanGoBack,
+  }),
   useLocalSearchParams: () => mockParams,
 }));
 
@@ -105,6 +112,9 @@ beforeEach(async () => {
   jest.setSystemTime(new Date(2026, 9, 7, 12, 0, 0));
   mockPush.mockReset();
   mockBack.mockReset();
+  mockReplace.mockReset();
+  mockCanGoBack.mockReset();
+  mockCanGoBack.mockReturnValue(true);
   mockApiFetch.mockReset();
   mockApiFetch.mockResolvedValue({});
   mockParams = {};
@@ -397,5 +407,72 @@ describe("resume pill routes a quick session to the overview", () => {
     expect(mockPush).toHaveBeenCalledWith(
       quickSessionOverviewHref("qs-2", { saved: true }) as never,
     );
+  });
+});
+
+describe("(bug fix) Back lands on the Workout tab, not whatever tab the navigator's history points to", () => {
+  // Reproduces the reported bug: ResumeWorkoutPill on Home pushes this screen
+  // cross-tab (the test above), which can land here with no local back entry.
+  // Plain `router.back()` then fell through to the tab navigator's own
+  // `backBehavior="history"`, landing on whichever tab was focused before
+  // Home (Mind, in the report) instead of reliably "the workout page".
+  it("the header back button pops locally when there is history to pop to", async () => {
+    await seedNamed("qs-back-local");
+    mockParams = { session: "qs-back-local" };
+    mockCanGoBack.mockReturnValue(true);
+    const { getByTestId } = render(<QuickSessionOverviewRoute />);
+    await waitFor(() => {
+      expect(getByTestId("quick-session-overview-title")).toBeTruthy();
+    });
+
+    fireEvent.press(getByTestId("quick-session-overview-back-btn"));
+    expect(mockBack).toHaveBeenCalledTimes(1);
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it("the header back button lands on the Workout tab when opened cross-tab (no local history)", async () => {
+    await seedNamed("qs-back-crosstab");
+    mockParams = { session: "qs-back-crosstab" };
+    mockCanGoBack.mockReturnValue(false);
+    const { getByTestId } = render(<QuickSessionOverviewRoute />);
+    await waitFor(() => {
+      expect(getByTestId("quick-session-overview-title")).toBeTruthy();
+    });
+
+    fireEvent.press(getByTestId("quick-session-overview-back-btn"));
+    expect(mockReplace).toHaveBeenCalledWith("/(tabs)/programming");
+    expect(mockBack).not.toHaveBeenCalled();
+  });
+
+  it("Android hardware back follows the same fallback logic as the header button", async () => {
+    await seedNamed("qs-back-android");
+    mockParams = { session: "qs-back-android" };
+    mockCanGoBack.mockReturnValue(false);
+    const listeners: (() => boolean)[] = [];
+    const fakeBackHandler = {
+      addEventListener: (_type: "hardwareBackPress", handler: () => boolean) => {
+        listeners.push(handler);
+        return {
+          remove: () => {
+            const idx = listeners.indexOf(handler);
+            if (idx >= 0) listeners.splice(idx, 1);
+          },
+        };
+      },
+    };
+
+    const { getByTestId } = render(
+      <QuickSessionOverviewRoute backHandler={fakeBackHandler} />,
+    );
+    await waitFor(() => {
+      expect(getByTestId("quick-session-overview-title")).toBeTruthy();
+    });
+
+    expect(listeners).toHaveLength(1);
+    const intercepted = listeners[0]!();
+
+    expect(intercepted).toBe(true);
+    expect(mockReplace).toHaveBeenCalledWith("/(tabs)/programming");
+    expect(mockBack).not.toHaveBeenCalled();
   });
 });

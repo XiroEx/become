@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Pressable, ScrollView, View } from "react-native";
+import { BackHandler, Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { CalendarClock, Check, ChevronLeft, Pencil, Play } from "lucide-react-native";
 import {
@@ -42,6 +42,10 @@ import {
   QUICK_SESSION_DATE_RE,
   logPlanAvailability,
 } from "@/lib/quickSession/logPlan";
+import {
+  useAndroidBackHandler,
+  type BackHandlerLike,
+} from "@/lib/android/backHandler";
 
 /**
  * QUICK SESSION OVERVIEW (NP-227).
@@ -71,6 +75,19 @@ import {
  * top bar rather than standing alone under the title. After a Log it the
  * stash and progress are cleared; after a Plan it the member lands back on
  * the Workout tab.
+ *
+ * BACK (bug fix, "pressing back lands on Mind instead of the workout page"):
+ * this screen is reached two ways — a same-tab push from the Sessions hub /
+ * Workout tab (real local history) and `ResumeWorkoutPill` on the Home
+ * dashboard (`quickSessionOverviewHref`, a cross-tab push that lands here
+ * with NO local back entry). Plain `router.back()` then fell through to the
+ * tab navigator's own `backBehavior="history"`, which lands on whichever tab
+ * was focused before Home — Mind, if that happened to be the last one
+ * visited — never reliably "the workout page" the member actually meant.
+ * `handleBack` (header button and Android hardware back/gesture both go
+ * through it, same shape as NP-315's `programming/history.tsx` /
+ * `nutrition/goals.tsx`) pops when there is somewhere local to pop to,
+ * otherwise lands deterministically on the Workout tab root.
  */
 
 const FOCUS_LABELS: Record<string, string> = {
@@ -107,7 +124,14 @@ function toAccordionExercise(ex: DraftExercise, index: number) {
   };
 }
 
-export default function QuickSessionOverviewRoute() {
+export interface QuickSessionOverviewRouteProps {
+  /** DI for tests — injects `BackHandler` for the Android hardware-back fix. */
+  backHandler?: BackHandlerLike;
+}
+
+export default function QuickSessionOverviewRoute({
+  backHandler = BackHandler,
+}: QuickSessionOverviewRouteProps = {}) {
   const router = useRouter();
   const { colors } = useThemeTokens();
   const tabBarInset = useTabBarScreenInset();
@@ -118,6 +142,28 @@ export default function QuickSessionOverviewRoute() {
     started?: string;
     date?: string;
   }>();
+
+  // Opened cross-tab (ResumeWorkoutPill on Home), this screen can land with
+  // no local back entry — `router.back()` would then bubble to the tab
+  // navigator's own unreliable `backBehavior="history"`, which can land on
+  // whatever tab was focused before Home (e.g. Mind). Fall back to the
+  // Workout tab root explicitly instead of trusting it.
+  const handleBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/(tabs)/programming" as never);
+    }
+  }, [router]);
+
+  useAndroidBackHandler({
+    enabled: true,
+    onBack: () => {
+      handleBack();
+      return true;
+    },
+    backHandler,
+  });
 
   const sessionId = Array.isArray(params.session)
     ? params.session[0]!
@@ -451,7 +497,7 @@ export default function QuickSessionOverviewRoute() {
             testID="quick-session-overview-back-btn"
             accessibilityRole="button"
             accessibilityLabel="Back"
-            onPress={() => router.back()}
+            onPress={handleBack}
             style={{
               flexDirection: "row",
               alignItems: "center",
