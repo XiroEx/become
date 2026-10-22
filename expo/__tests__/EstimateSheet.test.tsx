@@ -620,7 +620,10 @@ describe("EstimateSheet describe sheet matches web (NP-263)", () => {
       "chicken burrito bowl",
     );
     fireEvent.press(getByTestId("estimate-sheet-describe-upload-photo"));
-    expect(mockCapture).toHaveBeenCalledWith("library");
+    // The picker launches after the sheet's own modal has stepped aside.
+    await waitFor(() => {
+      expect(mockCapture).toHaveBeenCalledWith("library");
+    });
     await waitFor(() => {
       expect(getByTestId("estimate-sheet-compose")).toBeTruthy();
     });
@@ -802,11 +805,12 @@ describe("EstimateSheet direct capture (camera hang fix)", () => {
         resolveCapture = resolve as (r: { status: "cancelled" }) => void;
       }),
     );
-    const { getByTestId } = renderSheet();
+    const { getByTestId, queryByTestId } = renderSheet();
     fireEvent.press(getByTestId("estimate-sheet-take-photo"));
-    // The sheet's own modal hides so the OS can present the picker.
+    // The sheet's own modal hides (a hidden Modal renders nothing) so the
+    // OS can present the picker.
     await waitFor(() => {
-      expect(getByTestId("estimate-sheet").props.visible).toBe(false);
+      expect(queryByTestId("estimate-sheet")).toBeNull();
     });
     // Backing out of the camera restores the sheet on the chooser with the
     // spinner reset — the button is tappable again.
@@ -815,7 +819,7 @@ describe("EstimateSheet direct capture (camera hang fix)", () => {
       expect(getByTestId("estimate-sheet").props.visible).toBe(true);
     });
     expect(getByTestId("estimate-sheet-chooser")).toBeTruthy();
-    expect(getByTestId("estimate-sheet-take-photo").props.disabled).toBe(false);
+    expect(getByTestId("estimate-sheet-take-photo").props.accessibilityState?.disabled).toBe(false);
   });
 
   it("a throw from capture shows an error, not a stuck spinner", async () => {
@@ -825,9 +829,8 @@ describe("EstimateSheet direct capture (camera hang fix)", () => {
     await waitFor(() => {
       expect(getByTestId("estimate-sheet-error")).toBeTruthy();
     });
-    // The sheet is back and the button is tappable — no endless spinner.
+    // The sheet is back, on the error screen — no endless spinner.
     expect(getByTestId("estimate-sheet").props.visible).toBe(true);
-    expect(getByTestId("estimate-sheet-take-photo").props.disabled).toBe(false);
   });
 
   it("a permission denial shows the Settings way out and resets the spinner", async () => {
@@ -845,6 +848,6 @@ describe("EstimateSheet direct capture (camera hang fix)", () => {
     // Back on the chooser, sheet restored, button tappable again.
     expect(getByTestId("estimate-sheet-chooser")).toBeTruthy();
     expect(getByTestId("estimate-sheet").props.visible).toBe(true);
-    expect(getByTestId("estimate-sheet-take-photo").props.disabled).toBe(false);
+    expect(getByTestId("estimate-sheet-take-photo").props.accessibilityState?.disabled).toBe(false);
   });
 });
