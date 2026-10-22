@@ -22,6 +22,9 @@ import UserProgress from '../../models/UserProgress'
 import { signToken } from '../../lib/auth'
 
 const USER_ID = '65f00000000000000000ff99'
+// Yesterday (UTC), not a fixed day: the mood route rejects backdated logs past its window, so a
+// literal date here made these tests start failing a week after they were written.
+const MOOD_DAY = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
 
 let postMood: any
 let postNudge: any
@@ -137,14 +140,14 @@ test('(id: 96d41072, 96d41075) Mood: initial log on a day pushes new entry and m
 
   try {
     const res = await postMood(
-      makeMoodRequest({ mood: 4, date: '2026-10-14' }, token),
+      makeMoodRequest({ mood: 4, date: MOOD_DAY }, token),
     )
     assert.equal(res.status, 200)
     const json = await res.json()
     assert.equal(json.success, true)
     assert.equal(json.mood, 4)
     assert.equal(json.applied, true)
-    assert.equal(json.date, '2026-10-14')
+    assert.equal(json.date, MOOD_DAY)
 
     assert.ok(moodUpdateArgs, 'UserProgress.updateOne must be called for progress_doc_1')
     assert.deepEqual(moodUpdateArgs.filter, { _id: 'progress_doc_1' })
@@ -162,8 +165,8 @@ test('(id: 96d41072, 96d41075) Mood: initial log on a day pushes new entry and m
 test('(id: 96d41072) Mood: a second log on the same local day UPDATES that day\'s entry via $set rather than pushing a duplicate', async () => {
   const token = await makeAuthToken()
 
-  const firstLoggedAt = new Date('2026-10-14T10:00:00.000Z')
-  const secondLoggedAt = '2026-10-14T14:00:00.000Z'
+  const firstLoggedAt = new Date(`${MOOD_DAY}T10:00:00.000Z`)
+  const secondLoggedAt = `${MOOD_DAY}T14:00:00.000Z`
 
   const fakeDoc = {
     _id: 'progress_doc_1',
@@ -171,7 +174,7 @@ test('(id: 96d41072) Mood: a second log on the same local day UPDATES that day\'
     workoutLogs: [{ sets: [{ reps: 5 }] }], // legacy invalid
     moodHistory: [
       {
-        date: new Date('2026-10-14T00:00:00.000Z'),
+        date: new Date(`${MOOD_DAY}T00:00:00.000Z`),
         loggedAt: firstLoggedAt,
         mood: 3,
       },
@@ -179,7 +182,7 @@ test('(id: 96d41072) Mood: a second log on the same local day UPDATES that day\'
     moodChangeHistory: [
       {
         timestamp: firstLoggedAt,
-        date: new Date('2026-10-14T00:00:00.000Z'),
+        date: new Date(`${MOOD_DAY}T00:00:00.000Z`),
         previousMood: null,
         newMood: 3,
       },
@@ -201,7 +204,7 @@ test('(id: 96d41072) Mood: a second log on the same local day UPDATES that day\'
   try {
     const res = await postMood(
       makeMoodRequest(
-        { mood: 5, date: '2026-10-14', loggedAt: secondLoggedAt },
+        { mood: 5, date: MOOD_DAY, loggedAt: secondLoggedAt },
         token,
       ),
     )
@@ -231,15 +234,15 @@ test('(id: 96d41072) Mood: a second log on the same local day UPDATES that day\'
 test('(id: 96d41073) Mood: a stale replay (older loggedAt) loses, returns applied:false, and performs no mood DB write', async () => {
   const token = await makeAuthToken()
 
-  const storedLoggedAt = new Date('2026-10-14T14:00:00.000Z')
-  const olderLoggedAt = '2026-10-14T10:00:00.000Z'
+  const storedLoggedAt = new Date(`${MOOD_DAY}T14:00:00.000Z`)
+  const olderLoggedAt = `${MOOD_DAY}T10:00:00.000Z`
 
   const fakeDoc = {
     _id: 'progress_doc_1',
     userId: USER_ID,
     moodHistory: [
       {
-        date: new Date('2026-10-14T00:00:00.000Z'),
+        date: new Date(`${MOOD_DAY}T00:00:00.000Z`),
         loggedAt: storedLoggedAt,
         mood: 4,
       },
@@ -262,7 +265,7 @@ test('(id: 96d41073) Mood: a stale replay (older loggedAt) loses, returns applie
   try {
     const res = await postMood(
       makeMoodRequest(
-        { mood: 2, date: '2026-10-14', loggedAt: olderLoggedAt },
+        { mood: 2, date: MOOD_DAY, loggedAt: olderLoggedAt },
         token,
       ),
     )
