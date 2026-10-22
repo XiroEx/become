@@ -105,6 +105,7 @@ import { DateNav } from "@/components/nutrition/DateNav";
 import { TagSection } from "@/components/nutrition/TagSection";
 import { FoodSearchSheet, type FoodPickResult } from "@/components/nutrition/FoodSearchSheet";
 import { EstimateSheet } from "@/components/nutrition/EstimateSheet";
+import { captureImage, type CapturedImage } from "@/lib/media/capture";
 import { ScanHistorySheet } from "@/components/nutrition/ScanHistorySheet";
 import { WaterTracker } from "@/components/nutrition/WaterTracker";
 import { QuickAddSheet, type QuickAddData } from "@/components/nutrition/QuickAddSheet";
@@ -141,6 +142,13 @@ export type NutritionViewMode = "day" | "week" | "month";
 
 const EMPTY_PLANS: MealPlan[] = [];
 const EMPTY_LOGS: MealLog[] = [];
+
+
+/**
+ * How long the camera / upload menu's own Modal needs to finish dismissing
+ * before iOS will present the system picker from this screen.
+ */
+const MENU_DISMISS_MS = 350;
 
 export default function NutritionIndexRoute() {
   const { colors, scrim, tint } = useThemeTokens();
@@ -1183,8 +1191,11 @@ export default function NutritionIndexRoute() {
   // Meal-photo / describe estimate (NP-089): which surface the sheet opens on.
   const [estimateOpen, setEstimateOpen] = useState(false);
   const [estimatePhase, setEstimatePhase] = useState<
-    "chooser" | "describe" | "review"
+    "chooser" | "describe" | "compose" | "review"
   >("chooser");
+  // The photo taken/picked BEFORE the sheet opened (see captureThenEstimate).
+  const [estimateImage, setEstimateImage] = useState<CapturedImage | null>(null);
+  const [estimateOrigin, setEstimateOrigin] = useState<"camera" | "library">("camera");
   // NP-263: the Upload menu's "Upload photo" opens the photo library
   // directly (web's `pickGallery`) instead of re-presenting this sheet's
   // own Take photo / Upload photo / Describe chooser.
@@ -1402,6 +1413,7 @@ export default function NutritionIndexRoute() {
     if (phase !== "review") setReopenedScan(null);
     setEstimatePhase(phase === "review" ? "review" : phase);
     setEstimateAutoCaptureSource(null);
+    setEstimateImage(null);
     setEstimateOpen(true);
   };
 
@@ -1410,21 +1422,45 @@ export default function NutritionIndexRoute() {
   // web's gallery file input is the equivalent: no capture attribute, so
   // the OS presents its own picker straight away.
   const openEstimateWithLibraryUpload = () => {
-    setReopenedScan(null);
-    setEstimatePhase("chooser");
-    setEstimateAutoCaptureSource("library");
-    setEstimateOpen(true);
+    void captureThenEstimate("library");
   };
 
   // The camera menu's "Take photo" opens the camera directly — no chooser.
-  // The web's camera file input (`capture="environment"`) is the
-  // equivalent: the entry point goes straight to the camera, and the sheet
-  // hides itself while the picker is presenting (see `captureFrom`).
-  const openEstimateWithCameraCapture = () => {
+  //
+  // CAPTURE FIRST, SHEET SECOND (device review 2026-10-22). Opening the
+  // estimate sheet and launching the picker from it stacked three iOS
+  // presentations on top of each other — the closing menu, the opening sheet
+  // and the picker — and iOS refused the picker mid-transition: the camera
+  // never appeared and a half-dismissed modal swallowed every touch ("freezes
+  // the whole page"). So the menu closes, its dismissal is allowed to land,
+  // the picker presents from the plain screen, and only a captured photo
+  // opens the sheet — straight on compose, the web's flow after
+  // `capture="environment"`. A refusal or a failure opens the sheet's chooser,
+  // where its own Take photo / Upload buttons explain and retry.
+  const captureThenEstimate = async (source: "camera" | "library") => {
     setReopenedScan(null);
-    setEstimatePhase("chooser");
-    setEstimateAutoCaptureSource("camera");
+    setEstimateAutoCaptureSource(null);
+    await new Promise((resolve) => setTimeout(resolve, MENU_DISMISS_MS));
+    let result: Awaited<ReturnType<typeof captureImage>>;
+    try {
+      result = await captureImage(source);
+    } catch {
+      result = { status: "failed", message: "" } as Awaited<ReturnType<typeof captureImage>>;
+    }
+    if (result.status === "cancelled") return;
+    if (result.status === "captured") {
+      setEstimateImage(result.image);
+      setEstimateOrigin(source);
+      setEstimatePhase("compose");
+    } else {
+      setEstimateImage(null);
+      setEstimatePhase("chooser");
+    }
     setEstimateOpen(true);
+  };
+
+  const openEstimateWithCameraCapture = () => {
+    void captureThenEstimate("camera");
   };
 
   // Estimate history (NP-141): reopen a saved estimate in the native review
@@ -2974,6 +3010,7 @@ export default function NutritionIndexRoute() {
           setEstimateOpen(false);
           setReopenedScan(null);
           setEstimateAutoCaptureSource(null);
+          setEstimateImage(null);
         }}
         onLogged={() => void handleEstimateLogged()}
         tag={reopenedScan?.tag ?? currentDefaultTag}
@@ -3008,6 +3045,8 @@ export default function NutritionIndexRoute() {
               }))
             : null
         }
+        initialImage={reopenedScan ? null : estimateImage}
+        initialOrigin={estimateOrigin}
         initialImageUrl={reopenedScan?.imageUrl ?? null}
         initialScanId={reopenedScan?.scanId ?? null}
         initialAutoCaptureSource={reopenedScan ? null : estimateAutoCaptureSource}
