@@ -17,6 +17,7 @@ import {
 } from "@/components/live/LiveWorkoutClient";
 import {
   createWorkoutNotificationHandle,
+  formatClockTime,
   WORKOUT_NOTIFICATION_CHANNEL_ID,
   WORKOUT_NOTIFICATION_ID,
   type WorkoutNotificationNative,
@@ -134,7 +135,7 @@ describe("NP-200 acceptance", () => {
     // press time. Both count down from that one `endsAt`; the row's text
     // is the remainder at its refresh instant.
     expect(lastUpdate?.content.body).toBe(
-      "Bench Press · Set 2 of 2 · Rest 1:30 left",
+      `Bench Press · Set 2 of 2 · Rest 1:30, back at ${formatClockTime(nowMs + 90_000)}`,
     );
     expect(lastUpdate?.content.body).toContain("Bench Press");
   });

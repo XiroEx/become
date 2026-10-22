@@ -168,6 +168,14 @@ export function formatRestRemaining(totalMs: number): string {
 }
 
 /** The row's title: the workout, always. */
+/** The local wall-clock time of an instant, as the phone's locale writes it. */
+export function formatClockTime(atMs: number): string {
+  return new Date(atMs).toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 export function workoutNotificationTitle(props: WorkoutNotificationProps): string {
   return props.workoutTitle;
 }
@@ -189,7 +197,14 @@ export function workoutNotificationBody(
   nowMs: number = Date.now(),
 ): string {
   if (props.phase === "rest" && props.restEndsAtMs !== null) {
-    return `${props.exerciseName} · ${props.setLabel} · Rest ${formatRestRemaining(props.restEndsAtMs - nowMs)} left`;
+    // The row is re-posted only when the workout CHANGES, never per second, so
+    // a countdown in it would freeze at its first value. Show the rest length
+    // and the wall-clock time it ends instead: both stay true until the next
+    // update.
+    const length = formatRestRemaining(
+      (props.restTotalSec ?? Math.max(0, props.restEndsAtMs - nowMs) / 1000) * 1000,
+    );
+    return `${props.exerciseName} · ${props.setLabel} · Rest ${length}, back at ${formatClockTime(props.restEndsAtMs)}`;
   }
   return `${props.exerciseName} · ${props.setLabel}`;
 }
@@ -263,8 +278,8 @@ export function loadWorkoutNotificationNative(
               name: "Live Workout",
               description:
                 "Shows the current exercise and rest countdown during a live workout.",
-              importance: 5 /* AndroidImportance.DEFAULT */,
-              sound: undefined,
+              importance: 4 /* AndroidImportance.LOW: no sound, no heads-up on every re-post */,
+              sound: null,
               vibrationPattern: null,
             },
           );

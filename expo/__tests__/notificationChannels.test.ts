@@ -76,7 +76,7 @@ describe("getNotificationChannels", () => {
     const c = channels.find((ch) => ch.id === CHANNEL_IDS.liveWorkout);
     expect(c).toBeDefined();
     expect(c?.name).toBe("Live Workout");
-    expect(c?.importance).toBe("default");
+    expect(c?.importance).toBe("low");
     expect(c?.sound).toBe(false);
     expect(c?.vibrate).toBe(false);
   });

@@ -72,6 +72,9 @@ export function useWorkoutNotification(
     options.handle ?? createWorkoutNotificationHandle(),
   );
   const startedRef = useRef(false);
+  // A start is async. If the screen goes away before it resolves, the sticky
+  // row would be posted with nothing left to take it down.
+  const unmountedRef = useRef(false);
   const native = options.native ?? null;
   const now = options.now ?? Date.now;
 
@@ -98,7 +101,12 @@ export function useWorkoutNotification(
       // `native` is null — the effect re-runs on its own the moment
       // `native` changes, which is what actually retries the start.
       void startWorkoutNotification(handle, snapshot, native, now()).then(() => {
-        if (handle.showing) startedRef.current = true;
+        if (!handle.showing) return;
+        if (unmountedRef.current) {
+          void endWorkoutNotification(handle, native);
+          return;
+        }
+        startedRef.current = true;
       });
       return;
     }
@@ -124,7 +132,9 @@ export function useWorkoutNotification(
   // `active` to false first (the component is simply gone).
   useEffect(() => {
     const handle = handleRef.current;
+    unmountedRef.current = false;
     return () => {
+      unmountedRef.current = true;
       if (startedRef.current) {
         startedRef.current = false;
         void endWorkoutNotification(handle, native);
