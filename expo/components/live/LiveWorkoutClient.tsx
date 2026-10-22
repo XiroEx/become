@@ -26,6 +26,7 @@ import type { VideoFramingOverride } from "@/lib/videoFraming";
 import type { VideoTrimOverride } from "@/lib/videoTrim";
 import { useRestTimer } from "@/lib/live/useRestTimer";
 import { useWorkoutLiveActivity } from "@/lib/live/liveActivity/useWorkoutLiveActivity";
+import { useWorkoutNotification } from "@/lib/live/liveActivity/useWorkoutNotification";
 import {
   getRestDuration,
   restAfterStep,
@@ -195,6 +196,19 @@ export interface LiveWorkoutClientProps {
   workoutLiveActivityFactory?: import(
     "@/lib/live/liveActivity/workoutLiveActivity"
   ).WorkoutLiveActivityFactory | null;
+  /** DI for tests: the Android ongoing notification handle (NP-200). */
+  workoutNotificationHandle?: import(
+    "@/lib/live/liveActivity/workoutNotification"
+  ).WorkoutNotificationHandle;
+  /** DI for tests: the Android ongoing notification native wrapper (NP-200). */
+  workoutNotificationNative?: import(
+    "@/lib/live/liveActivity/workoutNotification"
+  ).WorkoutNotificationNative | null;
+  /**
+   * Clock for the notification row's rest remainder (tests only). Defaults
+   * to `Date.now` — the same clock the in-app rest timer reads.
+   */
+  workoutNotificationNow?: () => number;
   /**
    * PR ids the save just reported (all-time records). Fires the PR haptic
    * once per new record — the celebration half of NP-082's haptics.
@@ -553,6 +567,9 @@ export function LiveWorkoutClient({
   onRestEnd,
   workoutLiveActivityHandle,
   workoutLiveActivityFactory,
+  workoutNotificationHandle,
+  workoutNotificationNative,
+  workoutNotificationNow,
   celebratedPrIds,
   exerciseHistory,
   exercisePRs,
@@ -1271,6 +1288,30 @@ export function LiveWorkoutClient({
     ...(workoutLiveActivityFactory !== undefined
       ? { factory: workoutLiveActivityFactory }
       : {}),
+  });
+  // THE ANDROID ONGOING NOTIFICATION (NP-200). Same description, same
+  // lifecycle as the Lock Screen activity above — one hook per platform, so
+  // iOS gets ActivityKit and Android gets the shade row, and neither
+  // platform pays for the other's surface. `rest.endsAt` travels straight
+  // through here too: the row's countdown names the exact same instant as
+  // the in-app timer.
+  useWorkoutNotification({
+    active: workout.exercises.length > 0,
+    workoutTitle: workout.workoutTitle,
+    exerciseName: activityExercise?.name ?? "",
+    setLabel: activityExercise
+      ? `Set ${activitySetIndex + 1} of ${activityTotalSets}`
+      : "",
+    phase: rest.active ? "rest" : "exercise",
+    restEndsAtMs: rest.active ? rest.endsAt : null,
+    restTotalSec: rest.active ? rest.totalSec : null,
+    ...(workoutNotificationHandle !== undefined
+      ? { handle: workoutNotificationHandle }
+      : {}),
+    ...(workoutNotificationNative !== undefined
+      ? { native: workoutNotificationNative }
+      : {}),
+    ...(workoutNotificationNow !== undefined ? { now: workoutNotificationNow } : {}),
   });
   // The web's `isSkipping`, read off the step's inputs: blank means the
   // primary button offers to skip rather than complete. Intervals never

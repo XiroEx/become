@@ -1,16 +1,18 @@
 /**
  * Android notification channels, named after the server's notification types —
- * plus the local-only rest-timer channel (NP-082).
+ * plus the local-only rest-timer (NP-082) and live-workout (NP-200) channels.
  *
  * The server's notify cron (`webapp/app/api/cron/notify/route.ts`) tags every
  * push it sends — `workout-reminder`, `meal-reminder`, `mind-reminder`,
  * `streak-at-risk`, `super-streak-at-risk`, `goal-nudge`, `checkin-reminder`,
  * `schedule-setup`, `daily-glance`, `re-engagement` — and the channel id IS
  * the tag, so each category the server sends maps to a channel the member can
- * tune (sound / vibrate / importance) in Android settings. `rest-timer` is
- * the one channel the server never sends: it carries the local rest-end
- * alert scheduled on-device when a rest starts, so the member can tune the
- * rest alarm without touching workout reminders.
+ * tune (sound / vibrate / importance) in Android settings. `rest-timer` and
+ * `live-workout` are the two channels the server never sends: `rest-timer`
+ * carries the local rest-end alert scheduled on-device when a rest starts, so
+ * the member can tune the rest alarm without touching workout reminders, and
+ * `live-workout` carries the local ongoing row shown during a live workout,
+ * so the member can silence the shade row without touching the rest alarm.
  *
  * The factory is pure so it can be tested without booting the native module;
  * `ensureAndroidChannels` creates them at app boot via expo-notifications.
@@ -49,6 +51,14 @@ export const CHANNEL_IDS = {
   /** The rest timer's locked-phone alert (NP-082) — its own channel so the
    * member can tune the rest alarm without touching workout reminders. */
   restTimer: "rest-timer",
+  /**
+   * The Android ongoing live-workout notification (NP-200) — its own
+   * channel so the member can silence the shade row without touching the
+   * rest alarm. The server never sends on it: it carries the local
+   * show-exercise-and-rest-countdown row, posted on-device while a live
+   * workout is open.
+   */
+  liveWorkout: "live-workout",
 } as const;
 
 export function getNotificationChannels(): NotificationChannel[] {
@@ -140,6 +150,15 @@ export function getNotificationChannels(): NotificationChannel[] {
       importance: "high",
       sound: true,
       vibrate: true,
+    },
+    {
+      id: CHANNEL_IDS.liveWorkout,
+      name: "Live Workout",
+      description:
+        "Shows the current exercise and rest countdown during a live workout.",
+      importance: "default",
+      sound: false,
+      vibrate: false,
     },
   ];
 }

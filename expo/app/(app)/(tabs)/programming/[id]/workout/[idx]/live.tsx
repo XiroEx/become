@@ -51,6 +51,10 @@ import {
   loadWorkoutLiveActivityFactory,
   type WorkoutLiveActivityFactory,
 } from "@/lib/live/liveActivity/workoutLiveActivity";
+import {
+  loadWorkoutNotificationNative,
+  type WorkoutNotificationNative,
+} from "@/lib/live/liveActivity/workoutNotification";
 
 export interface LiveWorkoutRouteProps {
   /** DI for tests — defaults to the SecureStore-backed cache. */
@@ -86,6 +90,14 @@ export interface LiveWorkoutRouteProps {
    * tests render with no Live Activity DI at all.
    */
   workoutLiveActivityFactory?: WorkoutLiveActivityFactory | null;
+  /**
+   * DI for tests: the Android ongoing notification native wrapper (NP-200).
+   * Omitted, the route loads the real `expo-notifications` wrapper itself —
+   * deliberately NOT the default inside `LiveWorkoutClient`, for the same
+   * reason as the Live Activity factory above. Null (or forever-null on
+   * iOS / Expo Go) means "no shade surface".
+   */
+  workoutNotificationNative?: WorkoutNotificationNative | null;
 }
 
 /**
@@ -123,6 +135,7 @@ export default function LiveWorkoutRoute({
   navigation,
   backHandler,
   workoutLiveActivityFactory: workoutLiveActivityFactoryProp,
+  workoutNotificationNative: workoutNotificationNativeProp,
 }: LiveWorkoutRouteProps = {}) {
   const router = useRouter();
   const { colors } = useThemeTokens();
@@ -155,6 +168,23 @@ export default function LiveWorkoutRoute({
        carves out; it cannot be derived during render. */
     setWorkoutLiveActivityFactory(loadWorkoutLiveActivityFactory());
   }, [workoutLiveActivityFactoryProp]);
+  // The Android ongoing notification's native wrapper (NP-200). Loaded
+  // HERE, once per mount, in an effect — never inside `LiveWorkoutClient`
+  // itself, for the same reason as the factory above. Null until the
+  // effect resolves, or forever on iOS / Expo Go / without the permission —
+  // `useWorkoutNotification` treats a null wrapper as "no shade surface"
+  // and simply does not post one.
+  const [workoutNotificationNative, setWorkoutNotificationNative] =
+    useState<WorkoutNotificationNative | null>(
+      workoutNotificationNativeProp ?? null,
+    );
+  useEffect(() => {
+    if (workoutNotificationNativeProp !== undefined) return;
+    /* eslint-disable-next-line react-hooks/set-state-in-effect -- loading a
+       native module is exactly the "something outside React" case the rule
+       carves out; it cannot be derived during render. */
+    setWorkoutNotificationNative(loadWorkoutNotificationNative());
+  }, [workoutNotificationNativeProp]);
   const params = useLocalSearchParams<{
     id?: string;
     programId?: string;
@@ -591,6 +621,7 @@ export default function LiveWorkoutRoute({
         onDismissHint={(slug) => void dismissHint(slug)}
         onExit={() => router.back()}
         workoutLiveActivityFactory={workoutLiveActivityFactory}
+        workoutNotificationNative={workoutNotificationNative}
         manageExercises={
           workout
             ? {
