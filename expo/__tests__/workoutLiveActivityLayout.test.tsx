@@ -61,9 +61,28 @@ function timers(node: Host | null, out: unknown[] = []): unknown[] {
   return out;
 }
 
+/** Every `uiImage` prop (cached exercise stills) in the tree, in draw order. */
+function uiImages(node: Host | null, out: string[] = []): string[] {
+  if (!node) return out;
+  const uiImage = node.props["uiImage"];
+  if (typeof uiImage === "string") out.push(uiImage);
+  for (const child of node.children ?? []) uiImages(child, out);
+  return out;
+}
+
+/** Every `assetName` prop (Become arrow placeholder tiles) in the tree. */
+function assetNames(node: Host | null, out: string[] = []): string[] {
+  if (!node) return out;
+  const assetName = node.props["assetName"];
+  if (typeof assetName === "string") out.push(assetName);
+  for (const child of node.children ?? []) assetNames(child, out);
+  return out;
+}
+
 type LayoutRegions = {
   banner: React.ReactElement;
   expandedBottom: React.ReactElement;
+  expandedLeading: React.ReactElement;
 };
 
 type LayoutFn = (props: WorkoutLiveActivityProps) => LayoutRegions;
@@ -196,6 +215,48 @@ describe("WorkoutLiveActivityLayout controls", () => {
       const regions = bare(props);
       expect(() => render(regions.banner as never)).not.toThrow();
       expect(() => render(regions.expandedBottom as never)).not.toThrow();
+    }
+  });
+});
+
+describe("WorkoutLiveActivityLayout exercise tile", () => {
+  const FRAMED: WorkoutLiveActivityProps = {
+    ...LIFTING,
+    imageUri: "file:///group/exercise-frames/frame-abc123.jpg",
+  };
+
+  it("banner draws the cached still when imageUri is set", () => {
+    const found = rendered(layoutFn()(FRAMED).banner);
+    expect(uiImages(found)).toEqual([FRAMED.imageUri]);
+    // No placeholder arrow beside it.
+    expect(assetNames(found)).toEqual([]);
+  });
+
+  it("banner draws the Become arrow tile — same 44 pt frame — with no still cached", () => {
+    const found = rendered(layoutFn()(LIFTING).banner);
+    expect(uiImages(found)).toEqual([]);
+    expect(assetNames(found)).toEqual(["BecomeArrow"]);
+    // The placeholder is the same tile the still fills, so the layout never
+    // shifts when a frame lands.
+    const flat = JSON.stringify(found);
+    expect(flat).toContain('"width":44');
+    expect(flat).toContain('"height":44');
+  });
+
+  it("expanded leading mirrors the banner tile", () => {
+    const withFrame = rendered(layoutFn()(FRAMED).expandedLeading);
+    expect(uiImages(withFrame)).toEqual([FRAMED.imageUri]);
+    expect(assetNames(withFrame)).toEqual([]);
+
+    const placeholder = rendered(layoutFn()(LIFTING).expandedLeading);
+    expect(uiImages(placeholder)).toEqual([]);
+    expect(assetNames(placeholder)).toEqual(["BecomeArrow"]);
+
+    // Same size with and without a frame.
+    for (const node of [withFrame, placeholder]) {
+      const flat = JSON.stringify(node);
+      expect(flat).toContain('"width":44');
+      expect(flat).toContain('"height":44');
     }
   });
 });

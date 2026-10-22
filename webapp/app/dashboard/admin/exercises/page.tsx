@@ -25,6 +25,10 @@ interface ExerciseListItem {
   isActive?: boolean
   videoUrl?: string | null
   instructions?: string[]
+  /** How many programs prescribe this exercise. Only sent on the No Video
+   *  tab, which sorts most-used first — the most useful clip to record next
+   *  is the one the most programs are already prescribing. */
+  programCount?: number
   /** A member made this one and an admin approved it into the shared library.
    *  It is still theirs — removing it here unpublishes it, it is not a delete. */
   isCustom?: boolean
@@ -449,6 +453,9 @@ export default function AdminExercisesPage() {
                     : ''}
                   {ex.equipment && ex.equipment.length > 0
                     ? ` · ${ex.equipment.join(', ')}`
+                    : ''}
+                  {issue === 'noVideo' && typeof ex.programCount === 'number'
+                    ? ` · in ${ex.programCount} program${ex.programCount === 1 ? '' : 's'}`
                     : ''}
                 </p>
                 {ex.aliases && ex.aliases.length > 0 && (

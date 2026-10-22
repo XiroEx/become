@@ -118,6 +118,30 @@ describe("useWorkoutLiveActivity", () => {
     expect(rec.updated).toEqual([{ ...BASE, weightLabel: "135 lbs" }]);
   });
 
+  it("carries imageUri into the snapshot only when present — omitted, never null", () => {
+    const rec = recordingFactory();
+    const handle = createWorkoutLiveActivityHandle();
+    const { rerender } = renderHook(
+      (props: { imageUri?: string }) =>
+        useWorkoutLiveActivity({
+          ...BASE,
+          active: true,
+          ...(props.imageUri !== undefined
+            ? { imageUri: props.imageUri }
+            : {}),
+          handle,
+          factory: rec.factory,
+        }),
+      { initialProps: { imageUri: undefined as string | undefined } },
+    );
+    expect(rec.started[0]).not.toHaveProperty("imageUri");
+
+    act(() => rerender({ imageUri: "file:///group/frame-1.jpg" }));
+    expect(rec.updated).toEqual([
+      { ...BASE, imageUri: "file:///group/frame-1.jpg" },
+    ]);
+  });
+
   it("ends the activity when `active` turns false", () => {
     const rec = recordingFactory();
     const handle = createWorkoutLiveActivityHandle();
