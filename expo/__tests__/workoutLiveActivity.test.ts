@@ -84,6 +84,21 @@ describe("startWorkoutLiveActivity", () => {
     expect(rec.started).toEqual([EXERCISE_PROPS]);
   });
 
+  it("carries weightLabel through start and update — and omits the key when absent, never null", () => {
+    const rec = recordingFactory();
+    const handle = createWorkoutLiveActivityHandle();
+    const weighed: WorkoutLiveActivityProps = {
+      ...EXERCISE_PROPS,
+      weightLabel: "135 lbs",
+    };
+    startWorkoutLiveActivity(handle, weighed, rec.factory);
+    expect(rec.started).toEqual([weighed]);
+
+    // The omit rule: a timed / bodyweight set carries no weightLabel key at
+    // all — ActivityKit refuses a dictionary containing null (PR #2159).
+    expect(EXERCISE_PROPS).not.toHaveProperty("weightLabel");
+  });
+
   it("does nothing when there is no factory (Android, Expo Go, iOS < 16.2)", () => {
     const handle = createWorkoutLiveActivityHandle();
     startWorkoutLiveActivity(handle, EXERCISE_PROPS, null);
