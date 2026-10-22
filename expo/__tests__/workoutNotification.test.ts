@@ -10,6 +10,7 @@
 import {
   createWorkoutNotificationHandle,
   endWorkoutNotification,
+  formatClockTime,
   formatRestRemaining,
   startWorkoutNotification,
   updateWorkoutNotification,
@@ -96,8 +97,10 @@ describe("workout notification copy", () => {
 
   it("bodies the row with the rest countdown while resting", () => {
     const nowMs = 1_000_000;
+    // Re-posted only on a change, so it names the length and the end time,
+    // never a countdown that would freeze.
     expect(workoutNotificationBody(restProps(nowMs + 90_000), nowMs)).toBe(
-      "Bench Press · Set 1 of 4 · Rest 1:30 left",
+      `Bench Press · Set 1 of 4 · Rest 1:30, back at ${formatClockTime(nowMs + 90_000)}`,
     );
   });
 
@@ -188,7 +191,7 @@ describe("updateWorkoutNotification", () => {
     // Same identifier = the row is replaced in place, never stacked.
     expect(rec.scheduled[1]?.identifier).toBe(WORKOUT_NOTIFICATION_ID);
     expect(rec.scheduled[1]?.content.body).toBe(
-      "Bench Press · Set 1 of 4 · Rest 1:30 left",
+      `Bench Press · Set 1 of 4 · Rest 1:30, back at ${formatClockTime(endsAt)}`,
     );
     // The instant carried to the row is `endsAt`, verbatim — never a value
     // recomputed here: the row and the in-app timer name the same instant.

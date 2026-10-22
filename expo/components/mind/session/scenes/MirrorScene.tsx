@@ -12,8 +12,7 @@ import {
 import { WriteAffirm } from "@/components/mind/session/scenes/WriteAffirm";
 import { useSpeechMatch } from "@/hooks/useSpeechMatch";
 import { lightHaptic, type HapticFn } from "@/lib/feedback/haptics";
-import { useThemeTokens } from "@/lib/theme/useThemeTokens";
-import { onDarkForeground } from "@/lib/theme/tokens";
+import { onDarkForeground, resolveToken } from "@/lib/theme/tokens";
 
 /**
  * MIRROR SCENE (NP-100).
@@ -48,6 +47,19 @@ import { onDarkForeground } from "@/lib/theme/tokens";
  * always-dark surface names the dark palette instead.)
  */
 
+/**
+ * ALWAYS BLACK, LIKE THE WEB. The viewfinder is black on every phone in
+ * either mode (see the header comment); the word highlight and the ring use
+ * the DARK palette explicitly, never the `useThemeTokens()` hook.
+ */
+const C = {
+  border: resolveToken("border", "dark"),
+  "muted-foreground": resolveToken("muted-foreground", "dark"),
+  primary: resolveToken("primary", "dark"),
+  accent: resolveToken("accent", "dark"),
+  success: resolveToken("success", "dark"),
+} as const;
+
 export const MIRROR_PASS = 0.6;
 export const MIRROR_HOLD_MS = 1800;
 export const MIRROR_DONE_MS = 1000;
@@ -72,7 +84,6 @@ export function MirrorScene({
   cameraImpl: CameraImpl = CameraView,
   testID = "mind-mirror-scene",
 }: MirrorSceneProps): React.JSX.Element {
-  const { colors } = useThemeTokens();
   const [writeMode, setWriteMode] = useState(false);
   const [started, setStarted] = useState(false);
   const [done, setDone] = useState(false);
@@ -236,10 +247,10 @@ export function MirrorScene({
             const statusColor = !showHighlight
               ? undefined
               : status === "matched"
-                ? colors.success
+                ? C.success
                 : status === "missed"
-                  ? colors.accent
-                  : colors["muted-foreground"];
+                  ? C.accent
+                  : C["muted-foreground"];
             return (
               <Text
                 key={i}
@@ -273,9 +284,9 @@ export function MirrorScene({
         {done ? (
           <View testID={`${testID}-done`} className="mt-12 items-center">
             <View className="h-20 w-20 items-center justify-center rounded-full bg-white/15">
-              <Check size={40} color={colors.success} strokeWidth={3} />
+              <Check size={40} color={C.success} strokeWidth={3} />
             </View>
-            <Text className="mt-5 text-sm font-semibold text-success">
+            <Text className="mt-5 text-sm font-semibold text-green-300">
               Locked in.
             </Text>
           </View>
@@ -305,7 +316,7 @@ export function MirrorScene({
                   cy={60}
                   r={RADIUS}
                   fill="none"
-                  stroke={colors.border}
+                  stroke={C.border}
                   strokeWidth={6}
                 />
                 <Circle
@@ -362,7 +373,7 @@ export function MirrorScene({
           // ── Listening ──
           <View testID={`${testID}-listening`} className="mt-12 items-center">
             <View className="h-28 w-28 items-center justify-center rounded-full bg-white/15">
-              <Mic size={40} color={colors.primary} />
+              <Mic size={40} color={C.primary} />
             </View>
             <Text className="mt-6 text-sm text-white/60">
               Say it like you mean it…

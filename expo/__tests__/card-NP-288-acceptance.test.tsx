@@ -207,6 +207,22 @@ describe("(id: np288-step) The Live view is the web's full-screen step", () => {
     const src = read("components/live/LiveStepView.tsx");
     expect(src).not.toMatch(/#fff|#FFF|"white"|rgba\(255/);
   });
+
+  it("pins class colours to dark too, and draws the inputs translucent", () => {
+    // The pin used to cover only the hook (`ForcedThemeMode mode="dark"`),
+    // so every class-coloured element still read light-mode grey on a light
+    // phone. `scopeClassColors` scopes the dark triplets to the subtree, the
+    // panel reads the foreground washes, and the wells use the `live` Input.
+    const live = read("components/live/LiveStepView.tsx");
+    expect(live).toContain("scopeClassColors");
+    expect(live).toContain("bg-foreground/10");
+    expect(live).toContain("text-foreground/60");
+    const inputs = read("components/live/LiveStepInputs.tsx");
+    expect(inputs).toContain('variant="live"');
+    expect(inputs).toContain("bg-foreground/10");
+    expect(inputs).toContain("text-foreground/60");
+    expect(read("components/Input.tsx")).toContain('"live"');
+  });
 });
 
 describe("(id: np288-one-entry) One exercises entry, not two", () => {

@@ -18,7 +18,7 @@
 import type { WidgetState } from "@become/api-client";
 import { ANDROID_WIDGETS } from "@/lib/widgets/androidWidgets";
 import { darkTokens } from "@/lib/theme/tokens";
-import { GEIST_FACES } from "@/lib/theme/fonts";
+import { ANDROID_SANS_FACES, GEIST_FONTS } from "@/lib/theme/fonts";
 import {
   NATIVE_ROUTES,
   resolveWebPath,
@@ -284,10 +284,13 @@ describe("the palette and the typeface are the app's own", () => {
     expect(WIDGET_COLORS.accent).toBe(hexFromTriplet(darkTokens.accent));
   });
 
-  it("names Geist faces the app already registers", () => {
-    expect(WIDGET_FONTS.headline).toBe(GEIST_FACES.sans[700]);
-    expect(WIDGET_FONTS.title).toBe(GEIST_FACES.sans[500]);
-    expect(WIDGET_FONTS.caption).toBe(GEIST_FACES.sans[400]);
+  it("names the Arimo faces the app registers", () => {
+    expect(WIDGET_FONTS.headline).toBe(ANDROID_SANS_FACES.bold);
+    expect(WIDGET_FONTS.title).toBe(ANDROID_SANS_FACES.regular);
+    expect(WIDGET_FONTS.caption).toBe(ANDROID_SANS_FACES.regular);
+    for (const face of Object.values(WIDGET_FONTS)) {
+      expect(Object.keys(GEIST_FONTS)).toContain(face);
+    }
   });
 
   it("puts a face on every string it draws — RN has no cascade and neither has this", () => {

@@ -6,7 +6,21 @@ import { Text } from "@/components/Text";
 import type { MindSceneProps } from "@/components/mind/session/scenes/types";
 import { useReducedMotion } from "@/lib/a11y/reducedMotion";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
-import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { resolveToken, tintToken } from "@/lib/theme/tokens";
+
+/**
+ * ALWAYS BLACK, LIKE THE WEB. See `WinScene.tsx` — this scene renders
+ * straight onto the player's fixed `bg-black` stage, so every colour is
+ * pinned to the DARK palette, never the `useThemeTokens()` hook.
+ */
+const C = {
+  "muted-foreground": resolveToken("muted-foreground", "dark"),
+  "primary-foreground": resolveToken("primary-foreground", "dark"),
+  destructive: resolveToken("destructive", "dark"),
+  success: resolveToken("success", "dark"),
+  /** Unmatched words — the web's `text-white/25`, derived not written out. */
+  dim: tintToken("foreground", "dark", 0.25),
+} as const;
 
 function words(s: string): string[] {
   return s
@@ -24,7 +38,6 @@ export function TypeScene({
   onDone,
   testID = "mind-type-scene",
 }: MindSceneProps): React.JSX.Element {
-  const { colors } = useThemeTokens();
   const reduced = useReducedMotion();
 
   const statement = (move.statement ?? "").trim();
@@ -66,6 +79,7 @@ export function TypeScene({
   return (
     <ScrollView
       testID={testID}
+      className="flex-1 bg-black"
       contentContainerStyle={{
         flexGrow: 1,
         alignItems: "center",
@@ -75,8 +89,8 @@ export function TypeScene({
       }}
       keyboardShouldPersistTaps="handled"
     >
-      <View className="mb-5 h-12 w-12 items-center justify-center rounded-2xl bg-primary/10">
-        <Keyboard size={24} color={colors.primary} />
+      <View className="mb-5 h-12 w-12 items-center justify-center rounded-2xl bg-white/10">
+        <Keyboard size={24} color={C.success} />
       </View>
 
       {locked ? (
@@ -85,13 +99,13 @@ export function TypeScene({
           entering={reduced ? undefined : FadeIn.duration(250)}
           className="w-full max-w-sm items-center"
         >
-          <View className="h-16 w-16 items-center justify-center rounded-full bg-success/20">
-            <Check size={32} color={colors.success} />
+          <View className="h-16 w-16 items-center justify-center rounded-full bg-green-500/20">
+            <Check size={32} color={C.success} />
           </View>
-          <Text className="mt-4 text-center text-lg font-bold text-foreground">
+          <Text className="mt-4 text-center text-lg font-bold text-white">
             In your own hand.
           </Text>
-          <Text className="mt-1 text-center text-sm text-muted-foreground">
+          <Text className="mt-1 text-center text-sm text-white/50">
             You wrote it. Now own it.
           </Text>
           <Pressable
@@ -100,12 +114,12 @@ export function TypeScene({
             accessibilityLabel="Continue"
             onPress={() => onDone()}
             style={minTouchTarget}
-            className="mt-8 w-full flex-row items-center justify-center gap-2 rounded-2xl bg-primary py-4"
+            className="mt-8 w-full flex-row items-center justify-center gap-2 rounded-2xl bg-white py-4"
           >
-            <Text className="text-base font-bold text-primary-foreground">
+            <Text className="text-base font-bold text-black">
               Continue
             </Text>
-            <ArrowRight size={20} color={colors["primary-foreground"]} />
+            <ArrowRight size={20} color={C["primary-foreground"]} />
           </Pressable>
         </Animated.View>
       ) : (
@@ -114,7 +128,7 @@ export function TypeScene({
           entering={reduced ? undefined : FadeInUp.duration(300)}
           className="w-full max-w-sm items-center"
         >
-          <Text className="text-center text-xs uppercase tracking-widest text-muted-foreground">
+          <Text className="text-center text-xs uppercase tracking-widest text-white/40">
             {move.title}
           </Text>
 
@@ -126,8 +140,7 @@ export function TypeScene({
               <Text
                 key={i}
                 style={{
-                  color:
-                    i < matched ? colors.success : colors["muted-foreground"],
+                  color: i < matched ? C.success : C.dim,
                 }}
               >
                 {w}
@@ -142,13 +155,13 @@ export function TypeScene({
             onChangeText={setText}
             multiline
             placeholder="Type it here…"
-            placeholderTextColor={colors["muted-foreground"]}
-            className={`mt-6 w-full rounded-2xl border bg-card p-4 text-center text-base text-foreground ${
-              hasError ? "border-destructive" : "border-border"
+            placeholderTextColor={C["muted-foreground"]}
+            className={`mt-6 w-full rounded-2xl border bg-white/5 p-4 text-center text-base text-white ${
+              hasError ? "border-red-400/50" : "border-white/15"
             }`}
           />
 
-          <Text className="mt-3 text-center text-xs text-muted-foreground">
+          <Text className="mt-3 text-center text-xs text-white/40">
             {hasError
               ? "Almost — check the last word."
               : `${matched} / ${targetWords.length}`}
@@ -162,7 +175,7 @@ export function TypeScene({
             style={minTouchTarget}
             className="mt-5 items-center justify-center"
           >
-            <Text className="text-sm font-medium text-muted-foreground">
+            <Text className="text-sm font-medium text-white/40">
               Skip
             </Text>
           </Pressable>

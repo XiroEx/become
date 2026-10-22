@@ -20,7 +20,7 @@ import { Card } from "@/components/Card";
 import { Modal } from "@/components/Modal";
 import { CustomExerciseForm } from "@/components/workout/CustomExerciseForm";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
-import { geistFontFamily } from "@/lib/theme/fonts";
+import { appFontFamily } from "@/lib/theme/fonts";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import {
   CUSTOM_EXERCISE_BODY_PART_FILTERS,
@@ -245,7 +245,7 @@ export function MyExercises({
           className="flex-1 ml-2 text-foreground text-sm py-0"
           style={{
             color: colors.foreground,
-            fontFamily: geistFontFamily("text-foreground text-sm"),
+            fontFamily: appFontFamily("text-foreground text-sm"),
           }}
           autoCapitalize="none"
           autoCorrect={false}

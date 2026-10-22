@@ -40,6 +40,9 @@ import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useQuickLiveWorkout } from "@/lib/quickSession/useQuickLiveWorkout";
 import { useExerciseHints } from "@/lib/live/useExerciseHints";
 import { useLiftingUnit } from "@/lib/live/useLiftingUnit";
+import { useLiveNativeSurfaces } from "@/lib/live/useLiveNativeSurfaces";
+import type { WorkoutLiveActivityFactory } from "@/lib/live/liveActivity/workoutLiveActivity";
+import type { WorkoutNotificationNative } from "@/lib/live/liveActivity/workoutNotification";
 
 export interface QuickLiveRouteProps {
   /** DI for tests — defaults to the AsyncStorage-backed store. */
@@ -71,6 +74,10 @@ export interface QuickLiveRouteProps {
   navigation?: import("@/lib/live/useLiveBackGuard").BackGuardNavigator | null;
   /** BackHandler override for tests. */
   backHandler?: import("@/lib/android/backHandler").BackHandlerLike | null;
+  /** DI for tests: the Lock Screen Live Activity factory (see `useLiveNativeSurfaces`). */
+  workoutLiveActivityFactory?: WorkoutLiveActivityFactory | null;
+  /** DI for tests: the Android ongoing notification wrapper (see `useLiveNativeSurfaces`). */
+  workoutNotificationNative?: WorkoutNotificationNative | null;
 }
 
 /**
@@ -99,6 +106,8 @@ export default function QuickLiveRoute({
   summaryDataForTests,
   navigation,
   backHandler,
+  workoutLiveActivityFactory: workoutLiveActivityFactoryProp,
+  workoutNotificationNative: workoutNotificationNativeProp,
 }: QuickLiveRouteProps = {}) {
   const router = useRouter();
   const { colors } = useThemeTokens();
@@ -106,6 +115,14 @@ export default function QuickLiveRoute({
   // The member's lifting-load unit (NP-209 / NP-080): `profile.weightUnit ??
   // 'lbs'`, read once and handed to the live views and the summary.
   const liftingUnit = useLiftingUnit();
+  // Keep-awake, the Lock Screen Live Activity (iOS) and the ongoing
+  // notification (Android) — this route had none of the three until
+  // 2026-10-22. Shared with the program-day route.
+  const { workoutLiveActivityFactory, workoutNotificationNative } =
+    useLiveNativeSurfaces({
+      workoutLiveActivityFactory: workoutLiveActivityFactoryProp,
+      workoutNotificationNative: workoutNotificationNativeProp,
+    });
   const params = useLocalSearchParams<{ session?: string }>();
   const sessionId =
     typeof params.session === "string" ? params.session : "";
@@ -450,6 +467,8 @@ export default function QuickLiveRoute({
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <LiveWorkoutClient
         workout={vm}
+        workoutLiveActivityFactory={workoutLiveActivityFactory}
+        workoutNotificationNative={workoutNotificationNative}
         initialView="live"
         weightUnit={liftingUnit}
         // The skip flow is the web's on EVERY live route (NP-288): a blank

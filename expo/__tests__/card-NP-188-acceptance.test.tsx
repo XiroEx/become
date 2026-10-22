@@ -11,12 +11,14 @@
  * uses for the rest-alert deps).
  */
 import { act, fireEvent, render } from "@testing-library/react-native";
+import { addUserInteractionListener } from "expo-widgets";
 import {
   LiveWorkoutClient,
   type LiveWorkoutViewModel,
 } from "@/components/live/LiveWorkoutClient";
 import {
   createWorkoutLiveActivityHandle,
+  WORKOUT_LIVE_ACTIVITY_NAME,
   type WorkoutLiveActivityFactory,
   type WorkoutLiveActivityInstance,
   type WorkoutLiveActivityProps,
@@ -138,5 +140,100 @@ describe("NP-188 acceptance", () => {
       />,
     );
     expect(rec.started).toEqual([]);
+  });
+});
+
+describe("NP-188 interactive controls", () => {
+  const WEIGHTED_WORKOUT: LiveWorkoutViewModel = {
+    programId: "p",
+    workoutTitle: "Upper Body",
+    exercises: [
+      {
+        slug: "bench",
+        name: "Bench Press",
+        sets: 2,
+        restSec: 90,
+        trackingType: "reps_weight",
+        prefill: [
+          { reps: 5, weight: 135, completed: false },
+          { reps: 5, weight: 135, completed: false },
+        ],
+      },
+    ],
+  };
+
+  /** The listener the client subscribed with `addUserInteractionListener`. */
+  function lockScreenListener() {
+    const calls = jest.mocked(addUserInteractionListener).mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    const listener = calls[calls.length - 1]?.[0] as unknown as (event: {
+      source?: string;
+      target?: string;
+    }) => void;
+    expect(typeof listener).toBe("function");
+    return listener;
+  }
+
+  it("weight-up steps the current set from its prefill and the activity redraws the number, then log-set runs the on-screen Complete path", () => {
+    const rec = recordingFactory();
+    const handle = createWorkoutLiveActivityHandle();
+    let nowMs = 1_000_000;
+    const { setI, clearI } = mockInterval();
+    const { getByTestId } = render(
+      <LiveWorkoutClient
+        workout={WEIGHTED_WORKOUT}
+        restTimerSetInterval={setI}
+        restTimerClearInterval={clearI}
+        restTimerNow={() => nowMs}
+        workoutLiveActivityHandle={handle}
+        workoutLiveActivityFactory={rec.factory}
+      />,
+    );
+    const press = lockScreenListener();
+
+    // The activity starts on the last-done load — the set's prefill.
+    expect(rec.started).toHaveLength(1);
+    expect(rec.started[0]?.weightLabel).toBe("135 lbs");
+
+    // − / + type into the same input the on-screen steppers would: empty
+    // starts from the prefill, then steps by 5 (lb).
+    act(() => {
+      press({ source: WORKOUT_LIVE_ACTIVITY_NAME, target: "weight-up" });
+    });
+    const stepped = rec.updated[rec.updated.length - 1];
+    expect(stepped?.weightLabel).toBe("140 lbs");
+
+    // Log set IS the on-screen Complete button: the same 90 s rest starts and
+    // the activity moves to the rest phase at the in-app instant.
+    act(() => {
+      press({ source: WORKOUT_LIVE_ACTIVITY_NAME, target: "log-set" });
+    });
+    const restDisplay = getByTestId("live-workout-rest-time").props.children;
+    expect(restDisplay).toBe("1:30");
+    const restUpdate = rec.updated[rec.updated.length - 1];
+    expect(restUpdate?.phase).toBe("rest");
+    expect(restUpdate?.restEndsAtMs).toBe(nowMs + 90_000);
+    expect(restUpdate?.exerciseName).toBe("Bench Press");
+  });
+
+  it("a timed set starts the activity with no weightLabel and no controls to press", () => {
+    const rec = recordingFactory();
+    const handle = createWorkoutLiveActivityHandle();
+    const { setI, clearI } = mockInterval();
+    render(
+      <LiveWorkoutClient
+        workout={{
+          programId: "p",
+          workoutTitle: "Cardio",
+          exercises: [{ slug: "run", name: "Run", sets: 1, trackingType: "time" }],
+        }}
+        restTimerSetInterval={setI}
+        restTimerClearInterval={clearI}
+        workoutLiveActivityHandle={handle}
+        workoutLiveActivityFactory={rec.factory}
+      />,
+    );
+    expect(rec.started).toHaveLength(1);
+    expect(rec.started[0]).not.toHaveProperty("weightLabel");
   });
 });

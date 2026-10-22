@@ -114,12 +114,11 @@ import {
  * green-400 / amber-400 rather than whatever the phone happens to be set to.
  *
  * Scoped to what THIS file draws. The individual scenes (`StateCheckScene`,
- * `BreathScene`, …) are untouched — they are separately-shipped NP-098/123
- * surfaces that deliberately follow the system scheme, which is still correct
- * everywhere else they're used. The `move` stage here keeps its own explicit
- * `bg-background` behind whichever scene is playing so none of that legibility
- * work is undone; only the chrome this file owns (the top bar, the intro, the
- * payoff, the level-up) takes the web's fixed black.
+ * `BreathScene`, …) are separately-shipped NP-098/123 surfaces that used to
+ * deliberately follow the system scheme; every one of them is now pinned to
+ * the dark palette too (same `resolveToken(name, "dark")` shape as this
+ * file), because the session is one immersive black stage on both clients —
+ * the scenes are only ever played here.
  */
 const PLAYER_WHITE = onDarkForeground;
 const PLAYER_BLACK = resolveToken("mind-ink", "dark");
@@ -688,16 +687,14 @@ export function SessionPlayer({
           </View>
         ) : null}
 
-        {/* Stage. `move` gets its own themed `bg-background` so the scene it
-            hosts (StateCheckScene, BreathScene, …) stays exactly as legible as
-            it always was — those are separate, system-following surfaces
-            (NP-098/123) that this card does not touch. Every other stage has
-            no background of its own, so the root's forced black shows through,
-            matching the web's fixed `bg-black` stage. */}
-        <View
-          testID={`${testID}-stage`}
-          className={stage === "move" ? "flex-1 bg-background" : "flex-1"}
-        >
+        {/* Stage. The whole session is the web's fixed black stage
+            (`bg-black`, never the system scheme): intro, every move, payoff
+            and level-up all render straight onto the root's forced black,
+            matching the web's `fixed inset-0 bg-black text-white` player. The
+            scenes below carry the web's own dark surfaces themselves
+            (NP-098/123 legibility work, re-pinned to the dark palette), so no
+            wrapper background is needed or wanted here. */}
+        <View testID={`${testID}-stage`} className="flex-1">
           {stage === "intro" ? (
             <View
               testID={`${testID}-intro`}

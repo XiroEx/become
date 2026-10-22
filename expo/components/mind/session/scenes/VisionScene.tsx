@@ -14,7 +14,17 @@ import { useReducedMotion } from "@/lib/a11y/reducedMotion";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { useAuth } from "@/lib/auth/useAuth";
 import { WEBAPP_BASE_URL } from "@/lib/config";
-import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { onDarkForeground, resolveToken } from "@/lib/theme/tokens";
+
+/**
+ * ALWAYS BLACK, LIKE THE WEB. See `WinScene.tsx` — this scene renders
+ * straight onto the player's fixed `bg-black` stage, so every colour is
+ * pinned to the DARK palette, never the `useThemeTokens()` hook.
+ */
+const C = {
+  "primary-foreground": resolveToken("primary-foreground", "dark"),
+  accent: resolveToken("accent", "dark"),
+} as const;
 
 const DIM_LABELS: { key: keyof MindVision; label: string }[] = [
   { key: "habits", label: "Habits" },
@@ -29,7 +39,6 @@ export function VisionScene({
   onDone,
   testID = "mind-vision-scene",
 }: MindSceneProps): React.JSX.Element {
-  const { colors } = useThemeTokens();
   const reduced = useReducedMotion();
   const { token } = useAuth();
 
@@ -90,9 +99,9 @@ export function VisionScene({
     return (
       <View
         testID={`${testID}-loading`}
-        className="flex-1 items-center justify-center"
+        className="flex-1 items-center justify-center bg-black"
       >
-        <ActivityIndicator size="large" color={colors.accent} />
+        <ActivityIndicator size="large" color={C.accent} />
       </View>
     );
   }
@@ -101,6 +110,7 @@ export function VisionScene({
     return (
       <ScrollView
         testID={testID}
+        className="flex-1 bg-black"
         contentContainerStyle={{
           flexGrow: 1,
           alignItems: "center",
@@ -110,13 +120,13 @@ export function VisionScene({
         }}
         keyboardShouldPersistTaps="handled"
       >
-        <View className="mb-5 h-12 w-12 items-center justify-center rounded-2xl bg-accent/15">
-          <Sparkles size={24} color={colors.accent} />
+        <View className="mb-5 h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/15">
+          <Sparkles size={24} color={C.accent} />
         </View>
-        <Text className="text-center text-2xl font-extrabold text-foreground">
+        <Text className="text-center text-2xl font-extrabold text-white">
           Paint your vision
         </Text>
-        <Text className="mt-2 max-w-xs text-center text-muted-foreground">
+        <Text className="mt-2 max-w-xs text-center text-white/50">
           A picture of your best self, clear enough to pull you forward.
         </Text>
 
@@ -128,7 +138,7 @@ export function VisionScene({
           style={minTouchTarget}
           className="mt-8 items-center justify-center"
         >
-          <Text className="text-sm font-medium text-muted-foreground">
+          <Text className="text-sm font-medium text-white/40">
             Skip
           </Text>
         </Pressable>
@@ -139,6 +149,7 @@ export function VisionScene({
   return (
     <ScrollView
       testID={testID}
+      className="flex-1 bg-black"
       contentContainerStyle={{
         flexGrow: 1,
         alignItems: "center",
@@ -148,12 +159,12 @@ export function VisionScene({
       }}
       keyboardShouldPersistTaps="handled"
     >
-      <View className="mb-4 h-12 w-12 items-center justify-center rounded-2xl bg-accent/15">
-        <Sparkles size={24} color={colors.accent} />
+      <View className="mb-4 h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/15">
+        <Sparkles size={24} color={C.accent} />
       </View>
       <Text
         testID={`${testID}-title`}
-        className="text-center text-xs uppercase tracking-widest text-muted-foreground"
+        className="text-center text-xs uppercase tracking-widest text-white/40"
       >
         See your future self
       </Text>
@@ -164,7 +175,7 @@ export function VisionScene({
           text={`“${statement}”`}
           onComplete={() => setReady(true)}
           speed={revealSpeed}
-          className="mt-4 max-w-sm text-center text-2xl font-bold leading-snug text-foreground"
+          className="mt-4 max-w-sm text-center text-2xl font-bold leading-snug text-white"
         />
       ) : null}
 
@@ -177,8 +188,8 @@ export function VisionScene({
           {dims.length > 0 ? (
             <View className="mt-6 w-full space-y-1.5">
               {dims.slice(0, 3).map((d) => (
-                <Text key={String(d.key)} className="text-sm text-muted-foreground">
-                  <Text className="font-semibold text-foreground">
+                <Text key={String(d.key)} className="text-sm text-white/55">
+                  <Text className="font-semibold text-white/80">
                     {d.label}:{" "}
                   </Text>
                   {vision?.[d.key] as string}
@@ -196,15 +207,19 @@ export function VisionScene({
             onPress={lockIn}
             style={minTouchTarget}
             className={`mt-10 w-full flex-row items-center justify-center gap-2 rounded-2xl py-4 ${
-              locked ? "bg-success" : "bg-primary"
+              locked ? "bg-green-500" : "bg-white"
             }`}
           >
             <Check
               size={20}
-              color={colors["primary-foreground"]}
+              color={locked ? onDarkForeground : C["primary-foreground"]}
               strokeWidth={3}
             />
-            <Text className="text-base font-bold text-primary-foreground">
+            <Text
+              className={`text-base font-bold ${
+                locked ? "text-white" : "text-black"
+              }`}
+            >
               {locked ? "That's who I'm becoming." : "I can see it"}
             </Text>
           </Pressable>

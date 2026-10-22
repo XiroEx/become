@@ -4,7 +4,7 @@ import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Button } from "@/components/Button";
 import { ChevronLeft } from "lucide-react-native";
-import type { LiveSetState } from "@/components/live/LiveSetRow";
+import { setInputsFor, type LiveSetState } from "@/components/live/LiveSetRow";
 import type { ExerciseGroupType } from "@/components/live/ExerciseGroupNav";
 import {
   buildWorkoutFlow,
@@ -26,6 +26,7 @@ import type { VideoFramingOverride } from "@/lib/videoFraming";
 import type { VideoTrimOverride } from "@/lib/videoTrim";
 import { useRestTimer } from "@/lib/live/useRestTimer";
 import { useWorkoutLiveActivity } from "@/lib/live/liveActivity/useWorkoutLiveActivity";
+import { useLiveActivityControls } from "@/lib/live/liveActivity/useLiveActivityControls";
 import { useWorkoutNotification } from "@/lib/live/liveActivity/useWorkoutNotification";
 import {
   getRestDuration,
@@ -1272,6 +1273,111 @@ export function LiveWorkoutClient({
   const activityTotalSets = activityExercise
     ? grid[activityExercise.slug]?.length ?? activityExercise.sets ?? 1
     : 1;
+  // THE LOCK SCREEN WEIGHT CONTROLS (interactive Live Activity). The − / +
+  // steppers and the Log button act on THIS set — the same row the activity
+  // describes — so while resting (standing on the next set) they adjust the
+  // next set's weight. The starting value when the input is empty is the
+  // set's prefill: the last-done weight Track shows as the placeholder,
+  // reused here rather than re-derived. Timed / bodyweight-only work
+  // (`weightLabel` absent) draws no controls on the Lock Screen.
+  const activityRow = activityExercise
+    ? grid[activityExercise.slug]?.[activitySetIndex]
+    : undefined;
+  const activityWeightTracked = activityExercise
+    ? setInputsFor(activityExercise.trackingType).weight
+    : false;
+  // A weight-tracked set ALWAYS gets the Lock Screen steppers — starting from
+  // 0 when nothing is typed and there is no last-done weight to prefill
+  // (device review 2026-10-22: a fresh dumbbell set showed no buttons).
+  //
+  // Quick sessions never PREFILL (their history is reference-only, the
+  // "Last:" line), so after the prefill the member's last logged weight for
+  // the exercise is the starting point — a dumbbell curl starts at last
+  // time's 25 lb, not 0 (device review 2026-10-22).
+  const startingWeightFor = (
+    ex: (typeof workout.exercises)[number] | undefined,
+    setIndex: number,
+  ): number =>
+    ex?.prefill?.[setIndex]?.weight ??
+    (ex ? exerciseHistory?.[ex.name]?.weight : undefined) ??
+    0;
+  const activityWeight: number | null = activityWeightTracked
+    ? (activityRow?.weight ?? startingWeightFor(activityExercise, activitySetIndex))
+    : null;
+  const activityWeightStep = weightUnit === "kg" ? 2.5 : 5;
+  // The typing path, not the logging path: adjusting the weight must not
+  // self-tick the set, start a rest or save — exactly what typing does.
+  const adjustActivityWeight = useCallback(
+    (delta: number) => {
+      const ex = workout.exercises[activityExerciseIndex];
+      if (!ex || !setInputsFor(ex.trackingType).weight) return;
+      const prev = gridRef.current[ex.slug]?.[activitySetIndex];
+      const base = prev?.weight ?? startingWeightFor(ex, activitySetIndex);
+      const next = Math.max(0, Math.round((base + delta) * 10) / 10);
+      const current: LiveSetState = prev ?? {
+        reps: null,
+        weight: null,
+        durationSec: null,
+        distance: null,
+        speed: null,
+        completed: false,
+      };
+      handleLiveSetChange(activityExerciseIndex, activitySetIndex, {
+        ...current,
+        weight: next,
+      });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- startingWeightFor reads exerciseHistory, listed
+    [
+      workout.exercises,
+      activityExerciseIndex,
+      activitySetIndex,
+      handleLiveSetChange,
+      exerciseHistory,
+    ],
+  );
+  // "Log set" without touching − / + logs the weight the Lock Screen SHOWS:
+  // an empty input is seeded with it first (the typing path), and the
+  // completion runs on the next tick so it reads the seeded grid.
+  const logActivitySet = useCallback(() => {
+    const ex = workout.exercises[activityExerciseIndex];
+    const prev = ex ? gridRef.current[ex.slug]?.[activitySetIndex] : undefined;
+    if (ex && setInputsFor(ex.trackingType).weight && prev?.weight == null) {
+      const seed = startingWeightFor(ex, activitySetIndex);
+      if (seed > 0) {
+        handleLiveSetChange(activityExerciseIndex, activitySetIndex, {
+          ...(prev ?? {
+            reps: null,
+            weight: null,
+            durationSec: null,
+            distance: null,
+            speed: null,
+            completed: false,
+          }),
+          weight: seed,
+        });
+        setTimeout(handleCompleteStep, 0);
+        return;
+      }
+    }
+    handleCompleteStep();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- startingWeightFor reads exerciseHistory, listed
+  }, [
+    workout.exercises,
+    activityExerciseIndex,
+    activitySetIndex,
+    handleLiveSetChange,
+    handleCompleteStep,
+    exerciseHistory,
+  ]);
+  useLiveActivityControls({
+    weightStep: activityWeightStep,
+    onAdjustWeight: adjustActivityWeight,
+    // The on-screen Complete button's own path — rest, autosave and the
+    // activity's rest phase follow from the normal completion.
+    onLogSet: logActivitySet,
+    resting: rest.active,
+  });
   useWorkoutLiveActivity({
     active: workout.exercises.length > 0,
     workoutTitle: workout.workoutTitle,
@@ -1282,6 +1388,10 @@ export function LiveWorkoutClient({
     phase: rest.active ? "rest" : "exercise",
     restEndsAtMs: rest.active ? rest.endsAt : null,
     restTotalSec: rest.active ? rest.totalSec : null,
+    // Omitted, never null — ActivityKit refuses a dictionary with null.
+    ...(activityWeight !== null
+      ? { weightLabel: loadLabel(activityWeight, weightUnit) }
+      : {}),
     ...(workoutLiveActivityHandle !== undefined
       ? { handle: workoutLiveActivityHandle }
       : {}),

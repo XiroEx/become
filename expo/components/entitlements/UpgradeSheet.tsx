@@ -66,7 +66,7 @@ import {
   PORTAL_PATH,
   dismissLabel,
   openBillingPortal,
-  openExternally,
+  openExternallyDetailed,
   probeCheckoutAvailable,
   startCheckout,
   type BillingDeps,
@@ -124,6 +124,12 @@ export interface CheckoutActionProps {
   browserOpened: boolean;
   onStart: () => void;
   onOpenPortal: () => void;
+  /**
+   * The machine reason with an `error` state (`network`, `schema`,
+   * `http-<status>-<code>`, `open-failed: <message>`) — rendered small and
+   * muted under the friendly sentence, so a TestFlight phone can say WHY.
+   */
+  reason?: string | null;
   testID?: string;
 }
 
@@ -142,6 +148,7 @@ export function CheckoutAction({
   browserOpened,
   onStart,
   onOpenPortal,
+  reason,
   testID = "upgrade-sheet",
 }: CheckoutActionProps) {
   const { colors } = useThemeTokens();
@@ -276,6 +283,15 @@ export function CheckoutAction({
             Checkout didn&apos;t start. That one is on us, and nothing was charged.
           </Text>
         </View>
+        {reason ? (
+          <Text
+            testID={`${testID}-checkout-error-reason`}
+            style={WRAPPABLE_TEXT}
+            className="text-muted-foreground text-xs"
+          >
+            {`Reason: ${reason}`}
+          </Text>
+        ) : null}
         <Button
           testID={`${testID}-retry`}
           onPress={onStart}
@@ -324,6 +340,7 @@ export function UpgradeSheet({
   const { colors } = useThemeTokens();
   const { data } = useEntitlements();
   const [checkout, setCheckout] = useState<CheckoutState>("checking");
+  const [checkoutReason, setCheckoutReason] = useState<string | null>(null);
   const [portalState, setPortalState] = useState<PortalState>("idle");
   const [portalPath, setPortalPath] = useState<string>(PORTAL_PATH);
   const [browserOpened, setBrowserOpened] = useState(false);
@@ -372,19 +389,22 @@ export function UpgradeSheet({
     // branch, which is the same attempt a second time.
     if (checkout !== "ready" && checkout !== "error") return;
     setCheckout("starting");
+    setCheckoutReason(null);
     void (async () => {
       const result = await startCheckout(deps);
       if (result.kind === "state") {
         if (result.portalPath) setPortalPath(result.portalPath);
         setCheckout(result.state);
+        setCheckoutReason(result.reason ?? null);
         return;
       }
       // THE PURCHASE LEAVES THE APP HERE, and only here.
-      const opened = await openExternally(result.url, deps);
+      const { opened, reason } = await openExternallyDetailed(result.url, deps);
       // Back to 'ready' either way: the member is in Safari now, and when they
       // return this sheet is still mounted — a spinner that never resolves is
       // the one thing it must not be left showing.
       setCheckout(opened ? "ready" : "error");
+      setCheckoutReason(opened ? null : (reason ?? "open-failed"));
       // Remembered for the foreground re-read (NP-054): the member may come
       // back through the app switcher, with no return params at all.
       if (opened) {
@@ -487,6 +507,7 @@ export function UpgradeSheet({
           browserOpened={browserOpened}
           onStart={onStart}
           onOpenPortal={onOpenPortal}
+          reason={checkoutReason}
         />
 
         <View style={{ marginTop: 12 }}>

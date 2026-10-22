@@ -30,6 +30,7 @@ import {
   consumePendingRedirect,
   getPendingRedirect,
   redirectSystemPath,
+  resetWarmPushDedupeForTests,
   resolveDirectNativeRoute,
   setPendingRedirect,
 } from "../app/+native-intent";
@@ -39,6 +40,7 @@ beforeEach(() => {
   mockOpenWebSignedIn.mockClear();
   mockRouterPush.mockClear();
   setPendingRedirect(null);
+  resetWarmPushDedupeForTests();
 });
 
 describe("+native-intent", () => {
@@ -147,6 +149,34 @@ describe("+native-intent", () => {
       expect(target).toBe("/plan");
       expect(mockRouterPush).toHaveBeenCalledWith("/plan");
       expect(getPendingRedirect()).toBe("/plan");
+    });
+
+    it("never pushes on a cold start — the launch route consumes the pending redirect", () => {
+      const target = redirectSystemPath({
+        path: "/verify?token=abcdefgh12345678&mode=login",
+        initial: true,
+      });
+      expect(target).toBe("/verify?token=abcdefgh12345678&mode=login");
+      expect(mockRouterPush).not.toHaveBeenCalled();
+      expect(getPendingRedirect()).toBe(
+        "/verify?token=abcdefgh12345678&mode=login",
+      );
+    });
+
+    it("pushes a twice-delivered warm verify link only once", () => {
+      const link = "/verify?token=abcdefgh12345678&mode=login";
+      expect(redirectSystemPath({ path: link, initial: false })).toBe(link);
+      expect(redirectSystemPath({ path: link, initial: false })).toBe(link);
+      expect(mockRouterPush).toHaveBeenCalledTimes(1);
+      expect(mockRouterPush).toHaveBeenCalledWith(link);
+    });
+
+    it("still pushes when the warm link changes", () => {
+      const first = "/verify?token=aaaaaaaaaaaaaaaa&mode=login";
+      const second = "/verify?token=bbbbbbbbbbbbbbbb&mode=login";
+      expect(redirectSystemPath({ path: first, initial: false })).toBe(first);
+      expect(redirectSystemPath({ path: second, initial: false })).toBe(second);
+      expect(mockRouterPush).toHaveBeenCalledTimes(2);
     });
 
     it("consumes and clears pending redirect", () => {

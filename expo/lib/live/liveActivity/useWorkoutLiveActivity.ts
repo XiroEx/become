@@ -41,6 +41,12 @@ export interface UseWorkoutLiveActivityOptions {
   /** `rest.endsAt`, verbatim — the rule that travels. */
   restEndsAtMs: number | null;
   restTotalSec: number | null;
+  /**
+   * The current set's load for the Lock Screen − / + controls
+   * (`weightLabel` on the props). Omitted when the set has no load.
+   * DI for tests, and the route's real value. Omitted = no controls.
+   */
+  weightLabel?: string;
   /** DI for tests, and the route's real production factory. Omitted = none. */
   handle?: WorkoutLiveActivityHandle;
   factory?: WorkoutLiveActivityFactory | null;
@@ -68,6 +74,10 @@ export function useWorkoutLiveActivity(
     phase: options.phase,
     restEndsAtMs: options.restEndsAtMs,
     restTotalSec: options.restTotalSec,
+    // Omitted, never null — ActivityKit refuses a dictionary with null (PR #2159).
+    ...(options.weightLabel !== undefined
+      ? { weightLabel: options.weightLabel }
+      : {}),
   };
 
   useEffect(() => {
@@ -101,6 +111,7 @@ export function useWorkoutLiveActivity(
     options.phase,
     options.restEndsAtMs,
     options.restTotalSec,
+    options.weightLabel,
     factory,
   ]);
 

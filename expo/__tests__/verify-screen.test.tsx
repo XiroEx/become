@@ -3,6 +3,7 @@ import { fireEvent, render, waitFor, within } from "@testing-library/react-nativ
 
 const mockReplace = jest.fn();
 let mockParams: { token?: string; mode?: string } = {};
+let mockSessionToken: string | null = null;
 
 jest.mock("expo-router", () => ({
   useRouter: () => ({
@@ -17,9 +18,9 @@ const mockSetToken = jest.fn(async () => {});
 jest.mock("@/lib/auth/useAuth", () => ({
   useAuth: () => ({
     user: null,
-    token: null,
+    token: mockSessionToken,
     loading: false,
-    isAuthed: false,
+    isAuthed: mockSessionToken !== null,
     setToken: mockSetToken,
     refresh: jest.fn(),
     logout: jest.fn(),
@@ -38,6 +39,7 @@ import { X, XCircle } from "lucide-react-native";
 import VerifyRoute, {
   VerifyScreen,
   friendlyVerifyErrorMessage,
+  resetVerifyFlightsForTests,
 } from "../app/(auth)/verify";
 /* eslint-enable import/first */
 
@@ -50,6 +52,8 @@ describe("VerifyScreen (presentational, prop-driven)", () => {
     mockSetToken.mockResolvedValue(undefined);
     mockApiFetch.mockReset();
     mockParams = {};
+    mockSessionToken = null;
+    resetVerifyFlightsForTests();
   });
 
   it("shows the working spinner during mount", () => {
@@ -146,6 +150,8 @@ describe("VerifyRoute (default export, route wrapper)", () => {
     mockSetToken.mockResolvedValue(undefined);
     mockApiFetch.mockReset();
     mockParams = {};
+    mockSessionToken = null;
+    resetVerifyFlightsForTests();
   });
 
   it("persists the JWT via useAuth().setToken on a successful verify", async () => {
@@ -208,6 +214,8 @@ describe("VerifyScreen error card (NP-252 web parity)", () => {
     mockSetToken.mockResolvedValue(undefined);
     mockApiFetch.mockReset();
     mockParams = {};
+    mockSessionToken = null;
+    resetVerifyFlightsForTests();
   });
 
   it("no token: shows the web's 'No verification token provided.' message", () => {
@@ -276,6 +284,8 @@ describe("VerifyScreen error card (NP-312 native-vs-web parity)", () => {
     mockSetToken.mockResolvedValue(undefined);
     mockApiFetch.mockReset();
     mockParams = {};
+    mockSessionToken = null;
+    resetVerifyFlightsForTests();
   });
 
   it("wraps the error state in the card surface (bg-card + border-border), not the bare page background", () => {
@@ -321,5 +331,76 @@ describe("friendlyVerifyErrorMessage (pure mapping)", () => {
     expect(friendlyVerifyErrorMessage(null)).toBe(
       "Something went wrong. Please try again.",
     );
+  });
+});
+
+// Single-flight verification: a magic-link token is one-time, so any re-run
+// or second mount with the same token must await the SAME promise instead of
+// re-POSTing — the second POST's "already consumed" refusal is what used to be
+// displayed over a sign-in that had already succeeded.
+describe("VerifyScreen single-flight (one token, one request)", () => {
+  beforeEach(() => {
+    mockReplace.mockReset();
+    mockSetToken.mockReset();
+    mockSetToken.mockResolvedValue(undefined);
+    mockApiFetch.mockReset();
+    mockParams = {};
+    mockSessionToken = null;
+    resetVerifyFlightsForTests();
+  });
+
+  it("re-render with a new inline onSuccess verifies only once", async () => {
+    mockParams = { token: "single-flight-rerender-1", mode: "login" };
+    const verifyFn = jest.fn(async () => ({ token: "jwt-1" }));
+    const { rerender } = render(
+      <VerifyScreen verifyFn={verifyFn} onSuccess={async () => {}} />,
+    );
+    // A new inline onSuccess every render (what the route passes) plus the
+    // setToken re-render is what used to re-run the effect and re-POST.
+    rerender(<VerifyScreen verifyFn={verifyFn} onSuccess={async () => {}} />);
+    rerender(<VerifyScreen verifyFn={verifyFn} onSuccess={async () => {}} />);
+    await waitFor(() => {
+      expect(verifyFn).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith("/");
+    });
+  });
+
+  it("two mounts with the same token share one request", async () => {
+    mockParams = { token: "single-flight-twomount-1", mode: "login" };
+    const verifyFn = jest.fn(async () => ({ token: "jwt-2" }));
+    const onSuccessA = jest.fn();
+    const onSuccessB = jest.fn();
+    render(<VerifyScreen verifyFn={verifyFn} onSuccess={onSuccessA} />);
+    render(<VerifyScreen verifyFn={verifyFn} onSuccess={onSuccessB} />);
+    await waitFor(() => {
+      expect(onSuccessA).toHaveBeenCalledWith("jwt-2");
+    });
+    await waitFor(() => {
+      expect(onSuccessB).toHaveBeenCalledWith("jwt-2");
+    });
+    expect(verifyFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("failure-after-success routes home instead of showing the error", async () => {
+    mockParams = { token: "single-flight-stale-1", mode: "login" };
+    // The session already holds a token (the first attempt succeeded and
+    // persisted it) while THIS run's request fails on the consumed token —
+    // the member is in, so route home like a success.
+    mockSessionToken = "fresh-jwt-from-first-attempt";
+    const verifyFn = jest.fn(async () => {
+      throw new Error("already consumed");
+    });
+    const onFailure = jest.fn();
+    const { getByTestId, queryByTestId } = render(
+      <VerifyScreen verifyFn={verifyFn} onFailure={onFailure} />,
+    );
+    await waitFor(() => {
+      expect(getByTestId("verify-success")).toBeTruthy();
+    });
+    expect(mockReplace).toHaveBeenCalledWith("/");
+    expect(queryByTestId("verify-error")).toBeNull();
+    expect(onFailure).not.toHaveBeenCalled();
   });
 });

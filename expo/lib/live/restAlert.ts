@@ -18,6 +18,9 @@
  * alert first, and `cancelRestAlert` is called from the skip/finish paths.
  */
 
+import { recordRestAlertResult } from "@/lib/diagnostics/deviceDiagnostics";
+import type { AsyncStorageLike } from "@/lib/query/persistor";
+
 export const REST_ALERT_CHANNEL_ID = "rest-timer";
 
 export interface RestAlertDeps {
@@ -28,6 +31,12 @@ export interface RestAlertDeps {
   /** Cancel a previously scheduled notification by id. */
   cancel: (id: string) => Promise<void>;
   log?: (message: string, ...args: unknown[]) => void;
+  /**
+   * Where the scheduling outcome is recorded for the Settings Diagnostics
+   * block. Defaults to AsyncStorage; pass an in-memory store in tests, or
+   * explicit null to skip recording.
+   */
+  diagnosticsStorage?: AsyncStorageLike | null;
 }
 
 export interface RestAlertHandle {
@@ -122,6 +131,11 @@ export const defaultRestAlertDeps: RestAlertDeps = {
  * previous rest scheduled. Resolves to the notification id, or null when
  * permission is not already granted (in-app timer only) or scheduling
  * failed. Never throws, never prompts.
+ *
+ * The outcome is recorded for the Settings Diagnostics block (`ok: true` =
+ * the OS accepted it; `no-permission` = in-app timer only; anything else =
+ * the schedule throw's message) — the same shape as the Live Activity's
+ * `lastFailure`.
  */
 export async function scheduleRestAlert(
   handle: RestAlertHandle,
@@ -129,13 +143,25 @@ export async function scheduleRestAlert(
   deps: RestAlertDeps = defaultRestAlertDeps,
 ): Promise<string | null> {
   await cancelRestAlert(handle, deps);
+  const storage = deps.diagnosticsStorage;
   try {
-    if (!(await deps.isGranted())) return null;
+    if (!(await deps.isGranted())) {
+      void recordRestAlertResult(false, "no-permission", Date.now(), storage);
+      return null;
+    }
     const id = await deps.schedule(endsAtMs);
     handle.id = id;
+    void recordRestAlertResult(true, "scheduled", Date.now(), storage);
     return id;
   } catch (error) {
     deps.log?.("[rest] alert schedule failed", error);
+    const message = error instanceof Error ? error.message : String(error);
+    void recordRestAlertResult(
+      false,
+      message || "schedule-failed",
+      Date.now(),
+      storage,
+    );
     return null;
   }
 }
