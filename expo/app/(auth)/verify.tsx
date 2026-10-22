@@ -165,9 +165,9 @@ export function VerifyScreen({
       const fn =
         verifyFnRef.current ??
         ((token: string, _mode: VerifyMode) => defaultVerifyFn(token));
-      flight = fn(rawToken, rawMode).then<VerifyOutcome>(
-        (result) => ({ ok: true, jwt: result.token }),
-        (error: unknown) => ({ ok: false, error }),
+      flight = fn(rawToken, rawMode).then(
+        (result): VerifyOutcome => ({ ok: true, jwt: result.token }),
+        (error: unknown): VerifyOutcome => ({ ok: false, error }),
       );
       verifyFlights.set(rawToken, flight);
     }
