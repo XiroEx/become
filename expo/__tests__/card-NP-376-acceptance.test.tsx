@@ -224,8 +224,13 @@ describe("(NP-376) no (tabs) screen reintroduces an absolute control under the b
     const recipeDetail = readExpo("app/(app)/(tabs)/nutrition/recipes/[id].tsx");
     expect(recipeDetail).toContain("bottom: tabBarInset + 24");
 
+    // The quick-session overview is a PUSHED screen, so `TabStack` already
+    // pads its container by the full tab-bar band: its CTA floats on the
+    // capsule's own breathing room instead of adding `tabBarInset` again
+    // (which lifted it by a whole tab bar, over the middle of the list).
     const quickOverview = readExpo("app/(app)/(tabs)/programming/quick/index.tsx");
-    expect(quickOverview).toContain("bottom: tabBarInset + 24");
+    expect(quickOverview).toContain("bottom: TAB_BAR_CONTENT_GAP + 12");
+    expect(quickOverview).not.toContain("useTabBarScreenInset");
 
     const programBuilder = readExpo("components/programs/ProgramBuilder.tsx");
     expect(programBuilder).toContain(
