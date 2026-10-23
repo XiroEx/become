@@ -1,9 +1,12 @@
 "use client"
 import React, { useEffect, useState, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { AnimatePresence, motion } from 'framer-motion'
-import { LogOut, MessageSquareText, Settings, ShieldCheck, UserRound, Bell } from 'lucide-react'
+import { LogOut, MessageSquareText, Settings, ShieldCheck, UserRound, Bell, HelpCircle } from 'lucide-react'
+import { useTutorialMaybe } from '@redbtn/redtutorial'
+import { becomeOnboardingTour } from '@/lib/tutorials/becomeTour'
+import { segmentForPath } from '@/lib/tutorials/segmentForPath'
 import FoodReportsPanel from './nutrition/FoodReportsPanel'
 import FeedbackModal from './FeedbackModal'
 import Avatar from './Avatar'
@@ -27,6 +30,9 @@ export default function ProfileMenu() {
   const [reportsOpen, setReportsOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
+  const pathname = usePathname()
+  const tutorial = useTutorialMaybe()
+  const helpSegment = segmentForPath(pathname)
 
   useEffect(() => {
     const token = localStorage.getItem('token')
@@ -178,6 +184,19 @@ export default function ProfileMenu() {
               <MessageSquareText className="h-4 w-4" />
               Send Feedback
             </button>
+            {tutorial && helpSegment && (
+              <button
+                data-testid="profile-menu-help"
+                onClick={() => {
+                  setIsOpen(false)
+                  tutorial.start(becomeOnboardingTour.id, { segment: helpSegment, force: true })
+                }}
+                className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-zinc-700 transition-colors hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-700"
+              >
+                <HelpCircle className="h-4 w-4" />
+                Help
+              </button>
+            )}
             <button
               onClick={handleLogout}
               className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-red-600 transition-colors hover:bg-zinc-50 dark:text-red-400 dark:hover:bg-zinc-700"
