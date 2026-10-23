@@ -12,6 +12,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
+import PageHeader from '@/components/PageHeader'
 import { Card } from '@/components/ui'
 import { BackButton } from '@/components/ui/BackButton'
 import { SYSTEM_INFO, getUnlockedSystems } from '@/lib/mindXP'
@@ -102,13 +103,15 @@ export default function ArsenalClient() {
   return (
     <PageTransition className="pb-6">
       <UpgradeSheet open={!!gate} gate={gate} onClose={() => setGate(null)} />
-      <header className="mb-2 flex items-center gap-3">
+      <div className="mb-1">
         <BackButton fallbackHref="/dashboard/mind" />
-        <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white sm:text-3xl">Your Arsenal</h1>
-      </header>
-      <p className="mb-5 text-sm text-zinc-500 dark:text-zinc-400">
-        Need a reset? Vision work? Pick a focus — each one&apos;s a short, fresh session.
-      </p>
+      </div>
+      <PageHeader
+        title="Your Arsenal"
+        subtitle="Need a reset? Vision work? Pick a focus — each one&apos;s a short, fresh session."
+        className="mb-2"
+      />
+      <div className="mb-5" />
 
       {loading ? (
         <div className="space-y-3">

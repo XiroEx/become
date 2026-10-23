@@ -11,6 +11,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Dumbbell, Zap, Sparkles, Calendar, Clock, Plus, Upload, ChevronRight, CalendarClock, Bookmark, Loader2, GripVertical } from 'lucide-react'
 import { DragDropContext, Droppable, Draggable, type DropResult, type DraggableProvidedDragHandleProps } from '@hello-pangea/dnd'
 import PageTransition from '@/components/PageTransition'
+import PageHeader from '@/components/PageHeader'
 import { Card, EmptyState, Toast } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
 import ExerciseLibraryClient from '../library/ExerciseLibraryClient'
@@ -616,12 +617,13 @@ export default function HubClient() {
 
   return (
     <PageTransition className="pb-6">
-      <header className="mb-4 flex items-center gap-3">
+      <div className="mb-1">
         <BackButton />
-        <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white sm:text-3xl">
-          My Workout
-        </h1>
-      </header>
+      </div>
+      <PageHeader
+        title="My Workout"
+        className="mb-4"
+      />
 
       {/* Segmented tab control */}
       <div className="mb-5 flex flex-wrap gap-2">

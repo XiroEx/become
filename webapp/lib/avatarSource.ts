@@ -10,7 +10,7 @@
 // 2026-06-03; the object is in neither MinIO today, so
 // `/api/blob/avatars/<id>/<rand>.jpg` answers 404 and `<Image>` rendered the
 // browser's broken-image box on every surface that shows an avatar at once —
-// TopNav, the profile card, the icon picker's preview and the picker's own
+// the PageHeader avatar button, the profile card, the icon picker's preview and the picker's own
 // "custom" slot. Four broken images and no way to tell what went wrong.
 //
 // A member's row can name an image that cannot be drawn for reasons the app

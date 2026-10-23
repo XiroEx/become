@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import PageTransition from '@/components/PageTransition'
+import PageHeader from '@/components/PageHeader'
 import { Card, EmptyState, Toast } from '@/components/ui'
 import DateOnlyPicker, { formatDatePillLabel } from '@/components/ui/DateOnlyPicker'
 import { useToast } from '@/hooks/useToast'
@@ -196,7 +197,7 @@ export default function ScanHistoryPage() {
   return (
     <PageTransition className="pb-6">
       <Toast toast={toast} />
-      <header className="mb-4 flex items-center gap-3">
+      <div className="mb-1">
         <Link
           href="/dashboard/nutrition"
           aria-label="Back to nutrition"
@@ -204,11 +205,12 @@ export default function ScanHistoryPage() {
         >
           <ArrowLeft className="h-4 w-4" />
         </Link>
-        <div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Estimate history</h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">Your past photo &amp; describe estimates</p>
-        </div>
-      </header>
+      </div>
+      <PageHeader
+        title="Estimate history"
+        subtitle="Your past photo & describe estimates"
+        className="mb-4"
+      />
 
       {loading ? (
         <div className="mt-10 flex justify-center"><Loader2 className="h-6 w-6 animate-spin text-zinc-400" /></div>

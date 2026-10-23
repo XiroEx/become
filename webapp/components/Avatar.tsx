@@ -1,7 +1,7 @@
 'use client'
 
-// The user's equipped profile icon, rendered consistently everywhere (TopNav,
-// profile card, etc.). Shows a custom uploaded image when equipped, otherwise a
+// The user's equipped profile icon, rendered consistently everywhere (the
+// PageHeader avatar button, profile card, etc.). Shows a custom uploaded image when equipped, otherwise a
 // preset glyph on its branded gradient. The optional `frame` slot is where an
 // earned redReward frame will wrap the avatar in a later phase.
 //

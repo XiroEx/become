@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { CalendarDays, Users } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
+import PageHeader from '@/components/PageHeader'
 import { Card, EmptyState } from '@/components/ui'
 import { BackButton } from '@/components/ui/BackButton'
 import { CommunityEvent, CommunityGroup, formatEventTime, getToken } from '@/components/community/types'
@@ -53,14 +54,16 @@ export default function GroupDetailPage() {
     <PageTransition><EmptyState title="Group not found" description="This group is unavailable or has been archived." /></PageTransition>
   ) : (
     <PageTransition>
-      <div className="mb-5">
-        <Link href="/dashboard/groups" className="text-sm font-medium text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white">Groups</Link>
-        <div className="mt-2 flex items-center gap-3">
-          <BackButton />
-          <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white">{group.name}</h1>
-        </div>
-        <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">{group.description}</p>
-        <div className="mt-4 flex items-center gap-2" data-tour="group-membership">
+      <Link href="/dashboard/groups" className="text-sm font-medium text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white">Groups</Link>
+      <div className="mb-1 mt-2">
+        <BackButton />
+      </div>
+      <PageHeader
+        title={group.name}
+        subtitle={group.description}
+        className="mb-5"
+      />
+        <div className="flex items-center gap-2" data-tour="group-membership">
           <button
             onClick={toggleJoin}
             className={`rounded-lg px-3 py-2 text-sm font-medium ${group.isMember ? 'border border-zinc-200 text-zinc-700 dark:border-zinc-700 dark:text-zinc-200' : 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'}`}
@@ -69,7 +72,6 @@ export default function GroupDetailPage() {
           </button>
           <span className="text-sm text-zinc-500 dark:text-zinc-400">{group.memberCount} members</span>
         </div>
-      </div>
 
       <section data-tour="group-events">
         <h2 className="mb-2 text-sm font-semibold text-zinc-900 dark:text-white">Group Events</h2>

@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageTransition from '@/components/PageTransition'
-import { ChevronLeft, ChevronRight, Calendar, Check } from 'lucide-react'
+import PageHeader from '@/components/PageHeader'
+import { ChevronLeft, ChevronRight, Check } from 'lucide-react'
 
 interface Props {
   programId: string
@@ -245,23 +246,19 @@ export default function ScheduleSetupClient({ programId, programName, trainingDa
 
     return (
       <PageTransition className="pb-6">
-        <div className="mb-6">
+        <div className="mb-1">
           <button
             onClick={() => router.back()}
-            className="mb-3 flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+            className="flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
           >
             <ChevronLeft className="h-4 w-4" /> Back
           </button>
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-900/30">
-              <Calendar className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-zinc-900 dark:text-white sm:text-2xl">Your Schedule</h1>
-              <p className="text-sm text-zinc-500 dark:text-zinc-400">{programName}</p>
-            </div>
-          </div>
         </div>
+        <PageHeader
+          title="Your Schedule"
+          subtitle={programName}
+          className="mb-6"
+        />
 
         {/* Stats */}
         <div data-tour="schedule-stats" className="mb-6 grid grid-cols-3 gap-3">
@@ -333,24 +330,20 @@ export default function ScheduleSetupClient({ programId, programName, trainingDa
   return (
     <PageTransition className="pb-6">
       {/* Header */}
-      <div className="mb-6">
+      <div className="mb-1">
         <button
           onClick={() => step > 1 ? setStep(step - 1) : router.back()}
-          className="mb-3 flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+          className="flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
         >
           <ChevronLeft className="h-4 w-4" />
           {step > 1 ? 'Back' : 'Skip Setup'}
         </button>
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-900/30">
-            <Calendar className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-zinc-900 dark:text-white sm:text-2xl">Set Up Schedule</h1>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">{programName}</p>
-          </div>
-        </div>
       </div>
+      <PageHeader
+        title="Set Up Schedule"
+        subtitle={programName}
+        className="mb-6"
+      />
 
       {/* Progress Steps */}
       <div data-tour="schedule-steps" className="mb-8 flex items-center gap-2">

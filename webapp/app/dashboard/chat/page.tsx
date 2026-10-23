@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Send, MessageCircle, ImagePlus, Loader2 } from "lucide-react";
 import PageTransition from "@/components/PageTransition";
+import PageHeader from "@/components/PageHeader";
 import FeatureGuard from "@/components/FeatureGuard";
 import GifPicker from "@/components/chat/GifPicker";
 
@@ -365,16 +366,13 @@ export default function ChatPage() {
   if (!selectedConversation) {
     return (
       <PageTransition className="flex h-full flex-col">
-        <div className="mb-4">
-          <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white">
-            Messages
-          </h1>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            {userRole === "trainer" || userRole === "admin"
-              ? "Chat with your clients"
-              : "Direct line to your coach"}
-          </p>
-        </div>
+        <PageHeader
+          title="Messages"
+          subtitle={userRole === "trainer" || userRole === "admin"
+            ? "Chat with your clients"
+            : "Direct line to your coach"}
+          className="mb-4"
+        />
 
         {/* data-tour wrapper: stable tour anchor across loading / empty / list
             states. flex-1 flex-col so the empty state keeps centering. */}

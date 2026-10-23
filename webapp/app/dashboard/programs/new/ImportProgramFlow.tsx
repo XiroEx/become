@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { ArrowLeft, FileText, Loader2, PencilLine, Upload } from "lucide-react";
+import PageHeader from "@/components/PageHeader";
 import { runAiTask } from "@/lib/ai/runClient";
 import { normalizeImportedProgram, flagImportedProgram, type ImportedProgram } from "@/lib/workout/importProgram";
 
@@ -123,16 +124,12 @@ export default function ImportProgramFlow({ onImported, onCancel }: ImportProgra
 
       {state.step === "choose" && (
         <div className="space-y-4">
-          <div>
-            <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white">
-              Import your program
-            </h1>
-            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-              Already wrote your program somewhere else — Notes, a text file? Paste it in or
+          <PageHeader
+            title="Import your program"
+            subtitle="Already wrote your program somewhere else — Notes, a text file? Paste it in or
               upload it and we&apos;ll turn it into a program you can actually run in the app.
-              You&apos;ll get a chance to review and edit before saving.
-            </p>
-          </div>
+              You&apos;ll get a chance to review and edit before saving."
+          />
 
           <div className="grid gap-3 sm:grid-cols-2">
             <button
@@ -170,13 +167,11 @@ export default function ImportProgramFlow({ onImported, onCancel }: ImportProgra
 
       {state.step === "paste" && (
         <div className="space-y-4">
-          <div>
-            <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white">Paste your program</h1>
-            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-              Paste it in as written — days, exercises, sets/reps, whatever you have. We&apos;ll
-              keep it exactly as written.
-            </p>
-          </div>
+          <PageHeader
+            title="Paste your program"
+            subtitle="Paste it in as written — days, exercises, sets/reps, whatever you have. We&apos;ll
+            keep it exactly as written."
+          />
           <textarea
             autoFocus
             value={state.text}

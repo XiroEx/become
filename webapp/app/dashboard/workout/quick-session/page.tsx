@@ -12,6 +12,7 @@ import { ArrowLeft, Play, Dumbbell, CalendarClock, Check, Pencil } from 'lucide-
 import ExerciseAccordion from '@/components/ExerciseAccordion'
 import ShareButton from '@/components/share/ShareButton'
 import PageTransition from '@/components/PageTransition'
+import PageHeader from '@/components/PageHeader'
 import SessionEditor from '@/components/workout/SessionEditor'
 import QuickSessionNamePrompt from '@/components/workout/QuickSessionNamePrompt'
 import {
@@ -200,11 +201,16 @@ export default function QuickSessionOverviewPage() {
     <PageTransition className="pb-44">
       <div className="mx-auto max-w-2xl space-y-4 px-4 py-4">
         {/* Header */}
-        <div className="flex items-center justify-between gap-2">
+        <div>
           <button onClick={() => router.back()} className="flex items-center gap-2 rounded-full bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700">
             <ArrowLeft className="h-4 w-4" /> Back
           </button>
-          <div className="flex items-center gap-2">
+        </div>
+        <PageHeader
+          title={session.title}
+          subtitle={`${isSaved || session.source === 'saved' ? 'Saved session' : 'Generated session'}${focusLabel ? ` · ${focusLabel}` : ''} · ${session.exercises.length} exercises`}
+        />
+        <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => {
                 setEditing((v) => !v)
@@ -235,7 +241,6 @@ export default function QuickSessionOverviewPage() {
               session={{ title: session.title, focus: session.focus, exercises: session.exercises }}
               label="Share"
             />
-          </div>
         </div>
 
         {/* Log / plan date panel — revealed by the header button. A past date
@@ -275,22 +280,6 @@ export default function QuickSessionOverviewPage() {
             {logError && <p className="mt-1.5 text-xs text-red-500">{logError}</p>}
           </div>
         )}
-
-        {/* Title */}
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-            {isSaved || session.source === 'saved' ? 'Saved session' : 'Generated session'}
-            {focusLabel ? ` · ${focusLabel}` : ''}
-          </p>
-          {/* Hidden while editing — the editor owns the name field, and two
-              titles on screen reads as a bug. */}
-          {!editing && (
-            <>
-              <h1 className="mt-1 text-2xl font-bold text-zinc-900 dark:text-white">{session.title}</h1>
-              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{session.exercises.length} exercises</p>
-            </>
-          )}
-        </div>
 
         {/* Exercises — read-only, or the editor when editing */}
         {editing ? (

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import PageTransition from "@/components/PageTransition";
+import PageHeader from "@/components/PageHeader";
 import { ArrowLeft, Plus, Trash2, Pencil, ChevronDown, Dumbbell, Globe2, Clock, ArrowDownAZ, Lock } from "lucide-react";
 import { Card } from "@/components/ui";
 import { setUnitLabel } from "@/lib/workout/tracking";
@@ -463,23 +464,24 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
       {/* Header — embedded (Hub tab) skips the Add button here; it renders
           below the search bar instead so this row doesn't sit empty. */}
       {embedded ? null : (
-        <div className="mb-6 flex items-center gap-3">
-          <button
-            onClick={() => router.back()}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </button>
-          <div className="flex-1">
-            <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white">
-              My Exercises
-            </h1>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">
-              Your custom exercises — use them in any workout or program.
-            </p>
+        <>
+          <div className="mb-1">
+            <button
+              onClick={() => router.back()}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
           </div>
-          {addButton}
-        </div>
+          <PageHeader
+            title="My Exercises"
+            subtitle="Your custom exercises — use them in any workout or program."
+            className="mb-6"
+          />
+          <div className="mb-6 flex">
+            {addButton}
+          </div>
+        </>
       )}
 
       {/* Create Form (non-embedded: right under the header, next to the button that opens it) */}

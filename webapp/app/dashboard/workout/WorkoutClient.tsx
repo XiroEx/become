@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Dumbbell, Sparkles, Search, Wand2, History, Zap } from "lucide-react";
 import { Program } from "@/lib/data/programs";
 import PageTransition from "@/components/PageTransition";
+import PageHeader from "@/components/PageHeader";
 import ResumeWorkoutButton from "@/components/ResumeWorkoutButton";
 import UpcomingWorkouts from "@/components/UpcomingWorkouts";
 import QuickSessionModal from "@/components/QuickSessionModal";
@@ -383,23 +384,20 @@ export default function WorkoutClient() {
   return (
     <PageTransition className="pb-6">
       {/* Header */}
+      <PageHeader
+        title="Workout"
+        subtitle="Choose your training path and start building."
+        className="mb-4 sm:mb-8"
+      />
       <div className="mb-4 sm:mb-8">
-        <div className="flex items-start justify-between gap-3">
-          <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white sm:text-3xl">
-            Workout
-          </h1>
+        <div data-tour="workout-quick-links" className="flex flex-wrap items-center gap-2">
           <Link
             href="/dashboard/history"
-            className="flex shrink-0 items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+            className="flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
           >
             <History className="h-3.5 w-3.5 text-blue-500 dark:text-blue-400" />
             History
           </Link>
-        </div>
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          Choose your training path and start building.
-        </p>
-        <div data-tour="workout-quick-links" className="mt-3 flex flex-wrap items-center gap-2">
           <Link
             href="/dashboard/workout/hub?tab=exercises"
             className="flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"

@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Trophy, Dumbbell, Calendar, TrendingUp, TrendingDown, Minus, ArrowLeft, Flame } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
+import PageHeader from '@/components/PageHeader'
 import { useMemberWeightUnit } from '@/lib/useMemberWeightUnit'
 
 interface JourneyData {
@@ -133,18 +134,19 @@ export default function JourneyPage() {
   return (
     <PageTransition className="pb-8">
       {/* Header */}
-      <div className="mb-6 flex items-center gap-3">
+      <div className="mb-1">
         <button
           onClick={() => router.push('/dashboard/workout')}
           className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg border border-zinc-200 bg-white transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800"
         >
           <ArrowLeft className="h-4 w-4 text-zinc-600 dark:text-zinc-400" />
         </button>
-        <div>
-          <h1 className="text-xl font-black leading-tight">Your Journey</h1>
-          <p className="text-sm text-zinc-500">{data.programName}</p>
-        </div>
       </div>
+      <PageHeader
+        title="Your Journey"
+        subtitle={data.programName}
+        className="mb-6"
+      />
 
       {/* Hero banner */}
       <motion.div

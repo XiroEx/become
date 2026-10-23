@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Sparkles, Lock, PencilLine, Upload } from "lucide-react";
 import ProgramCreator from "@/app/dashboard/admin/programs/_editors/ProgramCreator";
 import PageTransition from "@/components/PageTransition";
+import PageHeader from "@/components/PageHeader";
 import ImportProgramFlow from "./ImportProgramFlow";
 import type { ImportedProgram } from "@/lib/workout/importProgram";
 import { useEntitlements } from "@/hooks/useEntitlements";
@@ -42,6 +43,7 @@ export default function NewProgramClient() {
   if (!canCreate) {
     return (
       <PageTransition className="pb-6">
+        <PageHeader title="Create a program" className="mx-auto max-w-2xl px-0 sm:px-6" />
         <div className="mx-auto max-w-2xl px-0 py-12 sm:px-6">
           <div className="text-center sm:rounded-xl sm:border sm:border-zinc-200 sm:bg-white sm:p-8 dark:sm:border-zinc-800 dark:sm:bg-zinc-900">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-indigo-500 text-white">
@@ -132,12 +134,10 @@ export default function NewProgramClient() {
   return (
     <PageTransition className="pb-6">
       <div className="mx-auto max-w-2xl px-0 py-12 sm:px-6">
-        <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white sm:text-3xl">
-          Create a program
-        </h1>
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          Start from a blank program, or import one you already wrote.
-        </p>
+        <PageHeader
+          title="Create a program"
+          subtitle="Start from a blank program, or import one you already wrote."
+        />
 
         <div className="mt-8 grid gap-4 sm:grid-cols-2">
           <button

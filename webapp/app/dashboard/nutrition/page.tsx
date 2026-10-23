@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from 'rea
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import PageTransition from '@/components/PageTransition'
+import PageHeader from '@/components/PageHeader'
 import { useSwipeNav, slideVariants } from '@/hooks/useSwipeNav'
 import { AnimatePresence, motion } from 'framer-motion'
 import DateNav from '@/components/nutrition/DateNav'
@@ -1038,17 +1039,15 @@ function NutritionPageInner() {
       <PageTransition className="pb-28">
        <div className="space-y-4 sm:space-y-6" {...swipe.handlers}>
         {/* Header */}
-        <header className="mb-2 flex items-start justify-between gap-3 sm:mb-4">
-          <div className="min-w-0">
-            <h1 className="truncate text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">Nutrition</h1>
-            <p className="truncate text-sm text-zinc-500 dark:text-zinc-400 sm:text-base">
-              Track your food, macros, and hydration
-            </p>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <HeaderPillLink href="/dashboard/meals" Icon={ChefHat} data-tour="nutrition-my-stuff">My Stuff</HeaderPillLink>
-            {/* Timeline + Estimate history tucked into one dropdown */}
-            <div className="relative">
+        <PageHeader
+          title="Nutrition"
+          subtitle="Track your food, macros, and hydration"
+          className="mb-2 sm:mb-4"
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <HeaderPillLink href="/dashboard/meals" Icon={ChefHat} data-tour="nutrition-my-stuff">My Stuff</HeaderPillLink>
+          {/* Timeline + Estimate history tucked into one dropdown */}
+          <div className="relative">
               <button
                 onClick={() => setNavMenuOpen((o) => !o)}
                 aria-label="Timeline and history"
@@ -1075,8 +1074,7 @@ function NutritionPageInner() {
                 </>
               )}
             </div>
-          </div>
-        </header>
+        </div>
 
         {/* Add food — a compact (fake) search tap + two capture menus: a camera
             (take photo / scan barcode) and an upload (upload photo / describe). */}

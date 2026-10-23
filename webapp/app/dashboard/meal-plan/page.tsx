@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import PageTransition from '@/components/PageTransition'
+import PageHeader from '@/components/PageHeader'
 import FoodSearchModal from '@/components/nutrition/FoodSearchModal'
 import { Toast } from '@/components/ui'
 import { BackButton } from '@/components/ui/BackButton'
@@ -194,13 +195,14 @@ export default function MealPlanPage() {
   return (
     <>
     <PageTransition className="space-y-4 pb-24">
-      <header className="mb-1">
-        <div className="flex items-center gap-3">
-          <BackButton />
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">Meal Plan</h1>
-        </div>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400 sm:text-base">Plan your week ahead, one slot at a time.</p>
-      </header>
+      <div className="mb-1">
+        <BackButton />
+      </div>
+      <PageHeader
+        title="Meal Plan"
+        subtitle="Plan your week ahead, one slot at a time."
+        className="mb-1"
+      />
 
       {/* Week nav */}
       <div className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white px-2 py-2 dark:border-zinc-800 dark:bg-zinc-900" data-tour="plan-week-nav">
