@@ -1,4 +1,5 @@
 import { render, fireEvent, waitFor } from "@testing-library/react-native";
+import { StyleSheet } from "react-native";
 import { DashboardScreen } from "@/components/DashboardScreen";
 import type { UpcomingWorkoutSummary } from "@/lib/dashboard/types";
 
@@ -299,17 +300,19 @@ describe("DashboardScreen", () => {
   });
 
   describe("native spacing parity with the web (dashboard vertical rhythm)", () => {
-    // Web reference: DashboardClient.tsx `space-y-4` (16) between sections,
-    // `mb-2` (8) under the header, `mt-2` (8) above the Customize link inside
-    // the tiles group, `pt-2` (8) above the footer links.
-    it("keeps the page at space-y-4: 16pt padding with a 16pt section gap", () => {
+    // Web reference: layout `px-3 py-4` (12 sides, 16 top) + `space-y-4` (16)
+    // between sections, `mb-2` (8) under the header, `mt-2` (8) above the
+    // Customize link inside the tiles group, `pt-2` (8) above the footer links.
+    it("matches the web's phone page box: 12pt sides, 16pt top, 16pt section gap", () => {
       const { getByTestId } = render(<DashboardScreen {...baseProps} />);
       const content = getByTestId("dashboard-scroll").props
         .contentContainerStyle as {
-        padding: number;
+        paddingHorizontal: number;
+        paddingTop: number;
         gap: number;
       };
-      expect(content.padding).toBe(16);
+      expect(content.paddingHorizontal).toBe(12);
+      expect(content.paddingTop).toBe(16);
       expect(content.gap).toBe(16);
     });
 
@@ -354,6 +357,40 @@ describe("DashboardScreen", () => {
       expect((flat.minHeight ?? 0) + slop.top + slop.bottom).toBeGreaterThanOrEqual(
         44,
       );
+    });
+
+    it("ends the tile grid flush: cells carry no bottom margin (the web's gap-2 lives on the grid)", () => {
+      // Regression: cells once carried marginBottom 8 on top of the
+      // container rowGap 8, doubling every inter-row gap to 16 and leaving a
+      // trailing 8 below the grid — which stacked with Customize's mt-2 into
+      // the 16pt band above "Customize tiles".
+      const { getByTestId } = render(
+        <DashboardScreen
+          {...baseProps}
+          layout={[
+            { id: "streak", kind: "stat", size: "1x1" },
+            { id: "weekly", kind: "stat", size: "1x1" },
+          ]}
+        />,
+      );
+      const grid = getByTestId("tilegrid");
+      const cells = grid.props.children as Array<{
+        props: { style: unknown };
+      }>;
+      expect(cells.length).toBe(2);
+      for (const cell of cells) {
+        const flat = StyleSheet.flatten(cell.props.style as never) as {
+          marginBottom?: number;
+        };
+        expect(flat.marginBottom ?? 0).toBe(0);
+      }
+    });
+
+    it("stacks the Becoming card like the web: chips mt-2.5 under the header (p-3.5, no uniform gap)", () => {
+      const { getByTestId } = render(<DashboardScreen {...baseProps} />);
+      expect(
+        StyleSheet.flatten(getByTestId("becoming-door-chips").props.style),
+      ).toMatchObject({ marginTop: 10 });
     });
 
     it("fires onOpenCustomizeTiles when the Customize link is pressed", () => {

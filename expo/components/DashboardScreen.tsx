@@ -441,7 +441,9 @@ export function DashboardScreen({
       >
         <View
           testID="dashboard-skeleton"
-          style={{ padding: 16, gap: 16 }}
+          // Web phone padding: `px-3 py-4` (12 sides, 16 top) — the skeleton
+          // paints the same box the loaded page scrolls in.
+          style={{ paddingHorizontal: 12, paddingTop: 16, gap: 16 }}
           // Three grey rectangles are nothing at all to a screen reader unless
           // they are one element that says what is happening.
           accessible
@@ -481,7 +483,12 @@ export function DashboardScreen({
       <ScrollView
         testID="dashboard-scroll"
         contentContainerStyle={{
-          padding: 16,
+          // Web phone padding: `px-3 py-4` in app/dashboard/layout.tsx (12
+          // sides, 16 top) with `space-y-4` (16) between sections. The bottom
+          // stays TAB_BAR_CONTENT_INSET — that clears the floating glass bar,
+          // not the page rhythm.
+          paddingHorizontal: 12,
+          paddingTop: 16,
           gap: 16,
           // Clear the floating glass tab bar (NP-351): it is absolutely
           // positioned, so content scrolls UNDER it and nothing reserves the
