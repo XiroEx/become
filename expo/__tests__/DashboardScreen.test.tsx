@@ -297,4 +297,82 @@ describe("DashboardScreen", () => {
     fireEvent.press(getByTestId("nutrition-card-view-all"));
     expect(onOpenNutrition).toHaveBeenCalledTimes(1);
   });
+
+  describe("native spacing parity with the web (dashboard vertical rhythm)", () => {
+    // Web reference: DashboardClient.tsx `space-y-4` (16) between sections,
+    // `mb-2` (8) under the header, `mt-2` (8) above the Customize link inside
+    // the tiles group, `pt-2` (8) above the footer links.
+    it("keeps the page at space-y-4: 16pt padding with a 16pt section gap", () => {
+      const { getByTestId } = render(<DashboardScreen {...baseProps} />);
+      const content = getByTestId("dashboard-scroll").props
+        .contentContainerStyle as {
+        padding: number;
+        gap: number;
+      };
+      expect(content.padding).toBe(16);
+      expect(content.gap).toBe(16);
+    });
+
+    it("holds 8pt under the header (the web's mb-2; the gap is the space-y-4)", () => {
+      const { getByTestId } = render(<DashboardScreen {...baseProps} />);
+      expect(getByTestId("dashboard-header-wrap").props.style).toEqual(
+        expect.objectContaining({ marginBottom: 8 }),
+      );
+    });
+
+    it("sits Customize tiles 8pt under the grid with no extra margins (the web's mt-2)", () => {
+      const { getByTestId } = render(<DashboardScreen {...baseProps} />);
+      // Grid and link share one wrapper, like the web's dashboard-tiles div.
+      expect(getByTestId("dashboard-tiles-wrap")).toBeTruthy();
+      expect(getByTestId("dashboard-customize-wrap").props.style).toEqual(
+        expect.objectContaining({ marginTop: 8 }),
+      );
+      const style = getByTestId("dashboard-customize-wrap").props.style as {
+        marginTop: number;
+        marginBottom?: number;
+      };
+      expect(style.marginTop).toBe(8);
+      expect(style.marginBottom ?? 0).toBe(0);
+    });
+
+    it("keeps the Customize row at content height while holding a 44pt target via hitSlop", () => {
+      // The old `minTouchTarget` forced the VIEW to 44 tall — the empty bands
+      // above/below the text. hitSlop counts toward the 44pt rule (see
+      // test-support/a11y.ts) without growing the row.
+      const { getByTestId } = render(<DashboardScreen {...baseProps} />);
+      const link = getByTestId("dashboard-customize-tiles");
+      const flat = Array.isArray(link.props.style)
+        ? Object.assign({}, ...link.props.style)
+        : link.props.style;
+      expect(flat.minWidth ?? 0).toBeLessThan(44);
+      const slop = link.props.hitSlop as {
+        top: number;
+        bottom: number;
+        left: number;
+        right: number;
+      };
+      expect((flat.minHeight ?? 0) + slop.top + slop.bottom).toBeGreaterThanOrEqual(
+        44,
+      );
+    });
+
+    it("fires onOpenCustomizeTiles when the Customize link is pressed", () => {
+      const onOpenCustomizeTiles = jest.fn();
+      const { getByTestId } = render(
+        <DashboardScreen
+          {...baseProps}
+          onOpenCustomizeTiles={onOpenCustomizeTiles}
+        />,
+      );
+      fireEvent.press(getByTestId("dashboard-customize-tiles"));
+      expect(onOpenCustomizeTiles).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps the footer at pt-2 with no extra top margin (the web's LegalLinks pt-2)", () => {
+      const { getByTestId } = render(<DashboardScreen {...baseProps} />);
+      const footer = getByTestId("dashboard-legal-footer");
+      expect(footer.props.className).toContain("pt-2");
+      expect(footer.props.className).not.toContain("mt-4");
+    });
+  });
 });
