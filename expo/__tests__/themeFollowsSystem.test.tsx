@@ -549,9 +549,9 @@ describe("global.css and lib/theme/tokens.ts are the same palette", () => {
     expect(darkTokens.primary).toBe("255 255 255");
     expect(darkTokens["primary-foreground"]).toBe("24 24 27");
     // The brand red is still mode-aware red, on its own token.
-    expect(lightTokens.brand).toBe("220 38 38"); // red-600
-    expect(darkTokens.brand).toBe("239 68 68"); // red-500
-    expect(tintToken("destructive", "dark", 0.18)).toBe("rgba(248, 113, 113, 0.18)");
+    expect(lightTokens.brand).toBe("228 0 22"); // red-600 (v4)
+    expect(darkTokens.brand).toBe("251 44 54"); // red-500 (v4)
+    expect(tintToken("destructive", "dark", 0.18)).toBe("rgba(255, 101, 104, 0.18)");
   });
 });
 
