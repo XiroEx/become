@@ -15,6 +15,7 @@ import Animated, {
   useSharedValue,
   withSpring,
   withTiming,
+  type AnimatedStyle,
 } from "react-native-reanimated";
 import { BlurView } from "expo-blur";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
@@ -163,7 +164,9 @@ const MOTION_AVAILABLE =
   typeof withTiming === "function" &&
   Animated?.View != null;
 
-const AnimatedView = MOTION_AVAILABLE ? Animated.View : View;
+// Typed as Animated.View: the plain View fallback only ever receives the
+// static styles (no animated handles exist without Reanimated).
+const AnimatedView = (MOTION_AVAILABLE ? Animated.View : View) as typeof Animated.View;
 
 /** The web's badge: `h-4 min-w-[16px]`, `right-1 top-0.5`, `text-[10px]`. */
 const BADGE_SIZE = 16;
@@ -176,8 +179,9 @@ interface ItemLayout {
 interface BarMotion {
   /** Put the pill under `target` (null hides it); `animate` springs, else jumps. */
   place: (target: ItemLayout | null, animate: boolean) => void;
-  pillStyle: StyleProp<ViewStyle>;
-  condenseStyle: StyleProp<ViewStyle>;
+  // Animated styles: reanimated's handle type, which only Animated.* accepts.
+  pillStyle: StyleProp<AnimatedStyle<ViewStyle>>;
+  condenseStyle: StyleProp<AnimatedStyle<ViewStyle>>;
 }
 
 /**
@@ -254,7 +258,7 @@ function useStaticBarMotion(): BarMotion {
 const useBarMotion = MOTION_AVAILABLE ? useAnimatedBarMotion : useStaticBarMotion;
 
 interface IconPressMotion {
-  style: StyleProp<ViewStyle>;
+  style: StyleProp<AnimatedStyle<ViewStyle>>;
   onPressIn: () => void;
   onPressOut: () => void;
 }
