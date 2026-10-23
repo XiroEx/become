@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { CalendarDays, MapPin, Video } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
+import PageHeader from '@/components/PageHeader'
 import { Card, EmptyState } from '@/components/ui'
 import { BackButton } from '@/components/ui/BackButton'
 import { CommunityEvent, formatEventTime, getToken } from '@/components/community/types'
@@ -55,13 +56,14 @@ export default function EventsPage() {
       icon={<CalendarDays className="h-10 w-10" />}
     >
     <PageTransition>
-      <div className="mb-5">
-        <div className="flex items-center gap-3">
-          <BackButton />
-          <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white">Events</h1>
-        </div>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Live sessions, workshops, and community check-ins.</p>
+      <div className="mb-1">
+        <BackButton />
       </div>
+      <PageHeader
+        title="Events"
+        subtitle="Live sessions, workshops, and community check-ins."
+        className="mb-5"
+      />
 
       {/* data-tour wrapper: stable tour anchor across loading / empty / list states */}
       <div data-tour="events-list">

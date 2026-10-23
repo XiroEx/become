@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { AlertTriangle, Check, Dumbbell, TrendingUp, Trophy, Clock, Star, ChevronDown, BarChart2, Pencil, Trash2, X } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
+import PageHeader from '@/components/PageHeader'
 import { BackButton } from '@/components/ui/BackButton'
 import Link from 'next/link'
 import { getToken } from '@/lib/clientAuth'
@@ -545,20 +546,18 @@ export default function ProgressClient() {
     <PageTransition className="space-y-6">
 
       {/* ── Header ── */}
-      <header>
-        <div className="flex items-center gap-3">
-          <BackButton />
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">Training Log</h1>
-        </div>
-        {data && data.stats.totalWorkouts > 0 ? (
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            {data.stats.totalWorkouts} workouts
-            {data.totalVolumeLbs > 0 && <> · {fmt(data.totalVolumeLbs)} {data.weightUnit ?? 'lbs'} lifted all-time</>}
-          </p>
+      <div className="mb-1">
+        <BackButton />
+      </div>
+      <PageHeader
+        title="Training Log"
+        subtitle={data && data.stats.totalWorkouts > 0 ? (
+          <>{data.stats.totalWorkouts} workouts
+          {data.totalVolumeLbs > 0 && <> · {fmt(data.totalVolumeLbs)} {data.weightUnit ?? 'lbs'} lifted all-time</>}</>
         ) : (
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Your full training history</p>
+          'Your full training history'
         )}
-      </header>
+      />
 
       {/* ── Weekly Volume / Activity Chart ── */}
       {(data?.weeklyVolume?.length ?? 0) > 0 && (

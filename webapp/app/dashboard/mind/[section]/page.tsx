@@ -4,6 +4,7 @@ import { use } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
+import PageHeader from '@/components/PageHeader'
 import ToolIntroGate from '@/components/mind/ToolIntroGate'
 import StateShiftDashboard from '@/components/mind/StateShiftDashboard'
 import SelfImageDashboard from '@/components/mind/SelfImageDashboard'
@@ -40,17 +41,15 @@ export default function MindSectionPage({ params }: { params: Promise<{ section:
   return (
     <PageTransition className="flex flex-col">
       {/* data-tour anchors the onboarding tour (lib/tutorials/sections/mind.ts) */}
-      <header className="mb-5" data-tour="mind-section-header">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => router.push('/dashboard/mind')}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </button>
-          <h1 className="text-xl font-bold text-zinc-900 dark:text-white">{label}</h1>
-        </div>
-      </header>
+      <div className="mb-1" data-tour="mind-section-header">
+        <button
+          onClick={() => router.push('/dashboard/mind')}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </button>
+      </div>
+      <PageHeader title={label} className="mb-5" />
 
       <div className="min-h-0 flex-1" data-tour="mind-section-body">
         {/* First open of an unlocked tool runs its one-time onboarding intro. */}

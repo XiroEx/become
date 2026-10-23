@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react'
  * Shared open/close state for a "planned" chart tooltip: hover opens it on
  * desktop, a tap toggles it on mobile (click fires after touchend, so one
  * handler covers both), and a tap/click anywhere outside closes it — mirrors
- * the outside-dismiss pattern the profile dropdown already uses in TopNav.
+ * the outside-dismiss pattern the profile dropdown already uses in ProfileMenu.
  */
 export function usePlannedTooltip() {
   const [open, setOpen] = useState(false)

@@ -26,6 +26,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import PageTransition from '@/components/PageTransition'
+import PageHeader from '@/components/PageHeader'
 import { Card, Toast } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
 import { getToken } from '@/lib/clientAuth'
@@ -227,7 +228,7 @@ export default function MealSchedulePage() {
   return (
     <PageTransition className="pb-24">
       <div className="space-y-4">
-        <header className="flex items-center gap-3">
+        <div className="mb-1">
           <Link
             href="/dashboard/nutrition"
             aria-label="Back to nutrition"
@@ -235,13 +236,12 @@ export default function MealSchedulePage() {
           >
             <ArrowLeft className="h-4 w-4" />
           </Link>
-          <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Meal Schedule</h1>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">
-              When each meal usually happens
-            </p>
-          </div>
-        </header>
+        </div>
+        <PageHeader
+          title="Meal Schedule"
+          subtitle="When each meal usually happens"
+          className="mb-4"
+        />
 
         <Card variant="compact">
           <p className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-300">

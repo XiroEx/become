@@ -6,7 +6,6 @@ import type { Metadata } from 'next'
 import { cookies } from 'next/headers'
 import React from 'react'
 import BottomNav from '../../components/BottomNav'
-import TopNav from '../../components/TopNav'
 import AuthGuard from '../../components/AuthGuard'
 import MindSessionWarmer from '../../components/mind/MindSessionWarmer'
 import TutorialRoot from '../../components/tutorial/TutorialRoot'
@@ -85,11 +84,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         className="flex flex-col overflow-hidden bg-zinc-50 dark:bg-zinc-950"
         style={{ height: '100dvh', paddingTop: 'env(safe-area-inset-top, 0px)' }}
       >
-        {/* Top nav — fixed height, never scrolls */}
-        <div className="shrink-0">
-          <TopNav />
-        </div>
-
         {/* Content — grows to fill remaining space, scrolls vertically.
             id="app-scroll" is the contract the floating BottomNav uses to
             react to scrolling. Bottom padding clears the floating pill

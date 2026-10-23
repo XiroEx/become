@@ -5,6 +5,7 @@ import NotificationOptIn from '@/components/NotificationOptIn'
 import LegalLinks from '@/components/legal/LegalLinks'
 import Link from 'next/link'
 import PageTransition from '@/components/PageTransition'
+import PageHeader from '@/components/PageHeader'
 import ProgressChart from '@/components/ProgressChart'
 import { useTutorialMaybe } from '@redbtn/redtutorial'
 import { onboardingSettled } from '@/lib/tutorials/onboardingSettled'
@@ -765,10 +766,7 @@ export default function DashboardClient() {
 
       <PageTransition className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <header className="mb-2 sm:mb-4">
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">Dashboard</h1>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400 sm:text-base">Track your fitness journey</p>
-      </header>
+      <PageHeader title="Become" subtitle="Track your fitness journey" className="mb-2 sm:mb-4" />
 
       {/* The Becoming — the doorway, first thing on the page. */}
       <BecomingDoor goals={goalProgress} mind={mindSummary} />

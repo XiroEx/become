@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import PageTransition from '@/components/PageTransition'
+import PageHeader from '@/components/PageHeader'
 import { ArrowLeft, Save, Calculator, Scale } from 'lucide-react'
 import {
   AreaChart, Area, CartesianGrid, ReferenceLine,
@@ -525,18 +526,19 @@ export default function NutritionGoalsPage() {
     <>
     <PageTransition className="pb-6">
       {/* Header */}
-      <div className="mb-4 flex items-center gap-3 sm:mb-6">
+      <div className="mb-1">
         <button
           onClick={() => router.push('/dashboard/nutrition')}
           className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg border border-zinc-200 bg-white transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800"
         >
           <ArrowLeft className="h-4 w-4 text-zinc-600 dark:text-zinc-400" />
         </button>
-        <div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Nutrition Goals</h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">Set your daily calorie and macro targets</p>
-        </div>
       </div>
+      <PageHeader
+        title="Nutrition Goals"
+        subtitle="Set your daily calorie and macro targets"
+        className="mb-4 sm:mb-6"
+      />
 
       <SegmentedControl
         className="mb-4 sm:mb-6"

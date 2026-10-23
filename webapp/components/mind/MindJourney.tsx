@@ -11,6 +11,7 @@ import { useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Brain, ArrowRight, Check, ChevronRight, Flame, Lock } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
+import PageHeader from '@/components/PageHeader'
 import IdentityOnboarding from '@/components/mind/IdentityOnboarding'
 import SessionPlayer from '@/components/mind/session/SessionPlayer'
 import { isMoodLevel, seedStateForMood, type TodayMood } from '@/lib/mind/moodBridge'
@@ -412,19 +413,18 @@ export default function MindJourney() {
   return (
     <PageTransition className="flex min-h-[78vh] flex-col pb-6">
       {/* Header — calm, minimal (compact in Training Grounds mode) */}
-      <header className={available ? 'mb-5' : 'mb-4'}>
-        <div className="flex items-center justify-between">
-          <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">
-            <Brain className="h-6 w-6 text-violet-500" />
-            Mindset
-          </h1>
-          {streak > 0 && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2.5 py-1 text-sm font-bold text-orange-600 dark:bg-orange-500/15 dark:text-orange-300">
-              <Flame className="h-4 w-4" />
-              {streak}
-            </span>
-          )}
+      <PageHeader
+        title={<span className="flex items-center gap-2"><Brain className="h-6 w-6 text-violet-500" />Mindset</span>}
+        className={available ? 'mb-5' : 'mb-4'}
+      />
+      {streak > 0 && (
+        <div className="mb-4 flex">
+          <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2.5 py-1 text-sm font-bold text-orange-600 dark:bg-orange-500/15 dark:text-orange-300">
+            <Flame className="h-4 w-4" />
+            {streak}
+          </span>
         </div>
+      )}
         {available ? (
           <>
             {/* LEVEL — per-user, XP-driven, uncapped (from ALL mind activity). */}
@@ -489,7 +489,6 @@ export default function MindJourney() {
             </span>
           </div>
         )}
-      </header>
 
       {/* Focus area — centered for the daily session, top-aligned for Training
           Grounds so its tiles sit higher up. */}

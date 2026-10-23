@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import PageTransition from '@/components/PageTransition'
+import PageHeader from '@/components/PageHeader'
 import { BackButton } from '@/components/ui/BackButton'
 import { getToken } from '@/lib/clientAuth'
 import PacePicker from '@/components/goals/PacePicker'
@@ -747,15 +748,13 @@ function SettingsPageInner() {
   return (
     <PageTransition className="pb-10 space-y-4">
       {/* Header */}
-      <header>
-        <div className="flex items-center gap-3">
-          <BackButton />
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">Settings</h1>
-        </div>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          Manage your account and fitness preferences.
-        </p>
-      </header>
+      <div className="mb-1">
+        <BackButton />
+      </div>
+      <PageHeader
+        title="Settings"
+        subtitle="Manage your account and fitness preferences."
+      />
 
       {/* Tab bar */}
       <div data-tour="settings-tabs" className="flex rounded-xl border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-800 dark:bg-zinc-900/60">
