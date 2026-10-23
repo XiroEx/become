@@ -555,5 +555,48 @@ describe("Workout tab: acceptance criteria tests", () => {
       expect(getByTestId("programming-browse-search-input")).toBeTruthy();
       expect(getByTestId("programming-browse-filter-toggle")).toBeTruthy();
     });
+
+    it("matches the web's vertical rhythm: mb-4 header/links, mb-6 sections", () => {
+      // Web reference: WorkoutClient.tsx header `mb-4`, quick-links wrapper
+      // `mb-4`, Resume/Upcoming/Continue `mb-6` (phone widths, no sm:).
+      // NativeWind classNames are not resolved in jest, so assert on the
+      // authored className strings.
+      mockApiFetch.mockImplementation(async (path: string) => {
+        if (path.startsWith("/api/workouts/in-progress")) {
+          return { workout: null, planned: null };
+        }
+        if (path.startsWith("/api/programs/active")) {
+          return { activePrograms: [] };
+        }
+        if (path.startsWith("/api/schedule")) {
+          return { schedules: [] };
+        }
+        if (path.startsWith("/api/workouts/logs")) {
+          return { logs: [], favoriteSessionOrder: [] };
+        }
+        if (path.startsWith("/api/programs/saved")) {
+          return { savedPrograms: [] };
+        }
+        if (path.startsWith("/api/programs/search") || path === "/api/programs") {
+          return { programs: [], pagination: { hasMore: false, total: 0 }, availableTags: [] };
+        }
+        return {};
+      });
+
+      const { getByTestId } = render(<ProgrammingIndexRoute />);
+
+      expect(getByTestId("workout-header-wrap").props.className).toContain(
+        "mb-4",
+      );
+      expect(getByTestId("workout-upcoming-wrap").props.className).toContain(
+        "mb-6",
+      );
+      expect(getByTestId("workout-continue-wrap").props.className).toContain(
+        "mb-6",
+      );
+      // No resume pill with no workout — and no empty margined wrapper left
+      // behind either (the mb-6 lives on the pill, which returns null).
+      expect(() => getByTestId("resume-workout-pill")).toThrow();
+    });
   });
 });

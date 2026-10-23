@@ -50,7 +50,6 @@ import { WeightLogSheet } from "@/components/dashboard/WeightLogSheet";
 import { MoodLogSheet } from "@/components/dashboard/MoodLogSheet";
 import { kgToUnit, type WeightUnit } from "@become/core";
 import { LegalLinks } from "@/components/legal/LegalLinks";
-import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
@@ -527,12 +526,16 @@ export function DashboardScreen({
           </View>
         ) : null}
         {/* The page title and the avatar menu (help, profile and
-            settings all live in the menu now). */}
-        <PageHeader
-          title="Become"
-          subtitle="Track your fitness journey"
-          helpKey="dashboard"
-        />
+            settings all live in the menu now). The web keeps an extra 8
+            below its header (`mb-2` on top of `space-y-4`); the wrapper
+            below is that `mb-2`, the container gap is the `space-y-4`. */}
+        <View testID="dashboard-header-wrap" style={{ marginBottom: 8 }}>
+          <PageHeader
+            title="Become"
+            subtitle="Track your fitness journey"
+            helpKey="dashboard"
+          />
+        </View>
 
         {/* The doorway to The Becoming (NP-192) — first thing under the
             header, matching the web order (NP-255). */}
@@ -542,53 +545,65 @@ export function DashboardScreen({
           onPress={onOpenBecoming}
         />
 
-        {/* Unified Dashboard Tile Grid (NP-104) */}
-        <TileGrid
-          layout={currentLayout}
-          statData={statData ?? { streakDays, thisWeekWorkouts: 0 }}
-          tilesData={tilesData}
-          onDismissSuggestion={onDismissSuggestion}
-          onOpenMind={onOpenMind}
-          onOpenNutrition={onOpenNutrition}
-          onOpenNutritionGoals={onOpenNutritionGoals}
-          onOpenWorkoutNow={handleWorkoutNow}
-          onOpenCalendar={onOpenCalendar}
-          onOpenCheckIn={() => setOpen(true)}
-          onOpenWeight={handleOpenWeight}
-          onOpenMood={handleOpenMood}
-          onMoodChange={onSubmitMood}
-          onOpenSettings={onOpenSettings}
-          onOpenStreaks={onOpenStreaks}
-          onOpenHistory={onOpenHistory}
-        />
+        {/* Unified Dashboard Tile Grid (NP-104). The grid and the
+            Customize link share one wrapper, the way the web keeps them in
+            a single `data-tour="dashboard-tiles"` div: the link sits `mt-2`
+            (8) under the grid and the container gap (`space-y-4`) separates
+            the group from what follows — no negative margins. */}
+        <View testID="dashboard-tiles-wrap">
+          <TileGrid
+            layout={currentLayout}
+            statData={statData ?? { streakDays, thisWeekWorkouts: 0 }}
+            tilesData={tilesData}
+            onDismissSuggestion={onDismissSuggestion}
+            onOpenMind={onOpenMind}
+            onOpenNutrition={onOpenNutrition}
+            onOpenNutritionGoals={onOpenNutritionGoals}
+            onOpenWorkoutNow={handleWorkoutNow}
+            onOpenCalendar={onOpenCalendar}
+            onOpenCheckIn={() => setOpen(true)}
+            onOpenWeight={handleOpenWeight}
+            onOpenMood={handleOpenMood}
+            onMoodChange={onSubmitMood}
+            onOpenSettings={onOpenSettings}
+            onOpenStreaks={onOpenStreaks}
+            onOpenHistory={onOpenHistory}
+          />
 
-        {/* Customize tiles link (NP-211 / NP-157) */}
-        <View
-          style={{
-            alignItems: "flex-end",
-            marginTop: -6,
-            marginBottom: 4,
-          }}
-        >
-          <Pressable
-            testID="dashboard-customize-tiles"
-            accessibilityRole="button"
-            accessibilityLabel="Customize tiles"
-            onPress={handleCustomizeTiles}
-            style={[
-              minTouchTarget,
-              { flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 1 },
-            ]}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          {/* Customize tiles link (NP-211 / NP-157). Web parity is `mt-2`
+              above (8) and nothing below but the page `space-y-4` — the old
+              `marginTop: -6 / marginBottom: 4` overlapped the grid gap and
+              left a second gap below. The row is only as tall as its
+              content (~20): the 44-point touch target comes from `hitSlop`,
+              which the a11y helper counts, instead of `minTouchTarget`,
+              which forced the VIEW to 44 tall and left the empty bands
+              above and below the text (and pushed the resume banner down). */}
+          <View
+            testID="dashboard-customize-wrap"
+            style={{
+              alignItems: "flex-end",
+              marginTop: 8,
+            }}
           >
-            <Sliders size={14} color={colors["muted-foreground"]} />
-            <Text
-              style={{ flexShrink: 1 }}
-              className="text-muted-foreground text-xs font-medium"
+            <Pressable
+              testID="dashboard-customize-tiles"
+              accessibilityRole="button"
+              accessibilityLabel="Customize tiles"
+              onPress={handleCustomizeTiles}
+              style={[
+                { flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 1, minHeight: 20 },
+              ]}
+              hitSlop={{ top: 12, bottom: 12, left: 24, right: 24 }}
             >
-              Customize tiles
-            </Text>
-          </Pressable>
+              <Sliders size={14} color={colors["muted-foreground"]} />
+              <Text
+                style={{ flexShrink: 1 }}
+                className="text-muted-foreground text-xs font-medium"
+              >
+                Customize tiles
+              </Text>
+            </Pressable>
+          </View>
         </View>
 
         {/* Mood → Mindset gateway, once, right after the daily check-in (NP-158) */}
@@ -716,10 +731,12 @@ export function DashboardScreen({
 
         {/* The in-app footer. Apple wants the privacy policy reachable from
             inside the app, not only from a marketing page a member installing to
-            the home screen never returns to. Mirrors web's DashboardClient.tsx:965. */}
+            the home screen never returns to. Mirrors web's DashboardClient.tsx:965.
+            Web rhythm is the page `space-y-4` plus `pt-2` on the links — the
+            container gap supplies the 16, so this wrapper carries only the 8. */}
         <View
           testID="dashboard-legal-footer"
-          className="border-t border-border pt-4 mt-4"
+          className="border-t border-border pt-2"
         >
           <LegalLinks showCopyright />
         </View>
