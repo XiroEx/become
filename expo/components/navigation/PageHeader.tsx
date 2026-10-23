@@ -110,7 +110,7 @@ export function PageHeader({
   userName,
   testID = "page-header",
 }: PageHeaderProps) {
-  const { colors } = useThemeTokens();
+  const { colors, isDark } = useThemeTokens();
   const router = useRouter();
   const { token, user, logout } = useOptionalAuth() ?? {
     token: null,
@@ -126,6 +126,9 @@ export function PageHeader({
     null,
   );
   const { width: windowWidth } = useWindowDimensions();
+  const menuEdge = isDark
+    ? colors["muted-foreground"].replace(")", " / 0.25)")
+    : colors.border;
   const [reportsOpen, setReportsOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   // Unread food-report outcomes for the red badge on the avatar (the web's
@@ -330,10 +333,13 @@ export function PageHeader({
               paddingVertical: 4,
               borderRadius: 12,
               borderWidth: 1,
-              borderColor: colors.border,
-              backgroundColor: colors.card,
-              shadowColor: colors.foreground,
-              shadowOpacity: 0.2,
+              // The web's dropdown: white / zinc-200 in light, zinc-800 with a
+              // zinc-700-ish edge in dark. The shadow is black in both (a
+              // foreground-coloured one glowed white in dark mode).
+              borderColor: menuEdge,
+              backgroundColor: isDark ? colors.muted : colors.card,
+              shadowColor: "black",
+              shadowOpacity: isDark ? 0.5 : 0.15,
               shadowRadius: 16,
               shadowOffset: { width: 0, height: 8 },
               elevation: 8,
@@ -345,7 +351,7 @@ export function PageHeader({
                   paddingHorizontal: 16,
                   paddingVertical: 10,
                   borderBottomWidth: 1,
-                  borderBottomColor: colors.border,
+                  borderBottomColor: menuEdge,
                 }}
               >
                 <Text
