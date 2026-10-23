@@ -444,8 +444,9 @@ describe("Workout tab: acceptance criteria tests", () => {
 
       expect(getByText("Workout")).toBeTruthy();
 
-      // Calendar link -> pushes /(tabs)/calendar
-      fireEvent.press(getByTestId("programming-open-calendar"));
+      // The calendar left the header: the week strip carries it now, the
+      // same entry the web's next-workout card offers.
+      fireEvent.press(getByTestId("week-strip-open-calendar"));
       expect(mockPush).toHaveBeenCalledWith("/(tabs)/calendar");
 
       // Search and Saved icons are removed from the Workout tab header for now.

@@ -197,10 +197,8 @@ describe("DashboardRoute", () => {
     const { getByTestId } = render(<DashboardRoute />);
 
     await waitFor(() => {
-      // Header copy matches the web's (NP-255), not a personalized greeting.
-      expect(getByTestId("dashboard-greeting").props.children).toBe(
-        "Dashboard",
-      );
+      // The shared PageHeader owns the title ("Become", not "Dashboard").
+      expect(getByTestId("page-header-title").props.children).toBe("Become");
       expect(getByTestId("tile-streak")).toBeTruthy();
     });
     // One next-workout card (Up Next), falling back to today's current-workout
@@ -218,7 +216,7 @@ describe("DashboardRoute", () => {
     const { getByTestId } = render(<DashboardRoute />);
 
     await waitFor(() => {
-      expect(getByTestId("dashboard-greeting")).toBeTruthy();
+      expect(getByTestId("page-header-title")).toBeTruthy();
     });
     const before = callsTo("/api/auth/me").length;
 
@@ -244,7 +242,7 @@ describe("DashboardRoute", () => {
     checkinDue = true;
     const { getByTestId } = render(<DashboardRoute />);
     await waitFor(() => {
-      expect(getByTestId("dashboard-greeting")).toBeTruthy();
+      expect(getByTestId("page-header-title")).toBeTruthy();
       expect(getByTestId("dashboard-checkin-modal-mood-row")).toBeTruthy();
     });
     const streakCallsBefore = callsTo("/api/streak").length;
@@ -304,7 +302,7 @@ describe("DashboardRoute", () => {
     checkinDue = true;
     const { getByTestId, queryByTestId } = render(<DashboardRoute />);
     await waitFor(() => {
-      expect(getByTestId("dashboard-greeting")).toBeTruthy();
+      expect(getByTestId("page-header-title")).toBeTruthy();
       expect(getByTestId("dashboard-checkin-modal-mood-row")).toBeTruthy();
     });
 
@@ -346,7 +344,7 @@ describe("DashboardRoute", () => {
     mockNetInfoFetch.mockResolvedValue(AIRPLANE_MODE);
     const { getByTestId } = render(<DashboardRoute />);
     await waitFor(() => {
-      expect(getByTestId("dashboard-greeting")).toBeTruthy();
+      expect(getByTestId("page-header-title")).toBeTruthy();
       expect(getByTestId("dashboard-checkin-modal-mood-row")).toBeTruthy();
     });
 
@@ -386,7 +384,7 @@ describe("DashboardRoute", () => {
     checkinDue = true;
     const { getByTestId } = render(<DashboardRoute />);
     await waitFor(() => {
-      expect(getByTestId("dashboard-greeting")).toBeTruthy();
+      expect(getByTestId("page-header-title")).toBeTruthy();
       expect(getByTestId("dashboard-checkin-modal-mood-row")).toBeTruthy();
     });
 
@@ -462,15 +460,17 @@ describe("DashboardRoute navigation", () => {
     expect(mockPush).toHaveBeenCalledWith("/(tabs)/calendar");
   });
 
-  it("still opens settings from the gear — the store's deletion path", async () => {
+  it("still opens settings from the avatar menu — the store's deletion path", async () => {
     // storeReadiness.test.tsx (webapp) string-matches this wiring, because it
-    // is the only way to Delete account in a store build.
-    const { getByTestId } = render(<DashboardRoute />);
+    // is the only way to Delete account in a store build. The gear is gone;
+    // the menu item is the entry point now.
+    const { getByTestId, findByTestId } = render(<DashboardRoute />);
     await waitFor(() => {
-      expect(getByTestId("dashboard-open-settings")).toBeTruthy();
+      expect(getByTestId("page-header-avatar-button")).toBeTruthy();
     });
 
-    fireEvent.press(getByTestId("dashboard-open-settings"));
+    fireEvent.press(getByTestId("page-header-avatar-button"));
+    fireEvent.press(await findByTestId("page-header-settings-item"));
 
     expect(mockPush).toHaveBeenCalledWith("/settings");
   });

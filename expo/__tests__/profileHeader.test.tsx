@@ -76,38 +76,32 @@ describe("Profile reachability from headers (NP-163)", () => {
     mockPush.mockClear();
   });
 
-  it("Mind screen header includes profile avatar button that opens /(tabs)/profile", async () => {
+  it("Mind screen avatar menu opens /(tabs)/profile", async () => {
     const { findByTestId, getByTestId } = render(<MindRoute />);
 
-    const profileButton = await findByTestId("mind-header-profile");
-    expect(profileButton).toBeTruthy();
-    expect(getByTestId("mind-header-avatar")).toBeTruthy();
+    fireEvent.press(getByTestId("page-header-avatar-button"));
+    const profileItem = await findByTestId("page-header-profile-item");
+    expect(profileItem).toBeTruthy();
 
     await act(async () => {
-      fireEvent.press(profileButton);
+      fireEvent.press(profileItem);
     });
 
-    expect(mockPush).toHaveBeenCalledWith({
-      pathname: "/(tabs)/profile",
-      params: { from: "mind" },
-    });
+    expect(mockPush).toHaveBeenCalledWith("/(tabs)/profile");
   });
 
-  it("Dashboard header includes profile avatar button that opens /(tabs)/profile", async () => {
+  it("Dashboard avatar menu opens /(tabs)/profile", async () => {
     const { findByTestId, getByTestId } = render(<DashboardRoute />);
 
-    const profileButton = await findByTestId("dashboard-open-profile");
-    expect(profileButton).toBeTruthy();
-    expect(getByTestId("dashboard-header-avatar")).toBeTruthy();
+    fireEvent.press(getByTestId("page-header-avatar-button"));
+    const profileItem = await findByTestId("page-header-profile-item");
+    expect(profileItem).toBeTruthy();
 
     await act(async () => {
-      fireEvent.press(profileButton);
+      fireEvent.press(profileItem);
     });
 
-    expect(mockPush).toHaveBeenCalledWith({
-      pathname: "/(tabs)/profile",
-      params: { from: "dashboard" },
-    });
+    expect(mockPush).toHaveBeenCalledWith("/(tabs)/profile");
   });
 
   it("web path /dashboard/profile resolves to /(tabs)/profile with exact match", () => {

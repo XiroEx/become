@@ -1,13 +1,13 @@
 import { useEffect } from "react";
 import { useRouter } from "expo-router";
 import { View } from "react-native";
-import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   ConversationsResponseSchema,
   UnreadResponseSchema,
 } from "@become/api-client";
 import { ConversationList } from "@/components/chat/ConversationList";
+import { PageHeader } from "@/components/navigation/PageHeader";
 import { UnreadBadge } from "@/components/chat/UnreadBadge";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
@@ -70,14 +70,15 @@ export default function ChatIndexRoute({
       <View style={{ padding: 16 }}>
         <View
           style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 8,
             marginBottom: 12,
           }}
         >
-          <Text className="text-foreground text-2xl font-bold">Chat</Text>
-          <UnreadBadge testID="chat-unread-badge" count={unreadCount} />
+          <PageHeader
+            title="Chat"
+            titleAccessory={
+              <UnreadBadge testID="chat-unread-badge" count={unreadCount} />
+            }
+          />
         </View>
         <ConversationList
           conversations={conversations}

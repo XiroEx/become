@@ -15,8 +15,9 @@
 //
 //   1. the web settings screen renders the danger zone only inside the
 //      settings tab, so it does not appear across all settings tabs;
-//   2. the native settings screen renders one too, and the dashboard has the
-//      entry point that makes that screen reachable at all;
+//   2. the native settings screen renders one too, and the avatar menu (on
+//      every native screen) has the Settings entry point that makes that
+//      screen reachable at all;
 //   3. requesting deletion drops every push registration and signs the device
 //      out, on both platforms;
 //   4. the restore link works from a browser AND from inside the app, which
@@ -130,15 +131,17 @@ test('the native settings screen renders the danger zone', () => {
   assert.match(screen, /onDeleted=\{/, 'nothing happens after the account is deleted')
 })
 
-test('the native settings screen is REACHABLE — the dashboard has the entry point', () => {
-  // Settings lives in the (app) group, opened from the gear on the dashboard.
-  const dashboardScreen = readRepo('expo/components/DashboardScreen.tsx')
-  assert.match(dashboardScreen, /testID="dashboard-open-settings"/, 'no settings control on the dashboard')
-  assert.match(dashboardScreen, /accessibilityLabel="Settings"/, 'the settings control has no label')
-
-  const dashboardRoute = readRepo('expo/app/(app)/(tabs)/dashboard/index.tsx')
-  assert.match(dashboardRoute, /onOpenSettings=\{/, 'the dashboard never wires the settings control')
-  assert.match(dashboardRoute, /\/settings/, 'the settings control does not open settings')
+test('the native settings screen is REACHABLE — the avatar menu has the entry point', () => {
+  // Settings lives in the (app) group. It used to be opened from a gear on
+  // the dashboard; every native screen now opens with the same top line
+  // (PageHeader: title left, avatar menu right) and the menu carries the
+  // Settings item — reachable from everywhere, which is stronger than one
+  // gear. The entry point is what this test guards, because it is the only
+  // way to Delete account in a store build.
+  const header = readRepo('expo/components/navigation/PageHeader.tsx')
+  assert.match(header, /\$\{testID\}-settings-item/, 'no settings control in the avatar menu')
+  assert.match(header, /accessibilityLabel="Settings"/, 'the settings control has no label')
+  assert.match(header, /router\.push\("\/settings"/, 'the settings control does not open settings')
 })
 
 test('the native delete flow confirms, posts the same body, and clears the session', () => {

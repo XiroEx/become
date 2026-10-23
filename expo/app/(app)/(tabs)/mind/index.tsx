@@ -10,11 +10,9 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   ArrowRight,
-  Brain,
   Check,
   ChevronRight,
   Flame,
-  HelpCircle,
   Lock,
 } from "lucide-react-native";
 import {
@@ -50,9 +48,7 @@ import {
   type TodayMood,
 } from "@become/core";
 import { Text } from "@/components/Text";
-import { Avatar } from "@/components/Avatar";
-import { minTouchTarget } from "@/lib/a11y/touchTarget";
-import { requestNativeTourHub } from "@/lib/tour/nativeTourRequest";
+import { PageHeader } from "@/components/navigation/PageHeader";
 import { MoodHistoryStrip } from "@/components/mind/MoodHistoryStrip";
 import { IdentityOnboarding } from "@/components/mind/IdentityOnboarding";
 import { SessionPlayer } from "@/components/mind/session/SessionPlayer";
@@ -141,7 +137,7 @@ export const MOVE_CHIP: Record<string, string> = {
 function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
   const router = useRouter();
   const { colors } = useThemeTokens();
-  const { token, user } = useAuth();
+  const { token } = useAuth();
   const localDay = useLocalDay();
   const params = useLocalSearchParams<{ start?: string }>();
   const autoStart = params.start === "1";
@@ -609,70 +605,23 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
           paddingBottom: TAB_BAR_CONTENT_INSET,
         }}
       >
-        {/* Header: Title, Mind streak, and Profile avatar button */}
-        <View className="flex-row items-center justify-between">
-          <View className="flex-row items-center gap-2">
-            <Brain size={24} color={colors["mind-violet"]} />
-            <Text className="text-foreground text-2xl font-bold">
-              Mindset
-            </Text>
-          </View>
-          <View className="flex-row items-center gap-3">
-            <Pressable
-              testID="mind-help-button"
-              accessibilityRole="button"
-              accessibilityLabel="Mind help"
-              onPress={() => requestNativeTourHub("mind")}
-              style={[
-                minTouchTarget,
-                { alignItems: "center", justifyContent: "center" },
-              ]}
-              className="rounded-full border border-border p-2"
-            >
-              <HelpCircle
-                size={18}
-                color={colors["muted-foreground"]}
-                strokeWidth={1.5}
-              />
-            </Pressable>
-            {streak > 0 ? (
+        {/* Header: title + avatar menu (help and profile live in the menu).
+            The streak badge rides beside the title. */}
+        <PageHeader
+          title="Mindset"
+          helpKey="mind"
+          titleAccessory={
+            streak > 0 ? (
               <View
                 testID="mind-streak-badge"
                 className="flex-row items-center gap-1 rounded-full bg-accent/15 px-3 py-1"
               >
                 <Flame size={16} color={colors.accent} />
-                <Text className="text-sm font-bold text-accent">
-                  {streak}
-                </Text>
+                <Text className="text-sm font-bold text-accent">{streak}</Text>
               </View>
-            ) : null}
-            <Pressable
-              testID="mind-header-profile"
-              accessibilityRole="button"
-              accessibilityLabel="Profile"
-              onPress={() =>
-                // `from` lets Profile's back arrow / Android back return here
-                // instead of the tab navigator's default (Workout) — NP-306.
-                router.push({
-                  pathname: "/(tabs)/profile",
-                  params: { from: "mind" },
-                } as never)
-              }
-              style={[
-                minTouchTarget,
-                { alignItems: "center", justifyContent: "center" },
-              ]}
-              className="rounded-full border border-border p-0.5"
-            >
-              <Avatar
-                icon={typeof user?.profileIcon === "string" ? user.profileIcon : null}
-                imageUrl={typeof user?.avatarUrl === "string" ? user.avatarUrl : null}
-                size={32}
-                testID="mind-header-avatar"
-              />
-            </Pressable>
-          </View>
-        </View>
+            ) : undefined
+          }
+        />
 
         {/* Level bar: violet badge + violet→green gradient fill, always. In the
             cooldown state it collapses onto ONE line with the chapter label

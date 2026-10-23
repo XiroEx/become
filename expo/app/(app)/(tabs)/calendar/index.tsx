@@ -49,6 +49,7 @@ import {
   tzOffsetMinutes,
 } from "@/lib/time/localDay";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { PageHeader } from "@/components/navigation/PageHeader";
 import { subscribeProgramUpdates } from "@/lib/programs/programEvents";
 import { useScreenFocus } from "@/lib/navigation/useScreenFocus";
 import { WorkoutNowSheet } from "@/components/workout/WorkoutNowSheet";
@@ -602,7 +603,7 @@ export default function CalendarIndexRoute() {
       testID="calendar-index-route"
     >
       <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
-        <Text className="text-foreground text-2xl font-bold">Calendar</Text>
+        <PageHeader title="Calendar" />
         {error ? (
           <Text testID="calendar-error" className="text-destructive">
             Couldn&apos;t load your schedule.
