@@ -132,9 +132,10 @@ describe("(NP-376) the Nutrition FAB clears the glass tab bar", () => {
     expect(style.position).toBe("absolute");
 
     const required = tabBarScreenInset(TEST_BOTTOM_INSET);
-    // Pinned to the real geometry (NP-351: 34 + 10 + 56 + 12 = 112), so a
-    // drift in either this card's fix or the bar's own numbers is caught.
-    expect(required).toBe(112);
+    // Pinned to the real geometry (34 + 10 + 62 + 12 = 118; the capsule is the
+    // web's 62pt tall), so a drift in either this card's fix or the bar's own
+    // numbers is caught.
+    expect(required).toBe(118);
     expect(style.bottom).toBeGreaterThanOrEqual(required);
   });
 });

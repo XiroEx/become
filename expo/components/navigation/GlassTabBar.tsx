@@ -132,10 +132,38 @@ const PILL_SPRING = { stiffness: 500, damping: 35, mass: 1 } as const;
 /** The web's `scale-[0.88]` while scrolling, over `duration-300 ease-out`. */
 const CONDENSED_SCALE = 0.88;
 const CONDENSE_MS = 300;
-// Optional-chained: several shell tests mock reanimated with only the hooks they
-// need, and a module-level `Easing.bezier` call would crash the whole tab bar
-// at import there. Without it `withTiming` falls back to its default curve.
 const EASE_OUT = Easing?.bezier?.(0, 0, 0.58, 1);
+
+/**
+ * The web's `whileTap={{ scale: 0.85 }}` with `{ stiffness: 500, damping: 20 }`;
+ * the owner asked for a gentler ~0.9. The icon shrinks on press-in and springs
+ * back (with the web's little overshoot) on press-out.
+ */
+const PRESS_SCALE = 0.9;
+const TAP_SPRING = { stiffness: 500, damping: 20, mass: 1 } as const;
+
+/**
+ * IS REANIMATED THERE? Every suite that renders the real tab shell goes through
+ * `expo-router/testing-library`, whose `mocks.ts` does
+ * `jest.mock('react-native-reanimated', …)` over our root mock with the
+ * package's own `react-native-reanimated/mock` — or with `{}` when that cannot
+ * be loaded (it needs `react-native-worklets`' mock first). We got `{}`, so
+ * `useSharedValue` was not a function and the whole bar threw, taking every
+ * shell test with it. A bar that is the app's only navigation must not depend
+ * on an animation library being present, so the motion lives in two
+ * interchangeable hooks chosen ONCE at module load: the real one, and a static
+ * one (no pill, no scale, plain Views) for a host that has no usable
+ * Reanimated. The choice is a module constant, so each caller still calls
+ * exactly one hook, in the same order, every render.
+ */
+const MOTION_AVAILABLE =
+  typeof useSharedValue === "function" &&
+  typeof useAnimatedStyle === "function" &&
+  typeof withSpring === "function" &&
+  typeof withTiming === "function" &&
+  Animated?.View != null;
+
+const AnimatedView = MOTION_AVAILABLE ? Animated.View : View;
 
 /** The web's badge: `h-4 min-w-[16px]`, `right-1 top-0.5`, `text-[10px]`. */
 const BADGE_SIZE = 16;
@@ -144,6 +172,118 @@ interface ItemLayout {
   x: number;
   width: number;
 }
+
+interface BarMotion {
+  /** Put the pill under `target` (null hides it); `animate` springs, else jumps. */
+  place: (target: ItemLayout | null, animate: boolean) => void;
+  pillStyle: StyleProp<ViewStyle>;
+  condenseStyle: StyleProp<ViewStyle>;
+}
+
+/**
+ * THE SLIDING PILL AND THE CONDENSE. Shared values only — nothing here is React
+ * state, so a tab change or a scroll never re-renders for animation.
+ */
+function useAnimatedBarMotion(reducedMotion: boolean): BarMotion {
+  const pillX = useSharedValue(0);
+  const pillWidth = useSharedValue(TAB_BAR_ITEM_WIDTH);
+  const pillShown = useSharedValue(0);
+  const condense = useSharedValue(0);
+  const placed = useRef(false);
+
+  const place = useCallback(
+    (target: ItemLayout | null, animate: boolean) => {
+      if (target === null) {
+        pillShown.set(0);
+        placed.current = false;
+        return;
+      }
+      pillShown.set(1);
+      if (!animate || !placed.current) {
+        // First placement (nothing to slide FROM) and Reduce Motion: a jump.
+        pillX.set(target.x);
+        pillWidth.set(target.width);
+        placed.current = true;
+        return;
+      }
+      pillX.set(withSpring(target.x, PILL_SPRING));
+      pillWidth.set(withSpring(target.width, PILL_SPRING));
+    },
+    [pillShown, pillWidth, pillX],
+  );
+
+  // THE WEB'S `condensed` STATE: 0 → 1 while a tab root scrolls. Driven by a
+  // subscription, not by props, so a scroll event never re-renders the bar.
+  useEffect(() => {
+    if (reducedMotion) {
+      condense.set(0);
+      return undefined;
+    }
+    return subscribeTabBarCondensed((condensed) => {
+      condense.set(
+        withTiming(condensed ? 1 : 0, { duration: CONDENSE_MS, easing: EASE_OUT }),
+      );
+    });
+  }, [condense, reducedMotion]);
+
+  const pillStyle = useAnimatedStyle(() => ({
+    opacity: pillShown.value,
+    width: pillWidth.value,
+    transform: [{ translateX: pillX.value }],
+  }));
+  const condenseStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: 1 - (1 - CONDENSED_SCALE) * condense.value }],
+  }));
+
+  return { place, pillStyle, condenseStyle };
+}
+
+const HIDDEN_PILL: ViewStyle = { opacity: 0 };
+const noPlace: BarMotion["place"] = () => {};
+const STATIC_MOTION: BarMotion = {
+  place: noPlace,
+  pillStyle: HIDDEN_PILL,
+  condenseStyle: undefined,
+};
+
+/** No Reanimated: a bar with no pill and no condense, but a working bar. */
+function useStaticBarMotion(): BarMotion {
+  return STATIC_MOTION;
+}
+
+const useBarMotion = MOTION_AVAILABLE ? useAnimatedBarMotion : useStaticBarMotion;
+
+interface IconPressMotion {
+  style: StyleProp<ViewStyle>;
+  onPressIn: () => void;
+  onPressOut: () => void;
+}
+
+/** The icon's press scale: ~0.9 while pressed, a spring back to 1. UI thread. */
+function useAnimatedIconPress(reducedMotion: boolean): IconPressMotion {
+  const scale = useSharedValue(1);
+  const onPressIn = useCallback(() => {
+    if (!reducedMotion) scale.set(withSpring(PRESS_SCALE, TAP_SPRING));
+  }, [scale, reducedMotion]);
+  const onPressOut = useCallback(() => {
+    // Always restore: Reduce Motion may have been switched on mid-press.
+    scale.set(reducedMotion ? 1 : withSpring(1, TAP_SPRING));
+  }, [scale, reducedMotion]);
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  return { style, onPressIn, onPressOut };
+}
+
+const STATIC_ICON_PRESS: IconPressMotion = {
+  style: undefined,
+  onPressIn: noPlace as () => void,
+  onPressOut: noPlace as () => void,
+};
+
+function useStaticIconPress(): IconPressMotion {
+  return STATIC_ICON_PRESS;
+}
+
+const useIconPress = MOTION_AVAILABLE ? useAnimatedIconPress : useStaticIconPress;
 
 /**
  * Is this screen in the tree but not on the bar? `href: null` is expo-router's
@@ -241,6 +381,7 @@ interface GlassTabButtonProps {
   badge: number;
   badgeColor: string;
   badgeTextColor: string;
+  reducedMotion: boolean;
   testID: string;
   onPressTab: (key: string, name: string, focused: boolean) => void;
   onLongPressTab: (key: string) => void;
@@ -264,15 +405,17 @@ const GlassTabButton = memo(function GlassTabButton({
   badge,
   badgeColor,
   badgeTextColor,
+  reducedMotion,
   testID,
   onPressTab,
   onLongPressTab,
   onLayoutTab,
 }: GlassTabButtonProps) {
-  // The web's `whileTap={{ scale: 0.85 }}`, as opacity. NP-314: never a `style`
-  // callback — on RN 0.86.3 a Pressable with a function `style` renders with
-  // none of it applied on Android.
+  // Press feedback is two things: the icon's scale (below, on the UI thread)
+  // and a light dim. NP-314: never a `style` callback — on RN 0.86.3 a
+  // Pressable with a function `style` renders with none of it applied on Android.
   const { pressed, onPressIn, onPressOut } = usePressed();
+  const iconPress = useIconPress(reducedMotion);
 
   return (
     <Pressable
@@ -284,16 +427,28 @@ const GlassTabButton = memo(function GlassTabButton({
       testID={testID}
       onPress={() => onPressTab(routeKey, routeName, focused)}
       onLongPress={() => onLongPressTab(routeKey)}
-      onPressIn={onPressIn}
-      onPressOut={onPressOut}
+      onPressIn={() => {
+        onPressIn();
+        iconPress.onPressIn();
+      }}
+      onPressOut={() => {
+        onPressOut();
+        iconPress.onPressOut();
+      }}
       onLayout={(event) => onLayoutTab(routeKey, event)}
       style={[styles.item, { opacity: pressed ? 0.6 : 1 }]}
     >
-      {icon?.({
-        focused,
-        color: focused ? activeColor : inactiveColor,
-        size: ICON_SIZE,
-      })}
+      <AnimatedView
+        testID={`glass-tab-icon-${label}`}
+        style={[styles.icon, iconPress.style]}
+        pointerEvents="none"
+      >
+        {icon?.({
+          focused,
+          color: focused ? activeColor : inactiveColor,
+          size: ICON_SIZE,
+        })}
+      </AnimatedView>
       {badge > 0 ? (
         <View
           testID={`glass-tab-badge-${label}`}
@@ -350,13 +505,8 @@ export function GlassTabBar({
     [navigation],
   );
 
-  // THE SLIDING PILL. Three shared values and one ref of measurements; nothing
-  // here is React state, so a tab change never re-renders for animation.
-  const pillX = useSharedValue(0);
-  const pillWidth = useSharedValue(TAB_BAR_ITEM_WIDTH);
-  const pillShown = useSharedValue(0);
+  const { place, pillStyle, condenseStyle } = useBarMotion(reducedMotion);
   const layouts = useRef<Record<string, ItemLayout>>({});
-  const placed = useRef(false);
 
   const focusedRoute = state.routes[state.index];
   const focusedDescriptor = focusedRoute
@@ -371,29 +521,16 @@ export function GlassTabBar({
 
   const placePill = useCallback(
     (key: string | null, animate: boolean) => {
-      if (key === null) {
-        pillShown.set(0);
-        placed.current = false;
-        return;
-      }
-      const target = layouts.current[key];
-      if (!target) return;
-      pillShown.set(1);
-      if (!animate || !placed.current) {
-        // First placement (nothing to slide FROM) and Reduce Motion: a jump.
-        pillX.set(target.x);
-        pillWidth.set(target.width);
-        placed.current = true;
-        return;
-      }
-      pillX.set(withSpring(target.x, PILL_SPRING));
-      pillWidth.set(withSpring(target.width, PILL_SPRING));
+      place(key === null ? null : (layouts.current[key] ?? null), animate);
     },
-    [pillShown, pillWidth, pillX],
+    [place],
   );
 
   useEffect(() => {
     focusedKeyRef.current = focusedKey;
+    // A key with no measurement yet is a no-op, not a hide: the item's own
+    // `onLayout` places the pill when it arrives.
+    if (focusedKey !== null && !layouts.current[focusedKey]) return;
     placePill(focusedKey, !reducedMotion);
   }, [focusedKey, reducedMotion, placePill]);
 
@@ -409,31 +546,6 @@ export function GlassTabBar({
     },
     [placePill],
   );
-
-  const pillStyle = useAnimatedStyle(() => ({
-    opacity: pillShown.value,
-    width: pillWidth.value,
-    transform: [{ translateX: pillX.value }],
-  }));
-
-  // THE WEB'S `condensed` STATE: 0 → 1 while a tab root scrolls. Driven by a
-  // subscription, not by props, so a scroll event never re-renders the bar.
-  const condense = useSharedValue(0);
-  useEffect(() => {
-    if (reducedMotion) {
-      condense.set(0);
-      return undefined;
-    }
-    return subscribeTabBarCondensed((condensed) => {
-      condense.set(
-        withTiming(condensed ? 1 : 0, { duration: CONDENSE_MS, easing: EASE_OUT }),
-      );
-    });
-  }, [condense, reducedMotion]);
-
-  const condenseStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: 1 - (1 - CONDENSED_SCALE) * condense.value }],
-  }));
 
   /**
    * THE LIVE WORKOUT TAKES OVER THE WHOLE SCREEN (NP-381).
@@ -459,7 +571,7 @@ export function GlassTabBar({
       // not the capsule itself has to stay tappable.
       pointerEvents="box-none"
     >
-      <Animated.View
+      <AnimatedView
         testID="glass-tab-bar-condense"
         style={[styles.condense, condenseStyle]}
         pointerEvents="box-none"
@@ -484,7 +596,7 @@ export function GlassTabBar({
         >
           <GlassSurface isDark={isDark} liquidGlass={liquidGlass} />
           <View role="tablist" style={styles.row}>
-            <Animated.View
+            <AnimatedView
               testID="glass-tab-active-pill"
               // The web's `bg-zinc-900/10 dark:bg-white/15`, one view for the
               // whole bar.
@@ -528,6 +640,7 @@ export function GlassTabBar({
                   // both, so neither flips the way `primary` does.
                   badgeColor={colors["mind-green"]}
                   badgeTextColor={colors["brand-foreground"]}
+                  reducedMotion={reducedMotion}
                   testID={options.tabBarButtonTestID ?? `glass-tab-${route.name}`}
                   onPressTab={emitPress}
                   onLongPressTab={emitLongPress}
@@ -537,7 +650,7 @@ export function GlassTabBar({
             })}
           </View>
         </View>
-      </Animated.View>
+      </AnimatedView>
     </View>
   );
 }
@@ -606,6 +719,10 @@ const styles = StyleSheet.create({
     top: TAB_BAR_PADDING_Y,
     height: TAB_BAR_ITEM_HEIGHT,
     borderRadius: TAB_BAR_ITEM_HEIGHT / 2,
+  },
+  icon: {
+    alignItems: "center",
+    justifyContent: "center",
   },
   badge: {
     position: "absolute",

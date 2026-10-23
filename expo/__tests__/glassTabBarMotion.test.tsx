@@ -240,8 +240,11 @@ describe("the active pill slides", () => {
     fireEvent.press(r.getByTestId("glass-tab-mind"));
     expect(props.navigation.navigate).toHaveBeenCalledWith("mind");
 
-    // The navigator answers with the new state; the pill target moves.
+    // The navigator answers with the new state. The first render after it
+    // starts the pill's move (in an effect, so that render's style is the old
+    // one); the next render reads where it is headed.
     const after = <GlassTabBar {...barProps("mind")} />;
+    r.rerender(after);
     expect(pill(r, after).x).toBe(itemX(1));
   });
 
@@ -276,6 +279,62 @@ describe("the active pill slides", () => {
 
     expect(spring).not.toHaveBeenCalled();
     expect(pill(r, next).x).toBe(itemX(3));
+  });
+});
+
+describe("an icon shrinks while pressed and springs back", () => {
+  const iconScale = (r: RenderAPI, label: string) => {
+    const style = StyleSheet.flatten(
+      r.getByTestId(`glass-tab-icon-${label}`).props.style,
+    ) as { transform: { scale: number }[] };
+    return style.transform[0]?.scale;
+  };
+
+  it("goes to 0.9 on press-in and back to 1 on press-out, by spring", () => {
+    const spring = jest.spyOn(Reanimated, "withSpring");
+    const r = render(<GlassTabBar {...barProps("dashboard")} />);
+    expect(iconScale(r, "mind")).toBe(1);
+
+    const button = r.getByTestId("glass-tab-mind");
+    fireEvent(button, "pressIn");
+    expect(spring).toHaveBeenLastCalledWith(
+      0.9,
+      expect.objectContaining({ stiffness: 500, damping: 20 }),
+    );
+    expect(iconScale(r, "mind")).toBe(0.9);
+    // Only the pressed tab's icon moves.
+    expect(iconScale(r, "dashboard")).toBe(1);
+
+    fireEvent(button, "pressOut");
+    expect(spring).toHaveBeenLastCalledWith(
+      1,
+      expect.objectContaining({ stiffness: 500, damping: 20 }),
+    );
+    expect(iconScale(r, "mind")).toBe(1);
+  });
+
+  it("keeps the haptic on press", () => {
+    const Haptics = jest.requireMock("expo-haptics") as {
+      impactAsync: jest.Mock;
+    };
+    Haptics.impactAsync.mockClear();
+    const r = render(<GlassTabBar {...barProps("dashboard")} />);
+    fireEvent.press(r.getByTestId("glass-tab-mind"));
+    expect(Haptics.impactAsync).toHaveBeenCalled();
+  });
+
+  it("does not shrink under Reduce Motion", async () => {
+    mockReduceMotion(true);
+    const spring = jest.spyOn(Reanimated, "withSpring");
+    const r = render(<GlassTabBar {...barProps("dashboard")} />);
+    await act(async () => {});
+
+    const button = r.getByTestId("glass-tab-mind");
+    fireEvent(button, "pressIn");
+    expect(spring).not.toHaveBeenCalled();
+    expect(iconScale(r, "mind")).toBe(1);
+    fireEvent(button, "pressOut");
+    expect(iconScale(r, "mind")).toBe(1);
   });
 });
 
