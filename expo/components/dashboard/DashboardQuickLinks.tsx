@@ -178,12 +178,15 @@ export function DashboardQuickLinks({
 
 const styles = StyleSheet.create({
   wrapper: {
-    gap: 8,
+    // The empty-state card and the link grid are separate `space-y-4`
+    // children on the web (16 apart), not one tight group.
+    gap: 16,
   },
   emptyRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    // The web's `gap-4` (16) between icon, copy and Browse.
+    gap: 16,
   },
   emptyIcon: {
     width: 48,
@@ -225,7 +228,9 @@ const styles = StyleSheet.create({
     gap: 10,
     borderRadius: 12,
     borderWidth: 1,
-    padding: 10,
+    // The web's link tiles are compact Cards: `p-3` on phone widths (12),
+    // with `gap-2.5` (10) between icon and copy.
+    padding: 12,
     flexGrow: 0,
     flexShrink: 1,
     flexBasis: "48%",

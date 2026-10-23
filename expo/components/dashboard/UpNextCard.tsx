@@ -149,7 +149,8 @@ const styles = StyleSheet.create({
   container: {
     borderRadius: 16,
     borderWidth: 1,
-    padding: 16,
+    // The web's Up Next is a default Card: `p-3` on phone widths (12).
+    padding: 12,
     gap: 12,
   },
   header: {
@@ -160,7 +161,8 @@ const styles = StyleSheet.create({
   headerLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    // The web's `gap-2` (8) between the icon and the label.
+    gap: 8,
   },
   calendarLink: {
     minHeight: 32,
