@@ -241,7 +241,6 @@ export default function QuickSessionOverviewPage() {
               session={{ title: session.title, focus: session.focus, exercises: session.exercises }}
               label="Share"
             />
-          </div>
         </div>
 
         {/* Log / plan date panel — revealed by the header button. A past date
@@ -281,14 +280,6 @@ export default function QuickSessionOverviewPage() {
             {logError && <p className="mt-1.5 text-xs text-red-500">{logError}</p>}
           </div>
         )}
-
-        {/* Title */}
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-            {isSaved || session.source === 'saved' ? 'Saved session' : 'Generated session'}
-            {focusLabel ? ` · ${focusLabel}` : ''}
-          </p>
-        </div>
 
         {/* Exercises — read-only, or the editor when editing */}
         {editing ? (
