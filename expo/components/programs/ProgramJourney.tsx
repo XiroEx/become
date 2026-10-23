@@ -1,6 +1,5 @@
 import { Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
 import {
   Trophy,
   Flame,
@@ -12,6 +11,7 @@ import {
   Calendar,
 } from "lucide-react-native";
 import { Text } from "@/components/Text";
+import { WebGradient } from "@/components/WebGradient";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
@@ -201,10 +201,8 @@ export function ProgramJourney({
             (`from-yellow-500/20 to-amber-600/10`, `ring-yellow-500/30`,
             `text-yellow-400`), carried over via the `accent` token. */}
         <View testID={`${testID}-hero`} style={{ borderRadius: 16, overflow: "hidden" }}>
-          <LinearGradient
+          <WebGradient
             colors={[tint("accent", 0.2), tint("accent", 0.08)]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
             style={{
               borderRadius: 16,
               borderWidth: 1,
@@ -252,7 +250,7 @@ export function ProgramJourney({
             <Text className="text-muted-foreground text-xs mt-2 text-center">
               You showed up and did the work. That&apos;s everything.
             </Text>
-          </LinearGradient>
+          </WebGradient>
         </View>
 
         {/* Key stats grid (NP-363) — a unified 2x2 grid, 12px gap between

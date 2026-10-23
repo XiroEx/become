@@ -255,7 +255,12 @@ export function DailyDrop({
       testID={testID}
       accessibilityRole="button"
       onPress={onClick}
-      className="w-full overflow-hidden rounded-2xl border border-border bg-card p-4 active:opacity-90"
+      className="w-full overflow-hidden rounded-2xl border border-border p-4 active:opacity-90"
+      // No `bg-card` under the wash in dark: its end stop is the card colour at
+      // 40%, which on the web fades toward the PAGE behind it. Composited over
+      // an opaque card fill both stops resolve to the same colour and the
+      // gradient vanishes. Light keeps the card fill (its stops are opaque).
+      style={{ backgroundColor: isDark ? "transparent" : colors.card }}
     >
       <WebGradient testID={`${testID}-gradient`} fill colors={wash} />
       <View className="flex-row items-center gap-3">

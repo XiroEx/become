@@ -373,6 +373,57 @@ export const webGradientTokens = {
 } as const;
 
 /**
+ * OKLAB-SAMPLED RAMPS for the web's gradients that cross hues (gradient parity, F3).
+ *
+ * Tailwind v4 compiles `bg-gradient-to-*` to `linear-gradient(… in oklab, …)`,
+ * so the web blends in oklab. `expo-linear-gradient` blends in sRGB, which for
+ * two ADJACENT shades is under 0.3 ΔE of the same ramp but for violet → green
+ * or amber → green is 3.9 to 5.0 ΔE mid-ramp (the native badge reads greyer or
+ * darker than the web's). A multi-stop sRGB ramp reproduces the oklab one: each
+ * ramp is the two end colours blended at t = 0, ¼, ½, ¾, 1 IN OKLAB (Ottosson's
+ * matrices, linear-light sRGB in, clamped and gamma-encoded out) and rounded to
+ * 8-bit. `expo-linear-gradient` spaces five colours evenly, which is those
+ * five t values. The ends are the Tailwind colours named below, so the first
+ * and last entries equal the plain tokens (`webGradientRamps.test.ts` re-derives
+ * every ramp from the ends and fails if a token moves without the ramp).
+ * Triplets, like the tokens, so alpha composes through `rgbOf`.
+ */
+export const webGradientRamps = {
+  /** violet-500 → green-500 (Type, WriteAffirm) */
+  violetToGreen: [
+    "139 92 246",
+    "124 128 215",
+    "105 155 181",
+    "80 177 143",
+    "34 197 94",
+  ],
+  /** amber-500 → green-500 (Win, Vision) */
+  amberToGreen: [
+    "245 158 11",
+    "211 171 48",
+    "173 182 67",
+    "125 190 82",
+    "34 197 94",
+  ],
+  /** red-500 → amber-500 (Challenge) */
+  redToAmber: [
+    "239 68 68",
+    "242 95 62",
+    "244 118 53",
+    "245 138 39",
+    "245 158 11",
+  ],
+  /** sky-500 → green-500 (Assemble) */
+  skyToGreen: [
+    "14 165 233",
+    "0 175 203",
+    "0 184 171",
+    "16 191 137",
+    "34 197 94",
+  ],
+} as const;
+
+/**
  * The modal scrim. `--backdrop` in the web's redstyle tokens is
  * `rgba(0,0,0,0.5)` on dark; light gets a stronger wash than the web's 0.2
  * because a white sheet over a near-white page needs the separation on a phone,

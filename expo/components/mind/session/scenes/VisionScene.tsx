@@ -18,7 +18,7 @@ import {
   onDarkForeground,
   resolveToken,
   rgbOf,
-  webGradientTokens,
+  webGradientRamps,
 } from "@/lib/theme/tokens";
 import { WebGradient } from "@/components/WebGradient";
 
@@ -222,10 +222,7 @@ export function VisionScene({
                 testID={`${testID}-lock-in-gradient`}
                 fill
                 direction="r"
-                colors={[
-                  rgbOf(webGradientTokens.amber500),
-                  resolveToken("mind-green", "dark"),
-                ]}
+                colors={webGradientRamps.amberToGreen.map((t) => rgbOf(t))}
               />
             ) : null}
             <Check

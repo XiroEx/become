@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { View, Pressable, StyleSheet, Animated } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
+import { WebGradient } from "@/components/WebGradient";
 import { Text } from "@/components/Text";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import {
@@ -225,13 +225,14 @@ export function BecomingDoor({
         ]}
       >
         {isUnread ? (
-          <LinearGradient
+          // `bg-gradient-to-br`, measured: the door is a wide card, where a
+          // plain (0,0)→(1,1) would paint its top-right corner at ~91%
+          // instead of CSS's 50% (see `WebGradient`).
+          <WebGradient
             testID="becoming-door-gradient"
-            colors={[...unreadGradient]}
-            // `bg-gradient-to-br`: top-left → bottom-right.
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={StyleSheet.absoluteFill}
+            colors={unreadGradient}
+            direction="br"
+            fill
           />
         ) : null}
         <View style={styles.header}>

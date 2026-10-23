@@ -4,7 +4,7 @@ import {
   darkTokens,
   onDarkForeground,
   rgbOf,
-  webGradientTokens,
+  webGradientRamps,
 } from "@/lib/theme/tokens";
 
 /**
@@ -14,22 +14,26 @@ import {
  * scene is a fixed black stage, so the colours are the dark palette's tokens
  * and the white of `onDarkForeground`, like the rest of the scenes.
  */
-const VIOLET = rgbOf(darkTokens["mind-violet"]);
 const GREEN = rgbOf(darkTokens["mind-green"]);
 const EMERALD = rgbOf(darkTokens["mind-emerald"]);
-const AMBER = rgbOf(webGradientTokens.amber500);
+const ramp = (stops: readonly string[]) => stops.map((t) => rgbOf(t));
 
+/**
+ * The cross-hue badges are five-stop ramps sampled in oklab (`webGradientRamps`),
+ * because the web blends in oklab and a two-stop sRGB blend of these ends reads
+ * greyer or darker mid-ramp.
+ */
 export const DONE_BADGE_GRADIENTS = {
-  /** ContrastScene — `from-emerald-500 to-green-500` */
+  /** ContrastScene — `from-emerald-500 to-green-500` (adjacent shades: sRGB is within 1 ΔE) */
   contrast: [EMERALD, GREEN],
   /** TypeScene, WriteAffirm — `from-violet-500 to-green-500` */
-  violet: [VIOLET, GREEN],
+  violet: ramp(webGradientRamps.violetToGreen),
   /** ChallengeScene — `from-red-500 to-amber-500` */
-  challenge: [rgbOf(webGradientTokens.red500), AMBER],
+  challenge: ramp(webGradientRamps.redToAmber),
   /** AssembleScene — `from-sky-500 to-green-500` */
-  assemble: [rgbOf(webGradientTokens.sky500), GREEN],
+  assemble: ramp(webGradientRamps.skyToGreen),
   /** WinScene — `from-amber-500 to-green-500` */
-  win: [AMBER, GREEN],
+  win: ramp(webGradientRamps.amberToGreen),
 } as const;
 
 export type DoneBadgeTone = keyof typeof DONE_BADGE_GRADIENTS;
