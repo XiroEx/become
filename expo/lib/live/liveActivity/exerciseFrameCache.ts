@@ -25,6 +25,7 @@
  * to undefined — never a throw — and the tile falls back to the arrow.
  */
 import { Directory, File, Paths } from "expo-file-system";
+import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { IOS_WIDGET_GROUP_IDENTIFIER } from "@/lib/widgets/iosWidgets";
 
@@ -50,6 +51,8 @@ export interface ExerciseFrameDeps {
   sharedDir?: Directory | null;
   /** Override for the download (tests count calls to prove dedupe). */
   downloadFile?: (url: string, dest: File) => Promise<File>;
+  /** Shrink the downloaded image at `sourceUri` into `dest` (tile size). */
+  shrink?: (sourceUri: string, dest: File) => Promise<void>;
 }
 
 /**
@@ -78,26 +81,15 @@ export function resolveExerciseFrameSource(
   }
 }
 
-/** A stable filename per source URL (FNV-1a), keeping an image extension. */
+/** A stable filename per source URL (FNV-1a). Always .jpg: the cached copy
+ * is re-encoded at tile size. */
 function frameFileName(source: string): string {
-  let ext = ".jpg";
-  try {
-    const found = new URL(source).pathname.match(
-      /\.(jpe?g|png|webp|heic|heif)$/i,
-    )?.[0];
-    if (found) {
-      const lower = found.toLowerCase();
-      ext = lower === ".jpeg" ? ".jpg" : lower;
-    }
-  } catch {
-    /* keep the default */
-  }
   let hash = 0x811c9dc5;
   for (let i = 0; i < source.length; i++) {
     hash ^= source.charCodeAt(i);
     hash = Math.imul(hash, 0x01000193);
   }
-  return `frame-${(hash >>> 0).toString(16)}${ext}`;
+  return `frame-${(hash >>> 0).toString(16)}-sq${EXERCISE_FRAME_TILE_PX}.jpg`;
 }
 
 /** The `<group>/exercise-frames/` dir, created on first use — null where
@@ -126,6 +118,46 @@ export function clearExerciseFrameCache(): void {
   pendingLoads.clear();
 }
 
+/**
+ * The tile's pixel size: 44 pt at 3x. Live Activity views are ARCHIVED by
+ * WidgetKit, and an image over its small pixel-area budget is dropped: the
+ * 480 px thumbnail drew as an empty grey tile on a real iPhone (2026-10-23).
+ * So the cached copy is shrunk to exactly what the tile shows.
+ */
+export const EXERCISE_FRAME_TILE_PX = 132;
+
+async function shrinkToTile(sourceUri: string, dest: File): Promise<void> {
+  // Centre-crop to a square first, then shrink: the tile is square and a
+  // portrait clip's frame was squashed into it (device review 2026-10-23).
+  const probeContext = ImageManipulator.manipulate(sourceUri);
+  const probe = await probeContext.renderAsync();
+  const { width, height } = probe;
+  probe.release();
+  probeContext.release();
+  const side = Math.min(width, height);
+  const context = ImageManipulator.manipulate(sourceUri);
+  context.crop({
+    originX: Math.floor((width - side) / 2),
+    originY: Math.floor((height - side) / 2),
+    width: side,
+    height: side,
+  });
+  context.resize({ width: EXERCISE_FRAME_TILE_PX, height: EXERCISE_FRAME_TILE_PX });
+  const rendered = await context.renderAsync();
+  const saved = await rendered.saveAsync({ format: SaveFormat.JPEG, compress: 0.7 });
+  context.release();
+  rendered.release();
+  await new File(saved.uri).move(dest);
+}
+
+function discard(file: File): void {
+  try {
+    if (file.exists) file.delete();
+  } catch {
+    /* best effort */
+  }
+}
+
 async function loadExerciseFrame(
   source: string,
   deps?: ExerciseFrameDeps,
@@ -134,10 +166,22 @@ async function loadExerciseFrame(
     const dir =
       deps?.sharedDir !== undefined ? deps.sharedDir : sharedFramesDir();
     if (!dir) return undefined;
-    const dest = new File(dir, frameFileName(source));
+    const name = frameFileName(source);
+    const dest = new File(dir, name);
     if (dest.exists) return dest.uri;
-    const download = deps?.downloadFile ?? File.downloadFileAsync;
-    await download(source, dest);
+    const raw = new File(dir, `${name}.download`);
+    // A download left by an earlier failed attempt makes the next one throw
+    // DestinationAlreadyExists, so clear it first and always after.
+    discard(raw);
+    try {
+      const download = deps?.downloadFile ?? File.downloadFileAsync;
+      await download(source, raw);
+      if (!raw.exists) return undefined;
+      const shrink = deps?.shrink ?? shrinkToTile;
+      await shrink(raw.uri, dest);
+    } finally {
+      discard(raw);
+    }
     return dest.exists ? dest.uri : undefined;
   } catch {
     return undefined;

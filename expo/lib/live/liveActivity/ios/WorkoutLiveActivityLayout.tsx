@@ -30,11 +30,13 @@ import { Button, HStack, Image, Spacer, Text, VStack } from "@expo/ui/swift-ui";
 import {
   aspectRatio,
   background,
+  buttonBorderShape,
   buttonStyle,
   clipped,
   controlSize,
   cornerRadius,
   font,
+  foregroundStyle,
   frame,
   padding,
   resizable,
@@ -91,18 +93,26 @@ export function WorkoutLiveActivityLayout(
     <HStack spacing={8} modifiers={[padding({ top: 10 })]}>
       <Button
         target="weight-down"
-        modifiers={[buttonStyle("bordered"), controlSize("small")]}
+        modifiers={[
+          buttonStyle("bordered"),
+          buttonBorderShape("circle"),
+          controlSize("small"),
+        ]}
       >
-        <Image systemName="minus" />
+        <Image systemName="minus" modifiers={[frame({ width: 18, height: 18 })]} />
       </Button>
       <Text modifiers={[font({ size: 14, weight: "semibold" })]}>
         {props.weightLabel}
       </Text>
       <Button
         target="weight-up"
-        modifiers={[buttonStyle("bordered"), controlSize("small")]}
+        modifiers={[
+          buttonStyle("bordered"),
+          buttonBorderShape("circle"),
+          controlSize("small"),
+        ]}
       >
-        <Image systemName="plus" />
+        <Image systemName="plus" modifiers={[frame({ width: 18, height: 18 })]} />
       </Button>
       <Spacer />
       {resting ? null : (
@@ -144,13 +154,16 @@ export function WorkoutLiveActivityLayout(
         modifiers={[
           frame({ width: 44, height: 44 }),
           ...(padded ? [padding({ leading: 10, top: 6 })] : []),
+          // A hierarchical fill, not a material: inside the Dynamic Island
+          // a material flattens to an opaque grey and the arrow vanished on
+          // it (device review 2026-10-23).
           background(
-            { type: "material", material: "regular" },
+            { type: "hierarchical", style: "quaternary" },
             shapes.roundedRectangle({ cornerRadius: 10 }),
           ),
         ]}
       >
-        <Image assetName="BecomeArrow" />
+        <Image assetName="BecomeArrow" modifiers={[foregroundStyle("white")]} />
       </VStack>
     );
 
@@ -224,7 +237,12 @@ export function WorkoutLiveActivityLayout(
     <Image assetName="BecomeArrow" />
   );
 
-  const expandedLeading = exerciseTile(true);
+  // The tile sits BESIDE the words in the wide bottom region: stacked in the
+  // narrow leading slot it pushed the title under it and the expanded island
+  // ran out of height, clipping the steppers (device review 2026-10-23).
+  const expandedLeading = (
+    <Image assetName="BecomeArrow" modifiers={[padding({ leading: 10, top: 6 })]} />
+  );
 
   const expandedTrailing = resting ? (
     <Text
@@ -252,15 +270,20 @@ export function WorkoutLiveActivityLayout(
         frame({ maxWidth: 10000, alignment: "leading" }),
       ]}
     >
-      <Text modifiers={[font({ size: 12, weight: "medium" })]}>
-        {props.workoutTitle}
-      </Text>
-      <Text modifiers={[font({ size: 18, weight: "semibold" })]}>
-        {props.exerciseName}
-      </Text>
-      {resting ? (
-        <Text modifiers={[font({ size: 12 })]}>Resting</Text>
-      ) : null}
+      <HStack spacing={10}>
+        {exerciseTile(false)}
+        <VStack alignment="leading" spacing={2}>
+          <Text modifiers={[font({ size: 12, weight: "medium" })]}>
+            {props.workoutTitle}
+          </Text>
+          <Text modifiers={[font({ size: 18, weight: "semibold" })]}>
+            {props.exerciseName}
+          </Text>
+          {resting ? (
+            <Text modifiers={[font({ size: 12 })]}>Resting</Text>
+          ) : null}
+        </VStack>
+      </HStack>
       {weightControls}
     </VStack>
   );
