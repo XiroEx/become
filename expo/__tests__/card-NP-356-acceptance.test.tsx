@@ -132,6 +132,19 @@ describe("Card NP-356 Acceptance Tests: Programs Browse & Filters Spacing and Ty
       expect(targetUser).toBeTruthy();
       expect(targetUser.props.className).toContain("text-sm");
     });
+
+    it("shows the full weekly frequency on the recommended card (NP-221: 4x/wk, never 4x/)", async () => {
+      const { findByTestId, getAllByText, queryByText } = render(
+        <ProgramsCatalog catalogTitle="Browse Programs" />,
+      );
+      // Wait for the catalog data (training_days_per_week: 4) to render.
+      await findByTestId("programs-list-item-cat-1");
+
+      // The full badge renders everywhere it appears (recommended + list).
+      expect(getAllByText("4x/wk").length).toBeGreaterThan(0);
+      // The truncated badge from visual QA must not appear anywhere.
+      expect(queryByText("4x/")).toBeNull();
+    });
   });
 
   describe("2. Browse Programs Section Heading & Search Bar", () => {
@@ -171,6 +184,18 @@ describe("Card NP-356 Acceptance Tests: Programs Browse & Filters Spacing and Ty
       expect(inputContainer).toBeTruthy();
       const input = getByTestId("programming-browse-search-input");
       expect(input.props.className).toContain("pl-10");
+    });
+
+    it("matches the web's search placeholder wording (NP-221)", async () => {
+      const { getByTestId } = render(<ProgramsCatalog catalogTitle="Browse Programs" />);
+      await waitFor(() => {
+        expect(getByTestId("programming-browse-search-input")).toBeTruthy();
+      });
+
+      // Byte-exact with webapp/app/dashboard/workout/WorkoutClient.tsx.
+      expect(getByTestId("programming-browse-search-input").props.placeholder).toBe(
+        "Search programs by name, tags, or description...",
+      );
     });
   });
 
