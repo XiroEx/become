@@ -56,6 +56,9 @@ jest.mock("expo-file-system", () => {
     get exists(): boolean {
       return mockStore.get(this.uri) ?? false;
     }
+    delete(): void {
+      mockStore.delete(this.uri);
+    }
   }
   return {
     Directory: FakeDirectory,
@@ -72,10 +75,15 @@ jest.mock("expo-file-system", () => {
 
 const FRAME_URL = "https://cdn.example.com/frames/bench-press.jpg";
 
+const mockShrink = jest.fn(async (_sourceUri: string, dest: { uri: string }) => {
+  mockStore.set(dest.uri, true);
+});
+
 function dl(over: Partial<ExerciseFrameDeps> = {}): ExerciseFrameDeps {
   return {
     downloadFile:
       mockDownloadFile as unknown as ExerciseFrameDeps["downloadFile"],
+    shrink: mockShrink as unknown as ExerciseFrameDeps["shrink"],
     ...over,
   };
 }
@@ -147,6 +155,17 @@ describe("exerciseFrameUri", () => {
     expect(mockDownloadFile).toHaveBeenCalledTimes(1);
   });
 
+  it("shrinks every frame to the tile's pixel size, and drops the full-size download", async () => {
+    // WidgetKit drops an archived image over its pixel budget: the 480 px
+    // thumbnail drew as an empty grey tile on a real iPhone.
+    mockShrink.mockClear();
+    const uri = await exerciseFrameUri(FRAME_URL, dl());
+    expect(mockShrink).toHaveBeenCalledTimes(1);
+    expect(mockShrink.mock.calls[0]?.[0]).toMatch(/\.download$/);
+    expect(uri).toMatch(/-sq132\.jpg$/);
+    expect(mockStore.get(`${mockShrink.mock.calls[0]?.[0]}`)).toBeUndefined();
+  });
+
   it("reuses an already-downloaded file without downloading again", async () => {
     const first = await exerciseFrameUri(FRAME_URL, dl());
     clearExerciseFrameCache();
@@ -190,6 +209,31 @@ describe("exerciseFrameUri", () => {
     const uri = await exerciseFrameUri(FRAME_URL, dl());
     expect(uri).toMatch(/^file:\/\//);
     expect(mockDownloadFile).toHaveBeenCalledTimes(1);
+  });
+
+  it("recovers from a download left behind by an earlier failed attempt", async () => {
+    // The real downloader throws DestinationAlreadyExists when the temp file
+    // is already there; an earlier crash used to wedge every retry this way.
+    const strict = jest.fn(async (_url: string, dest: { uri: string }) => {
+      if (mockStore.get(dest.uri)) throw new Error("Destination already exists");
+      mockStore.set(dest.uri, true);
+      return dest;
+    });
+    // Learn the temp path, then leave a file there as a crashed run would.
+    let tempUri = "";
+    await exerciseFrameUri(FRAME_URL, dl({
+      downloadFile: (async (_url: string, dest: { uri: string }) => {
+        tempUri = dest.uri;
+        throw new Error("network");
+      }) as unknown as ExerciseFrameDeps["downloadFile"],
+    }));
+    expect(tempUri).toMatch(/\.download$/);
+    mockStore.set(tempUri, true);
+    const uri = await exerciseFrameUri(
+      FRAME_URL,
+      dl({ downloadFile: strict as unknown as ExerciseFrameDeps["downloadFile"] }),
+    );
+    expect(uri).toMatch(/-sq132\.jpg$/);
   });
 
   it("keeps the cached frame inside the App Group", async () => {

@@ -243,14 +243,19 @@ describe("WorkoutLiveActivityLayout exercise tile", () => {
     expect(flat).toContain('"height":44');
   });
 
-  it("expanded leading mirrors the banner tile", () => {
-    const withFrame = rendered(layoutFn()(FRAMED).expandedLeading);
-    expect(uiImages(withFrame)).toEqual([FRAMED.imageUri]);
-    expect(assetNames(withFrame)).toEqual([]);
+  it("expanded bottom carries the tile beside the title; leading is the bare arrow", () => {
+    // Stacked in the narrow leading slot the tile pushed the title down and
+    // the expanded island clipped its steppers (device review 2026-10-23).
+    const leading = rendered(layoutFn()(FRAMED).expandedLeading);
+    expect(uiImages(leading)).toEqual([]);
+    expect(assetNames(leading)).toEqual(["BecomeArrow"]);
 
-    const placeholder = rendered(layoutFn()(LIFTING).expandedLeading);
+    const withFrame = rendered(layoutFn()(FRAMED).expandedBottom);
+    expect(uiImages(withFrame)).toEqual([FRAMED.imageUri]);
+
+    const placeholder = rendered(layoutFn()(LIFTING).expandedBottom);
     expect(uiImages(placeholder)).toEqual([]);
-    expect(assetNames(placeholder)).toEqual(["BecomeArrow"]);
+    expect(assetNames(placeholder)).toContain("BecomeArrow");
 
     // Same size with and without a frame.
     for (const node of [withFrame, placeholder]) {
