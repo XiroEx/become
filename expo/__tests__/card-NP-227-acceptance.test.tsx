@@ -51,7 +51,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ScrollView, StyleSheet } from "react-native";
 import { apiFetch } from "@become/api-client";
 import { fallbackQuickSessionName } from "@become/core";
-import { TAB_BAR_CONTENT_GAP } from "@/lib/navigation/tabBarInset";
 import QuickSessionOverviewRoute from "../app/(app)/(tabs)/programming/quick/index";
 import { ResumeWorkoutPill } from "@/components/workout/ResumeWorkoutPill";
 import {
@@ -432,9 +431,9 @@ describe("(bug fix) Start/Continue floats just above the tab bar, not over the m
     );
     expect(wrapperStyle.position).toBe("absolute");
     const ctaBottom = Number(wrapperStyle.bottom);
-    // No `tabBarInset` here — just the capsule's breathing room plus 12pt, so
-    // the button sits ~12pt above the bar instead of a band above it.
-    expect(ctaBottom).toBe(TAB_BAR_CONTENT_GAP + 12);
+    // No `tabBarInset` here: TabStack's padding already leaves the content
+    // gap above the capsule, so the button sits flush on it.
+    expect(ctaBottom).toBe(0);
 
     const contentStyle = StyleSheet.flatten(
       UNSAFE_getByType(ScrollView).props.contentContainerStyle,
