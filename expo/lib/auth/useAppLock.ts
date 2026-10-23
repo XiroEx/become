@@ -38,17 +38,35 @@ import {
  * `locked` (returned below) is what obscures the dashboard while the warm
  * re-verification runs (card "Face ID lock must obscure dashboard during
  * scan"). It flips to `true` SYNCHRONOUSLY, in the AppState listener itself,
- * the instant the app leaves the foreground (`background` or `inactive`) —
- * before any async store read. That ordering is the whole point: the OS
- * takes the app-switcher snapshot and shows the Face ID sheet right after
- * that transition, so by the time an `await` could tell us whether the
- * member even opted in, the window the snapshot was taken through has
- * already passed. `locked` clears the moment there is nothing left to hide
- * behind it: a quick hop inside the grace period (no re-auth needed), an
- * opt-out (the async check), or a warm re-verification settling — on EITHER
- * verdict, success or failure. A failure already dropped the JWT and calls
- * `onLocked` before the overlay clears, so the caller's sign-out has fired
- * and the member lands on sign-in, not a flashed dashboard.
+ * the instant the app enters `background` — before any async store read. That
+ * ordering is the point: the OS takes the app-switcher snapshot and shows the
+ * Face ID sheet right after that transition, so an `await` on the stores
+ * would be too late. Whether a lock could follow at all is therefore a
+ * CACHED answer (`canLockRef`: a session token exists AND biometric unlock is
+ * opted in), refreshed on mount and on every `inactive` / `background` /
+ * `active` transition.
+ *
+ * Two rules keep the overlay off screens it has no business covering (the
+ * Google sign-in sheet went white because of both):
+ *
+ *   1. NOTHING IS OBSCURED UNLESS A LOCK COULD FOLLOW. A signed-out member or
+ *      one who never opted in has nothing to hide and nothing to re-verify.
+ *   2. `inactive` NEVER OBSCURES, only `background` does. `inactive` is also
+ *      what ASWebAuthenticationSession, passkey and Apple sign-in sheets, the
+ *      share sheet, the image picker and permission alerts cause WITHOUT the
+ *      app going anywhere, and the overlay is a native `Modal`: presenting it
+ *      while one of those is coming up knocks the sheet away and leaves the
+ *      overlay on screen as a white app. iOS takes the app-switcher snapshot
+ *      AFTER the app enters `background` (the `inactive` before it is only the
+ *      app losing focus), so `background` is early enough for the snapshot
+ *      and no suspend/resume pairing around each system sheet is needed.
+ *
+ * `locked` clears the moment there is nothing left to hide behind it: a quick
+ * hop inside the grace period (no re-auth needed), an opt-out (the async
+ * check), or a warm re-verification settling — on EITHER verdict, success or
+ * failure. A failure already dropped the JWT and calls `onLocked` before the
+ * overlay clears, so the caller's sign-out has fired and the member lands on
+ * sign-in, not a flashed dashboard.
  */
 export const APP_LOCK_GRACE_PERIOD_MS = 5 * 60 * 1000;
 
@@ -146,20 +164,51 @@ export function useAppLock(options: UseAppLockOptions): UseAppLockResult {
   // event that backgrounded the app, not a tick later.
   const [locked, setLocked] = useState(false);
 
+  // Cached "could a lock follow?" — read synchronously by the listener, which
+  // cannot await a store before the snapshot is taken. Unknown (not yet
+  // loaded) counts as no, so nothing is covered on a guess.
+  const canLockRef = useRef<boolean>(false);
+
   useEffect(() => {
+    const refreshCanLock = async () => {
+      const current = depsRef.current;
+      try {
+        const [token, optedIn] = await Promise.all([
+          current.tokenStore.get(),
+          createBiometricsOptInStore(current.optInStore).isOptedIn(),
+        ]);
+        canLockRef.current = Boolean(token) && optedIn;
+      } catch {
+        canLockRef.current = false;
+      }
+    };
+    void refreshCanLock();
+
     const unsubscribe = depsRef.current.subscribeToAppState((status) => {
       const current = depsRef.current;
-      if (status === "background" || status === "inactive") {
+      if (status === "inactive") {
+        // Not leaving the app (see the header): never obscure, never start the
+        // background clock. The member may be about to open a system sheet;
+        // refresh the cache so a `background` that follows has a fresh answer.
+        void refreshCanLock();
+        return;
+      }
+      if (status === "background") {
+        // The clock runs regardless of the cache: a stale "no" must not skip
+        // the warm re-verification, which re-reads both stores itself.
         if (backgroundedAtRef.current === null) {
           backgroundedAtRef.current = current.now();
         }
-        // Obscure NOW, before the async opt-in/token reads below ever run —
-        // this is what the app-switcher snapshot and the Face ID sheet sit
-        // on top of.
-        setLocked(true);
+        if (canLockRef.current) {
+          // Obscure NOW, before any async read — this is what the
+          // app-switcher snapshot and the Face ID sheet sit on top of.
+          setLocked(true);
+        }
+        void refreshCanLock();
         return;
       }
       if (status !== "active") return;
+      void refreshCanLock();
       const backgroundedAt = backgroundedAtRef.current;
       backgroundedAtRef.current = null;
       if (backgroundedAt === null) {
