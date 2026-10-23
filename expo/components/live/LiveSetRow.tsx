@@ -127,12 +127,6 @@ export interface LiveSetRowProps {
   /** Canonical exercise trackingType — selects which inputs render. */
   trackingType?: string | null;
   /**
-   * The interleaved round this set belongs to (NP-172) — e.g. "Round 2" for
-   * the second pass through a superset. Shown beside the set number so a
-   * grouped block reads as rounds, the way the web track view renders them.
-   */
-  roundLabel?: string;
-  /**
    * Hide the done checkbox (NP-288). The LIVE step has no per-set checkbox
    * on the web — `Complete Set →` is the one thing that logs a set and
    * moves on — and natively the tick started a rest without advancing the
@@ -140,6 +134,15 @@ export interface LiveSetRowProps {
    * Track keeps its checkbox: that is where a set is ticked by hand.
    */
   hideComplete?: boolean;
+  /**
+   * Controlled duration unit for the Track table (`sec` | `min`). When
+   * provided (with `onDurationUnitChange`), the exercise-level header owns
+   * the sec/min toggle — the web's `durationUnits[exerciseIndex]` — and
+   * every row of the exercise types in the same unit. Omitted, each row
+   * keeps its own toggle state exactly as before.
+   */
+  durationUnit?: DurationUnit;
+  onDurationUnitChange?: (unit: DurationUnit) => void;
   /**
    * Web-Track table style: label-less filled inputs with centred text, a
    * set-number chip instead of the bare number, a square done box, and no
@@ -237,10 +240,11 @@ export function LiveSetRow({
   state,
   prefill,
   trackingType,
-  roundLabel,
   hideComplete = false,
   compact = false,
   track = false,
+  durationUnit: durationUnitProp,
+  onDurationUnitChange,
   targetReps,
   targetDuration,
   onSkip,
@@ -264,9 +268,19 @@ export function LiveSetRow({
     unit: DurationUnit;
   } | null>(null);
   const durationUnit =
-    unitOverride && unitOverride.forType === trackingType
+    durationUnitProp ??
+    (unitOverride && unitOverride.forType === trackingType
       ? unitOverride.unit
-      : defaultDurationUnit(trackingType);
+      : defaultDurationUnit(trackingType));
+  // The header-owned (controlled) toggle writes back to the exercise; an
+  // uncontrolled row keeps its own toggle state, as before.
+  const changeDurationUnit = (unit: DurationUnit) => {
+    if (onDurationUnitChange) {
+      onDurationUnitChange(unit);
+    } else {
+      setUnitOverride({ forType: trackingType, unit });
+    }
+  };
   // The web's rule, verbatim: the doubled total is shown when the member is
   // loading a PAIR and a positive weight has been entered. A goblet squat, a
   // carry and any single-arm dumbbell work are one implement by default, and
@@ -333,15 +347,42 @@ export function LiveSetRow({
     onChange({ ...state, durationSec: parsedSeconds });
   };
 
-  // The web-Track table row: only when the exercise asks for weight and/or
-  // reps and nothing else. Timed / distance / speed work keeps the legacy
-  // labelled layout below, unchanged.
+  // The web-Track table row: label-less filled inputs with centred text
+  // and a square done box, under the exercise's own header row — no stacked
+  // labels, no per-input quick picks / helper / prefill / assumption lines.
   const trackTable =
     track &&
-    (inputs.weight || inputs.reps) &&
-    !inputs.duration &&
-    !inputs.distance &&
-    !inputs.speed;
+    (inputs.weight ||
+      inputs.reps ||
+      inputs.duration ||
+      inputs.distance ||
+      inputs.speed);
+
+  // ONE done control everywhere (the web's): an empty rounded square that
+  // turns green with a check when the set is done. No circle, and no
+  // outlined check icon sitting in an unfinished box.
+  const doneBox = (
+    <Pressable
+      testID={`${tid}-complete`}
+      onPress={() => onChange({ ...state, completed: !state.completed })}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: state.completed }}
+      accessibilityLabel={`Mark set ${setIndex + 1} ${state.completed ? "incomplete" : "complete"}`}
+      className={`w-9 h-9 rounded-lg items-center justify-center border ${
+        state.completed
+          ? "bg-success border-success"
+          : "bg-card border-border"
+      }`}
+    >
+      {state.completed ? (
+        <Check
+          color={colors["primary-foreground"]}
+          size={18}
+          strokeWidth={2}
+        />
+      ) : null}
+    </Pressable>
+  );
 
   if (trackTable) {
     return (
@@ -355,21 +396,17 @@ export function LiveSetRow({
             : "bg-card border-border"
         }`}
       >
-        <View className="w-8 items-center justify-center rounded-md bg-muted py-1.5">
-          <Text
-            testID={`${tid}-label`}
-            className="text-foreground text-xs font-bold"
-          >
-            {setIndex + 1}
-          </Text>
-        </View>
-        {roundLabel ? (
-          <Text
-            testID={`${tid}-round`}
-            className="text-muted-foreground text-xs font-semibold"
-          >
-            {roundLabel}
-          </Text>
+        {/* Grouped rows sit under their ROUND n heading, so they take no
+            number chip — the heading already says where they are. */}
+        {!compact ? (
+          <View className="w-8 items-center justify-center rounded-md bg-muted py-1.5">
+            <Text
+              testID={`${tid}-label`}
+              className="text-foreground text-xs font-bold"
+            >
+              {setIndex + 1}
+            </Text>
+          </View>
         ) : null}
         {inputs.weight ? (
           <View style={{ flex: 1 }}>
@@ -431,6 +468,91 @@ export function LiveSetRow({
             ) : null}
           </View>
         ) : null}
+        {inputs.duration ? (
+          <View style={{ flex: 1 }}>
+            <Input
+              testID={`${tid}-duration`}
+              accessibilityLabel={`Time for set ${setIndex + 1} in ${durationUnit === "sec" ? "seconds" : "minutes"}`}
+              keyboardType="decimal-pad"
+              value={durationDraft}
+              onChangeText={onDurationChangeText}
+              placeholder={
+                prefill?.durationSec != null
+                  ? secondsToUnitDisplay(prefill.durationSec, durationUnit)
+                  : targetDuration != null
+                    ? String(targetDuration).replace(/[^0-9]/g, "") || "30"
+                    : "0"
+              }
+              style={{
+                backgroundColor: colors.muted,
+                borderWidth: 0,
+                textAlign: "center",
+              }}
+            />
+            {compact ? (
+              <Text
+                testID={`${tid}-duration-label`}
+                className="text-muted-foreground text-[10px] text-center mt-0.5"
+              >
+                {durationUnit}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
+        {inputs.distance ? (
+          <View style={{ flex: 1 }}>
+            <Input
+              testID={`${tid}-distance`}
+              accessibilityLabel={`Distance for set ${setIndex + 1}`}
+              keyboardType="decimal-pad"
+              value={distanceDraft}
+              onChangeText={onDistanceChangeText}
+              placeholder={
+                prefill?.distance != null ? String(prefill.distance) : "0"
+              }
+              style={{
+                backgroundColor: colors.muted,
+                borderWidth: 0,
+                textAlign: "center",
+              }}
+            />
+            {compact ? (
+              <Text
+                testID={`${tid}-distance-label`}
+                className="text-muted-foreground text-[10px] text-center mt-0.5"
+              >
+                {isFloorsExercise(exerciseName) ? "Floors" : "m"}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
+        {inputs.speed ? (
+          <View style={{ flex: 1 }}>
+            <Input
+              testID={`${tid}-speed`}
+              accessibilityLabel={`Speed for set ${setIndex + 1}`}
+              keyboardType="decimal-pad"
+              value={speedDraft}
+              onChangeText={onSpeedChangeText}
+              placeholder={
+                prefill?.speed != null ? String(prefill.speed) : "0.0"
+              }
+              style={{
+                backgroundColor: colors.muted,
+                borderWidth: 0,
+                textAlign: "center",
+              }}
+            />
+            {compact ? (
+              <Text
+                testID={`${tid}-speed-label`}
+                className="text-muted-foreground text-[10px] text-center mt-0.5"
+              >
+                mph
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
         {compact && !state.completed && !state.weight && !state.reps && !state.durationSec && !state.distance && !state.speed ? (
           <Pressable
             testID={`${tid}-skip`}
@@ -456,29 +578,12 @@ export function LiveSetRow({
             <ChevronsRight size={16} color={colors["muted-foreground"]} />
           </Pressable>
         ) : null}
-        {hideComplete ? null : (
-          <Pressable
-            testID={`${tid}-complete`}
-            onPress={() => onChange({ ...state, completed: !state.completed })}
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: state.completed }}
-            accessibilityLabel={`Mark set ${setIndex + 1} ${state.completed ? "incomplete" : "complete"}`}
-            className={`w-9 h-9 rounded-lg items-center justify-center border ${
-              state.completed
-                ? "bg-success border-success"
-                : "bg-card border-border"
-            }`}
-          >
-            <Check
-              color={
-                state.completed
-                  ? colors["primary-foreground"]
-                  : colors["muted-foreground"]
-              }
-              size={18}
-              strokeWidth={2}
-            />
-          </Pressable>
+        {/* The DONE column is fixed at w-12 so the header label fits on one
+            line; the box stays centred inside it, exactly over the header. */}
+        {hideComplete ? null : compact ? (
+          doneBox
+        ) : (
+          <View className="w-12 items-center justify-center">{doneBox}</View>
         )}
       </View>
     );
@@ -507,14 +612,6 @@ export function LiveSetRow({
       >
         {setIndex + 1}
       </Text>
-      {roundLabel ? (
-        <Text
-          testID={`${tid}-round`}
-          className="text-muted-foreground text-xs font-semibold"
-        >
-          {roundLabel}
-        </Text>
-      ) : null}
       {inputs.weight ? (
         <View style={{ flex: 1 }}>
           <Input
@@ -625,10 +722,7 @@ export function LiveSetRow({
               accessibilityRole="button"
               accessibilityLabel={`Show duration in ${durationUnit === "sec" ? "minutes" : "seconds"}`}
               onPress={() =>
-                setUnitOverride({
-                  forType: trackingType,
-                  unit: durationUnit === "sec" ? "min" : "sec",
-                })
+                changeDurationUnit(durationUnit === "sec" ? "min" : "sec")
               }
               className="rounded-full bg-muted px-2 py-0.5"
             >
@@ -705,36 +799,7 @@ export function LiveSetRow({
           <ChevronsRight size={16} color={colors["muted-foreground"]} />
         </Pressable>
       ) : null}
-      {hideComplete ? null : (
-        <Pressable
-          testID={`${tid}-complete`}
-          onPress={() => onChange({ ...state, completed: !state.completed })}
-          accessibilityRole="checkbox"
-          accessibilityState={{ checked: state.completed }}
-          accessibilityLabel={`Mark set ${setIndex + 1} ${state.completed ? "incomplete" : "complete"}`}
-          className={
-            compact
-              ? `w-9 h-9 rounded-lg items-center justify-center border ${
-                  state.completed
-                    ? "bg-success border-success"
-                    : "bg-card border-border"
-                }`
-              : `w-10 h-10 rounded-full items-center justify-center ${
-                  state.completed ? "bg-primary" : "bg-muted"
-                }`
-          }
-        >
-          <Check
-            color={
-              state.completed
-                ? colors["primary-foreground"]
-                : colors["muted-foreground"]
-            }
-            size={compact ? 18 : 20}
-            strokeWidth={compact ? 2 : 1.5}
-          />
-        </Pressable>
-      )}
+      {hideComplete ? null : doneBox}
     </View>
   );
 }

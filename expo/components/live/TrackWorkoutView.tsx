@@ -25,13 +25,15 @@ import {
 import { FramedVideo } from "@/components/FramedVideo";
 import {
   canRemoveExercise,
+  defaultDurationUnit,
   getBellWeightInfo,
   groupIndexes,
+  isFloorsExercise,
   moveExercise,
   removeExercise,
   tracksTime,
   ungroupAt,
-  type WorkoutStep,
+  type DurationUnit,
 } from "@become/core";
 import type {
   LiveGrid,
@@ -42,10 +44,6 @@ import { DEFAULT_LOAD_UNIT, type WeightUnit } from "@/lib/live/bellStyle";
 export interface TrackWorkoutViewProps {
   exercises: LiveWorkoutExercise[];
   grid: LiveGrid;
-  /** The interleaved flow, for the per-set round labels on grouped blocks. */
-  workoutFlow: WorkoutStep[];
-  /** `exerciseIndex:setIndex` → position in the flow. */
-  flowIndexByKey: Map<string, number>;
   groupType?: ExerciseGroupType | null;
   round: number;
   totalRounds: number;
@@ -204,8 +202,6 @@ const GROUP_BLOCK_STYLES: Record<
 export function TrackWorkoutView({
   exercises,
   grid,
-  workoutFlow,
-  flowIndexByKey,
   groupType,
   round,
   totalRounds,
@@ -231,6 +227,11 @@ export function TrackWorkoutView({
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const toggleCollapsed = (slug: string) =>
     setCollapsed((prev) => ({ ...prev, [slug]: !prev[slug] }));
+  // The sec/min unit per exercise — the web's `durationUnits[exerciseIndex]`,
+  // owned here so the header toggle and every row of the exercise agree.
+  const [durationUnits, setDurationUnits] = useState<Record<string, DurationUnit>>({});
+  const durationUnitFor = (ex: LiveWorkoutExercise): DurationUnit =>
+    durationUnits[ex.slug] ?? defaultDurationUnit(ex.trackingType);
 
   const canRemove = canRemoveExercise(exercises);
 
@@ -264,13 +265,6 @@ export function TrackWorkoutView({
     }
     if (idx + 1 >= exercises.length) return;
     emitChange(groupIndexes(exercises, [idx, idx + 1], "superset"));
-  };
-
-  /** `roundLabel` for one grouped member's set — the shared interleaved flow. */
-  const roundLabelFor = (exIdx: number, setIdx: number): string | undefined => {
-    const flowIndex = flowIndexByKey.get(`${exIdx}:${setIdx}`);
-    const flowStep = flowIndex !== undefined ? workoutFlow[flowIndex] : undefined;
-    return flowStep ? `Round ${flowStep.roundNumber + 1}` : undefined;
   };
 
   const renderHint = (slug: string) => {
@@ -338,15 +332,11 @@ export function TrackWorkoutView({
       ex.repsLabel ? `${numSets} ${unit} × ${ex.repsLabel}` : `${numSets} ${unit}`,
       ex.difficulty ? capitalize(ex.difficulty) : null,
     ].filter(Boolean);
-    // The web-Track table row (label-less filled inputs under one header)
-    // only fits weight and/or reps work; timed / distance / speed work keeps
-    // the labelled LiveSetRow exactly as before.
+    // The web-Track table columns for this exercise, from its own tracking
+    // type — the header row and every set row are built from the same list
+    // so the labels sit exactly over the boxes they name.
     const tableInputs = setInputsFor(ex.trackingType);
-    const showTrackTable =
-      (tableInputs.weight || tableInputs.reps) &&
-      !tableInputs.duration &&
-      !tableInputs.distance &&
-      !tableInputs.speed;
+    const durationUnit = durationUnitFor(ex);
 
     return (
       <View
@@ -482,31 +472,65 @@ export function TrackWorkoutView({
             {renderHint(ex.slug)}
             {renderBellChoice(ex)}
             {/* The web's table header row above the set grid — one muted
-                uppercase cell per column, over the boxes they name. */}
+                uppercase cell per column the exercise asks for, over the
+                boxes they name, so SET never sits over a Time box. */}
             <View
               testID={`${testID}-${ex.slug}-set-table-header`}
               style={{ flexDirection: "row", alignItems: "center" }}
               className="gap-2 mb-1"
             >
               <Text className="w-8 text-center text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                Set
+                {isTimed ? "Round" : "Set"}
               </Text>
-              {showTrackTable && tableInputs.weight ? (
+              {tableInputs.weight ? (
                 <Text className="flex-1 text-center text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                  Weight
+                  {bell.style === "dumbbell"
+                    ? "Wt/DB"
+                    : bell.style === "kettlebell"
+                      ? "Wt/KB"
+                      : "Weight"}
                 </Text>
               ) : null}
-              {showTrackTable && tableInputs.reps ? (
+              {tableInputs.reps && !isTimed ? (
                 <Text className="flex-1 text-center text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
                   Reps
                 </Text>
               ) : null}
-              {!showTrackTable ? (
+              {tableInputs.duration ? (
+                <View className="flex-1 flex-row items-center justify-center">
+                  <Text className="text-center text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                    {durationUnit === "sec" ? "Sec" : "Min"}
+                  </Text>
+                  <Pressable
+                    testID={`${testID}-${ex.slug}-duration-toggle`}
+                    onPress={() =>
+                      setDurationUnits((prev) => ({
+                        ...prev,
+                        [ex.slug]: durationUnit === "sec" ? "min" : "sec",
+                      }))
+                    }
+                    accessibilityRole="button"
+                    accessibilityLabel={`Show duration in ${durationUnit === "sec" ? "minutes" : "seconds"}`}
+                    hitSlop={hitSlopToMinTarget(40, 20)}
+                    className="rounded-full bg-muted px-2 py-0.5 ml-1"
+                  >
+                    <Text className="text-muted-foreground text-[10px] font-semibold">
+                      {durationUnit === "sec" ? "min" : "sec"}
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null}
+              {tableInputs.distance ? (
                 <Text className="flex-1 text-center text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                  Reps
+                  {isFloorsExercise(ex.name) ? "Floors" : "Dist (m)"}
                 </Text>
               ) : null}
-              <Text className="w-9 text-center text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+              {tableInputs.speed ? (
+                <Text className="flex-1 text-center text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                  mph
+                </Text>
+              ) : null}
+              <Text className="w-12 text-center text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
                 Done
               </Text>
             </View>
@@ -525,6 +549,10 @@ export function TrackWorkoutView({
                 state={s}
                 prefill={ex.prefill?.[i] ?? null}
                 trackingType={ex.trackingType}
+                durationUnit={durationUnit}
+                onDurationUnitChange={(next) =>
+                  setDurationUnits((prev) => ({ ...prev, [ex.slug]: next }))
+                }
                 testID={`${testID}-${ex.slug}-set-${i}`}
                 onChange={(next) => onSetChange(exIdx, i, next)}
               />
@@ -756,8 +784,11 @@ export function TrackWorkoutView({
                         state={s}
                         prefill={ex.prefill?.[r] ?? null}
                         trackingType={ex.trackingType}
+                        durationUnit={durationUnitFor(ex)}
+                        onDurationUnitChange={(next) =>
+                          setDurationUnits((prev) => ({ ...prev, [ex.slug]: next }))
+                        }
                         testID={`${testID}-${ex.slug}-set-${r}`}
-                        roundLabel={roundLabelFor(exIdx, r)}
                         onChange={(next) => onSetChange(exIdx, r, next)}
                       />
                     </View>
