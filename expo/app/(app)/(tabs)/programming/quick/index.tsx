@@ -25,7 +25,6 @@ import { SessionEditor } from "@/components/workout/SessionEditor";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
-import { useTabBarScreenInset } from "@/lib/navigation/tabBarInset";
 import {
   clearQuickSession,
   quickSessionLiveHref,
@@ -134,7 +133,6 @@ export default function QuickSessionOverviewRoute({
 }: QuickSessionOverviewRouteProps = {}) {
   const router = useRouter();
   const { colors } = useThemeTokens();
-  const tabBarInset = useTabBarScreenInset();
   const { token } = useAuth();
   const params = useLocalSearchParams<{
     session?: string;
@@ -483,6 +481,8 @@ export default function QuickSessionOverviewRoute({
           paddingHorizontal: 16,
           paddingVertical: 16,
           gap: 16,
+          // Clears the floating Start/Continue CTA (~44pt button plus
+          // room to spare) so the last exercise scrolls fully above it.
           paddingBottom: 120,
         }}
       >
@@ -785,12 +785,19 @@ export default function QuickSessionOverviewRoute({
         </View>
       </ScrollView>
 
+      {/* The Start/Continue CTA floats over the scroll content. This screen is
+          a PUSHED screen of the programming tab, so `TabStack` already pads
+          the container by the full tab-bar band, which already ends
+          TAB_BAR_CONTENT_GAP above the capsule. The wrapper sits flush on that
+          band; adding `tabBarInset` again lifted it by a whole tab bar, over
+          the middle of the list. */}
       <View
+        testID="quick-session-overview-cta"
         style={{
           position: "absolute",
           left: 0,
           right: 0,
-          bottom: tabBarInset + 24,
+          bottom: 0,
           paddingHorizontal: 16,
         }}
       >
