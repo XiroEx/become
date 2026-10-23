@@ -54,6 +54,7 @@ import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { WRAPPABLE_TEXT } from "@/lib/a11y/dynamicType";
 import { usePressed } from "@/lib/a11y/usePressed";
 import { ScreenState } from "@/components/ScreenState";
+import { PageHeader } from "@/components/navigation/PageHeader";
 import {
   MonthGrid,
   VolumeBarChart,
@@ -438,8 +439,20 @@ export function ProgressScreen({
             ) : undefined
           }
         >
+          {/* PageHeader sits on top; Back stays as a row directly
+              below it, and the header line becomes the subtitle. */}
           <View>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <PageHeader
+              title="Training Log"
+              subtitle={headerLine ?? "Your full training history"}
+            />
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                marginTop: 8,
+              }}
+            >
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Back to dashboard"
@@ -458,16 +471,7 @@ export function ProgressScreen({
               >
                 <ChevronLeft size={20} color={colors.foreground} />
               </Pressable>
-              <Text
-                accessibilityRole="header"
-                className="text-foreground text-2xl font-bold"
-              >
-                Training Log
-              </Text>
             </View>
-            <Text className="text-muted-foreground text-sm mt-1">
-              {headerLine ?? "Your full training history"}
-            </Text>
           </View>
 
           {weeklyVolume.length > 0 ? (

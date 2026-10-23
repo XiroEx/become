@@ -4,9 +4,7 @@ import { Pressable, ScrollView, View } from "react-native";
 import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
-  CalendarDays,
   Dumbbell,
-  HelpCircle,
   History,
   Sparkles,
   Wand2,
@@ -17,8 +15,7 @@ import { ContinueTrainingSection } from "@/components/workout/ContinueTrainingSe
 import { WorkoutNowSheet } from "@/components/workout/WorkoutNowSheet";
 import { GenerateSheet } from "@/components/programs/GenerateSheet";
 import { ProgramsCatalog } from "@/components/programs/ProgramsCatalog";
-import { minTouchTarget } from "@/lib/a11y/touchTarget";
-import { requestNativeTourHub } from "@/lib/tour/nativeTourRequest";
+import { PageHeader } from "@/components/navigation/PageHeader";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { TAB_BAR_CONTENT_INSET } from "@/lib/navigation/tabBarInset";
 import { QUICK_SESSION_DATE_RE } from "@/lib/quickSession/logPlan";
@@ -94,63 +91,21 @@ export default function ProgrammingIndexRoute() {
         }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Top Header */}
-        <View className="flex-row items-center justify-between mb-2">
-          <Text className="text-foreground text-2xl font-bold">Workout</Text>
-          <View className="flex-row items-center gap-2">
-            <Pressable
-              testID="programming-help-button"
-              accessibilityRole="button"
-              accessibilityLabel="Training help"
-              onPress={() => requestNativeTourHub("programming")}
-              style={[minTouchTarget, { alignItems: "center", justifyContent: "center" }]}
-              className="rounded-xl border border-border p-2"
-            >
-              <HelpCircle
-                color={colors["muted-foreground"]}
-                size={20}
-                strokeWidth={1.5}
-              />
-            </Pressable>
-            <Pressable
-              testID="workout-open-history"
-              accessibilityRole="button"
-              accessibilityLabel="Training History"
-              onPress={handleOpenHistory}
-              className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-card"
-            >
-              <History size={14} color={colors.info} />
-              <Text className="text-foreground text-xs font-semibold">
-                History
-              </Text>
-            </Pressable>
-            {/* Search and Saved (favorite) icons removed for now — they
-                still have their own routes/screens and remain reachable
-                from Browse Programs, but are hidden from this header. */}
-            <Pressable
-              testID="programming-open-calendar"
-              accessibilityRole="button"
-              accessibilityLabel="Calendar"
-              onPress={() => router.push("/(tabs)/calendar")}
-              className="rounded-xl border border-border p-2"
-            >
-              <CalendarDays
-                color={colors["muted-foreground"]}
-                size={20}
-                strokeWidth={1.5}
-              />
-            </Pressable>
-          </View>
-        </View>
-
-        <Text className="text-muted-foreground text-sm mb-3">
-          Choose your training path and start building.
-        </Text>
+        {/* Top Header: title + avatar menu (help lives in the menu;
+            history moved to the quick-links pills below; the calendar is
+            reached from the week strip below, like the web's next-workout
+            card links to /dashboard/calendar). */}
+        <PageHeader
+          title="Workout"
+          subtitle="Choose your training path and start building."
+          helpKey="programming"
+        />
 
         {/* Quick Links Hub — Workouts (hub Exercises), Programs
-            (hub Programs) and Generate chips, matching the web's icons/colours exactly
-            (Workouts green dumbbell, Programs amber sparkles, Generate purple Wand2)
-            on a single horizontal row (NP-355). */}
+            (hub Programs), History and Generate chips, matching the web's
+            icons/colours exactly
+            (Workouts green dumbbell, Programs amber sparkles, History info,
+            Generate purple Wand2) on a single horizontal row (NP-355). */}
         <View className="flex-row flex-wrap items-center gap-2 mb-5">
           <Pressable
             testID="workout-open-exercises"
@@ -175,6 +130,19 @@ export default function ProgrammingIndexRoute() {
             <Sparkles size={14} color={colors.accent} />
             <Text className="text-foreground text-xs font-semibold">
               Programs
+            </Text>
+          </Pressable>
+
+          <Pressable
+            testID="workout-open-history"
+            accessibilityRole="button"
+            accessibilityLabel="Training History"
+            onPress={handleOpenHistory}
+            className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-card"
+          >
+            <History size={14} color={colors.info} />
+            <Text className="text-foreground text-xs font-semibold">
+              History
             </Text>
           </Pressable>
 

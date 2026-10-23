@@ -989,16 +989,6 @@ export default function DashboardRoute() {
       onOpenSettings={() => {
         router.push("/settings");
       }}
-      onOpenProfile={() => {
-        // `from` lets Profile's back arrow / Android back return to Home
-        // instead of the tab navigator's default (Workout) — NP-306.
-        router.push({
-          pathname: "/(tabs)/profile",
-          params: { from: "dashboard" },
-        } as never);
-      }}
-      userIcon={typeof user?.profileIcon === "string" ? user.profileIcon : null}
-      userAvatarUrl={typeof user?.avatarUrl === "string" ? user.avatarUrl : null}
       onOpenStreaks={() => {
         router.push("/(tabs)/dashboard/streaks" as never);
       }}

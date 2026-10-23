@@ -17,6 +17,7 @@ import {
 import { Text } from "@/components/Text";
 import { Button } from "@/components/Button";
 import { ScreenState } from "@/components/ScreenState";
+import { PageHeader } from "@/components/navigation/PageHeader";
 import { LegalLinks, LEGAL_BASE_URL } from "@/components/legal/LegalLinks";
 import { ManageBillingButton } from "@/components/billing/ManageBillingButton";
 import { CheckoutAction } from "@/components/entitlements/UpgradeSheet";
@@ -1052,8 +1053,10 @@ export default function PlanScreen({
         <ScrollView
           contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 40 }}
         >
-          {/* Header */}
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          {/* Header: PageHeader sits on top; Back stays as a row
+              directly below it. */}
+          <PageHeader title="Plan" />
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
             <Pressable
               testID="plan-back-button"
               accessibilityRole="button"
@@ -1066,13 +1069,6 @@ export default function PlanScreen({
             >
               <ChevronLeft size={24} color={colors.foreground} />
             </Pressable>
-            <Text
-              accessibilityRole="header"
-              className="text-foreground text-2xl font-bold"
-              style={WRAPPABLE_TEXT}
-            >
-              Plan
-            </Text>
           </View>
 
           {/* Kill-switch check */}

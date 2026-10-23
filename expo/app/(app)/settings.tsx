@@ -30,6 +30,7 @@ import { NutritionPlanningSection } from "@/components/settings/NutritionPlannin
 import { BillingSection } from "@/components/billing/BillingSection";
 import { LegalLinks, LEGAL_BASE_URL } from "@/components/legal/LegalLinks";
 import { ScreenState } from "@/components/ScreenState";
+import { PageHeader } from "@/components/navigation/PageHeader";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { WEBAPP_BASE_URL } from "@/lib/config";
@@ -573,8 +574,13 @@ export default function SettingsScreen({
     >
       <View style={{ paddingHorizontal: 16, paddingTop: 16, gap: 12 }}>
         {/* NP-303: the web header has a back button and a subtitle; native
-            only ever had the bare title (back was edge-swipe only). */}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            only ever had the bare title (back was edge-swipe only).
+            PageHeader sits on top; Back stays as a row directly below it. */}
+        <PageHeader
+          title="Settings"
+          subtitle="Manage your account and fitness preferences."
+        />
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
           <Pressable
             testID="settings-back-button"
             accessibilityRole="button"
@@ -593,17 +599,6 @@ export default function SettingsScreen({
           >
             <ChevronLeft size={22} color={colors.foreground} />
           </Pressable>
-          <View style={{ flex: 1 }}>
-            <Text
-              accessibilityRole="header"
-              className="text-foreground text-2xl font-bold"
-            >
-              Settings
-            </Text>
-            <Text className="text-muted-foreground text-sm mt-0.5">
-              Manage your account and fitness preferences.
-            </Text>
-          </View>
         </View>
 
         {/* NP-302: the web's Profile / Training / Settings segmented tabs. */}

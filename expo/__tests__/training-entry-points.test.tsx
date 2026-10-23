@@ -102,7 +102,7 @@ function tabButton(label: string) {
 
 describe("The calendar is two taps from the tab bar", () => {
   it.each([
-    ["programming-open-calendar", "(app)/(tabs)/calendar/index", "/calendar"],
+    ["week-strip-open-calendar", "(app)/(tabs)/calendar/index", "/calendar"],
   ])(
     "tap 1 = the Workout tab, tap 2 = %s",
     async (testID, destination, pathname) => {
@@ -115,8 +115,9 @@ describe("The calendar is two taps from the tab bar", () => {
       fireEvent.press(tabButton("Workout"));
       expect(await screen.findByTestId("programming-index-route")).toBeTruthy();
 
-      // Tap 2: the control in the programs header. Before this card there was
-      // no second tap to make — these three screens were pushed from nowhere.
+      // Tap 2: the calendar control on the week strip. Before this card
+      // there was no second tap to make — these three screens were pushed
+      // from nowhere.
       fireEvent.press(screen.getByTestId(testID));
 
       expect(await screen.findByTestId(screenId(destination))).toBeTruthy();
@@ -134,7 +135,7 @@ describe("The calendar is two taps from the tab bar", () => {
     const rendered = await renderShell("/(tabs)/programming");
     expect(await screen.findByTestId("programming-index-route")).toBeTruthy();
 
-    fireEvent.press(screen.getByTestId("programming-open-calendar"));
+    fireEvent.press(screen.getByTestId("week-strip-open-calendar"));
     expect(
       await screen.findByTestId(screenId("(app)/(tabs)/calendar/index")),
     ).toBeTruthy();

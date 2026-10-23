@@ -219,12 +219,13 @@ describe("<ProfileScreen />", () => {
     );
   });
 
-  it("navigates to settings from header or settings row", async () => {
+  it("navigates to settings from the avatar menu or the settings row", async () => {
     const { findByTestId, getByTestId } = render(<ProfileScreen />);
 
     await findByTestId("profile-identity");
 
-    fireEvent.press(getByTestId("profile-header-settings"));
+    fireEvent.press(getByTestId("page-header-avatar-button"));
+    fireEvent.press(await findByTestId("page-header-settings-item"));
     expect(mockPush).toHaveBeenCalledWith("/settings");
 
     fireEvent.press(getByTestId("profile-settings-link"));
