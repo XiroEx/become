@@ -533,10 +533,10 @@ export function DashboardScreen({
           </View>
         ) : null}
         {/* The page title and the avatar menu (help, profile and
-            settings all live in the menu now). The web keeps an extra 8
-            below its header (`mb-2` on top of `space-y-4`); the wrapper
-            below is that `mb-2`, the container gap is the `space-y-4`. */}
-        <View testID="dashboard-header-wrap" style={{ marginBottom: 8 }}>
+            settings all live in the menu now). Only the container's 16pt gap
+            sits under it: the owner cut the web's extra `mb-2` on device
+            (2026-10-23), the subtitle read as floating above the cards. */}
+        <View testID="dashboard-header-wrap">
           <PageHeader
             title="Become"
             subtitle="Track your fitness journey"

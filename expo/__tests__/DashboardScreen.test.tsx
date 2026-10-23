@@ -316,11 +316,9 @@ describe("DashboardScreen", () => {
       expect(content.gap).toBe(16);
     });
 
-    it("holds 8pt under the header (the web's mb-2; the gap is the space-y-4)", () => {
+    it("leaves only the 16pt section gap under the header (owner cut the extra 8)", () => {
       const { getByTestId } = render(<DashboardScreen {...baseProps} />);
-      expect(getByTestId("dashboard-header-wrap").props.style).toEqual(
-        expect.objectContaining({ marginBottom: 8 }),
-      );
+      expect(getByTestId("dashboard-header-wrap").props.style?.marginBottom ?? 0).toBe(0);
     });
 
     it("sits Customize tiles 8pt under the grid with no extra margins (the web's mt-2)", () => {
