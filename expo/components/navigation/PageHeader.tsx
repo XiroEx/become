@@ -23,6 +23,7 @@ import {
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { WRAPPABLE_TEXT } from "@/lib/a11y/dynamicType";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { AvatarMenuPop } from "@/components/navigation/AvatarMenuPop";
 
 /**
  * THE page header: one top line on every native screen (2026-10-23).
@@ -323,6 +324,15 @@ export function PageHeader({
           onPress={closeMenu}
           style={{ flex: 1 }}
         >
+          <AvatarMenuPop
+            testID={`${testID}-menu-pop`}
+            style={{
+              position: "absolute",
+              top: anchor?.top ?? 96,
+              right: anchor?.right ?? 16,
+              width: 220,
+            }}
+          >
           <Pressable
             testID={`${testID}-menu`}
             accessibilityViewIsModal
@@ -330,10 +340,6 @@ export function PageHeader({
             // Swallow taps inside the menu so they don't close it.
             onPress={() => {}}
             style={{
-              position: "absolute",
-              top: anchor?.top ?? 96,
-              right: anchor?.right ?? 16,
-              width: 220,
               paddingVertical: 4,
               borderRadius: 12,
               borderWidth: 1,
@@ -449,6 +455,7 @@ export function PageHeader({
           </Pressable>
         ) : null}
           </Pressable>
+          </AvatarMenuPop>
         </Pressable>
       </Modal>
 

@@ -4,6 +4,13 @@ import {
   Pressable,
   View,
 } from "react-native";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
 import { Text } from "@/components/Text";
 import {
   celebrationHaptic,
@@ -14,6 +21,11 @@ import {
   useReducedMotion,
 } from "@/lib/a11y/reducedMotion";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import {
+  CELEBRATION_POP_MS,
+  CELEBRATION_POP_PEAK,
+  motionMs,
+} from "@/lib/motion/motion";
 
 export const MILESTONE_LABELS: Record<number, string> = {
   3: "3-Day Streak",
@@ -57,6 +69,35 @@ export function StreakMilestoneModal({
   const isOpen = visible !== undefined ? visible : milestone !== null && milestone > 0;
   const reduceMotion = useReducedMotion();
   const { colors, scrim } = useThemeTokens();
+
+  // The web's fire pops in: `initial={{ scale: 0 }} animate={{ scale: [0,
+  // 1.3, 1] }}` over 500ms. A spring overshoot to 1.3x, then rest — a cut
+  // under Reduce Motion.
+  const pop = useSharedValue(reduceMotion ? 1 : 0);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (reduceMotion) {
+      pop.set(1);
+      return;
+    }
+    pop.set(0);
+    pop.set(
+      withSequence(
+        withTiming(CELEBRATION_POP_PEAK, {
+          duration: motionMs(Math.round(CELEBRATION_POP_MS * 0.6), false),
+          easing: Easing.out(Easing.quad),
+        }),
+        withTiming(1, {
+          duration: motionMs(Math.round(CELEBRATION_POP_MS * 0.4), false),
+          easing: Easing.inOut(Easing.quad),
+        }),
+      ),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- pop is a stable shared value
+  }, [isOpen, reduceMotion]);
+
+  const popStyle = useAnimatedStyle(() => ({ transform: [{ scale: pop.value }] }));
 
   useEffect(() => {
     if (isOpen && milestone) {
@@ -116,7 +157,11 @@ export function StreakMilestoneModal({
           />
 
           <View className="w-full px-6 py-7 items-center">
-            {/* Fire icon / emoji */}
+            {/* Fire animation — pops from 0 through 1.3x to rest, like the web. */}
+            <Animated.View
+              testID={`${testID}-fire-pop`}
+              style={reduceMotion ? undefined : popStyle}
+            >
             <Text
               testID={`${testID}-fire`}
               className="text-6xl text-center mb-3"
@@ -124,6 +169,7 @@ export function StreakMilestoneModal({
             >
               🔥
             </Text>
+            </Animated.View>
 
             <Text
               testID={`${testID}-label`}

@@ -1,10 +1,21 @@
 import { Modal as RNModal, Pressable } from "react-native";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
+import { useEffect } from "react";
 import { Text } from "@/components/Text";
 import type { ReactNode } from "react";
 import {
   modalAnimation,
   useReducedMotion,
 } from "@/lib/a11y/reducedMotion";
+import {
+  SHEET_ENTER_DISTANCE,
+  motionMs,
+} from "@/lib/motion/motion";
 
 export interface ModalProps {
   visible: boolean;
@@ -38,6 +49,31 @@ export function Modal({
   accessibilityLabel,
 }: ModalProps) {
   const reduceMotion = useReducedMotion();
+  // The web's sheet springs up 40pt (`initial={{ y: 40, opacity: 0 }}`,
+  // spring damping 28 / stiffness 300); the RN `fade` covers the backdrop.
+  // Under Reduce Motion the card draws in place.
+  const t = useSharedValue(reduceMotion || !visible ? 1 : 0);
+
+  useEffect(() => {
+    if (!visible) return;
+    if (reduceMotion) {
+      t.set(1);
+      return;
+    }
+    t.set(0);
+    t.set(
+      withTiming(1, {
+        duration: motionMs(350, false),
+        easing: Easing.out(Easing.quad),
+      }),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- t is a stable shared value
+  }, [visible, reduceMotion]);
+
+  const rise = useAnimatedStyle(() => ({
+    opacity: t.value,
+    transform: [{ translateY: SHEET_ENTER_DISTANCE * (1 - t.value) }],
+  }));
   return (
     <RNModal
       visible={visible}
@@ -53,6 +89,10 @@ export function Modal({
         importantForAccessibility="no"
         className="flex-1 bg-foreground/40 items-center justify-center px-6"
       >
+        <Animated.View
+          testID={testID ? `${testID}-rise` : undefined}
+          style={[reduceMotion ? undefined : rise, { width: "100%" }]}
+        >
         <Pressable
           testID={testID ? `${testID}-card` : undefined}
           accessibilityRole="none"
@@ -75,6 +115,7 @@ export function Modal({
           ) : null}
           {children}
         </Pressable>
+        </Animated.View>
       </Pressable>
     </RNModal>
   );

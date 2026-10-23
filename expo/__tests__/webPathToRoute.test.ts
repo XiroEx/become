@@ -214,10 +214,11 @@ describe("the table", () => {
     // Home and its rooms
     ["/dashboard", "/(tabs)/dashboard", "exact"],
     ["/dashboard/streaks", "/(tabs)/dashboard/streaks", "exact"],
-    ["/dashboard/settings?tab=training", "/(tabs)/dashboard?tab=training", "nearest"],
+    ["/dashboard/settings?tab=training", "/settings?tab=training&highlight=weekly", "exact"],
+    ["/dashboard/settings", "/settings", "exact"],
     ["/dashboard/profile", "/(tabs)/profile", "exact"],
     ["/profile", "/(tabs)/profile", "exact"],
-    ["/dashboard/customize", "/(tabs)/dashboard", "nearest"],
+    ["/dashboard/customize", "/settings", "exact"],
     // Calendar
     ["/dashboard/calendar", "/(tabs)/calendar", "exact"],
     ["/dashboard/calendar?date=2026-09-29", "/(tabs)/calendar?date=2026-09-29", "exact"],

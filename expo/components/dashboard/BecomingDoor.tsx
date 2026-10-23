@@ -1,5 +1,14 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { View, Pressable, StyleSheet, Animated } from "react-native";
+import React, { useEffect, useState } from "react";
+import { View, Pressable, StyleSheet } from "react-native";
+import Animated, {
+  Easing,
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
 import { Text } from "@/components/Text";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { useRouter } from "expo-router";
@@ -18,8 +27,13 @@ import type {
 import { fmtUnit, readReached } from "@become/core";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { usePressed } from "@/lib/a11y/usePressed";
-import { markBecomingSeen } from "@/lib/becoming/storage";
+import { markBecomingSeen, checkBecomingUnread } from "@/lib/becoming/storage";
 import { useReducedMotion } from "@/lib/a11y/reducedMotion";
+import {
+  DOOR_NUDGE_MS,
+  DOOR_PULSE_MS,
+  motionMs,
+} from "@/lib/motion/motion";
 
 export interface BecomingDoorProps {
   goals?: GoalProgressResponse | null;
@@ -52,33 +66,52 @@ export function BecomingDoor({
   const [isUnread, setIsUnread] = useState(false);
   const cardPress = usePressed();
 
-  const pulseAnim = useMemo(() => new Animated.Value(1), []);
+  // "Unread" = a new week has closed and The Becoming has not been opened
+  // since — the web's `useUnread` (`becoming.seen.<sunday>` missing, but a
+  // `becoming.seen.*` / `becoming.intro.*` key proving the member has been
+  // here before). Read after mount so server and client agree there; here,
+  // after mount so the first paint is calm and the pulse lands with the
+  // answer. `checkBecomingUnread` is the same rule against AsyncStorage.
+  useEffect(() => {
+    let cancelled = false;
+    void checkBecomingUnread().then((unread) => {
+      if (!cancelled) setIsUnread(unread);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // The web's two breaths (`globals.css`): the LOUD pulse while a new week
+  // sits unread (2.4s halo), the calm NUDGE while the card carries a "work on
+  // next" line (3.2s, half the amplitude) — one at a time, never stacked.
+  // Reanimated opacity on the card: React Native has no box-shadow animation
+  // to pulse, so the glow becomes a breath of the card itself. Reduce Motion
+  // holds the card still at full, like the web's `animation: none`.
+  const breath = useSharedValue(1);
+  const breathing = isUnread || topSuggestion(goals) != null;
 
   useEffect(() => {
-    let anim: Animated.CompositeAnimation | null = null;
-    if (isUnread && !reduced) {
-      anim = Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, {
-            toValue: 0.88,
-            duration: 1000,
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseAnim, {
-            toValue: 1,
-            duration: 1000,
-            useNativeDriver: true,
-          }),
-        ]),
-      );
-      anim.start();
-    } else {
-      pulseAnim.setValue(1);
+    if (!breathing || reduced) {
+      cancelAnimation(breath);
+      breath.set(1);
+      return;
     }
-    return () => {
-      anim?.stop();
-    };
-  }, [isUnread, reduced, pulseAnim]);
+    const half = motionMs((isUnread ? DOOR_PULSE_MS : DOOR_NUDGE_MS) / 2, false);
+    breath.set(
+      withRepeat(
+        withSequence(
+          withTiming(0.92, { duration: half, easing: Easing.inOut(Easing.ease) }),
+          withTiming(1, { duration: half, easing: Easing.inOut(Easing.ease) }),
+        ),
+        -1,
+        false,
+      ),
+    );
+    return () => cancelAnimation(breath);
+  }, [breathing, isUnread, reduced, breath]);
+
+  const breathStyle = useAnimatedStyle(() => ({ opacity: breath.value }));
 
   const handlePress = () => {
     markBecomingSeen();
@@ -148,9 +181,7 @@ export function BecomingDoor({
 
   return (
     <Animated.View
-      style={{
-        opacity: isUnread && !reduced ? pulseAnim : 1,
-      }}
+      style={breathing && !reduced ? breathStyle : undefined}
     >
       <Pressable
         testID={testID}

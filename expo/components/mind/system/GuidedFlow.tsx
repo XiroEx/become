@@ -15,6 +15,7 @@ import { ArrowRight, Check, ChevronLeft, X } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { useAndroidBackHandler, type BackHandlerLike } from "@/lib/android/backHandler";
 import { onDarkForeground, resolveToken, tintToken } from "@/lib/theme/tokens";
+import { ProgressFill } from "@/components/motion/ProgressFill";
 import type { GuidedStep } from "@/lib/ai/sanitize";
 
 export type { GuidedStep };
@@ -223,7 +224,8 @@ export default function GuidedFlow({
               <ChevronLeft size={18} color={SURFACE_WHITE} />
             </Pressable>
 
-            {/* Progress bar — the tool's own accent, not a generic token */}
+            {/* Progress bar — the tool's own accent, not a generic token.
+                Eases like the web's `transition-all` fills. */}
             <View className="flex-1 flex-row gap-1.5 items-center">
               {steps.map((_, i) => (
                 <View
@@ -231,16 +233,10 @@ export default function GuidedFlow({
                   testID={`guided-flow-progress-${i}`}
                   className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/15"
                 >
-                  <View
+                  <ProgressFill
+                    pct={i < idx || done ? 100 : i === idx ? 50 : 0}
+                    color={accent}
                     testID={`guided-flow-progress-${i}-fill`}
-                    className="h-full rounded-full"
-                    style={
-                      i < idx || done
-                        ? { width: "100%", backgroundColor: accent }
-                        : i === idx
-                          ? { width: "50%", backgroundColor: accent }
-                          : { width: "0%" }
-                    }
                   />
                 </View>
               ))}
