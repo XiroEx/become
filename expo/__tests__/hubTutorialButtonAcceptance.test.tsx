@@ -167,7 +167,8 @@ describe("Hub Tutorial Button Acceptance (card 96d41010)", () => {
       expect(button.props.accessibilityLabel).toBe("Help");
 
       fireEvent.press(button);
-      expect(hubSpy).toHaveBeenCalledWith("dashboard");
+      // Help waits for the menu to finish closing before it opens the tour.
+      await waitFor(() => expect(hubSpy).toHaveBeenCalledWith("dashboard"));
       hubSpy.mockRestore();
     });
 
@@ -181,7 +182,8 @@ describe("Hub Tutorial Button Acceptance (card 96d41010)", () => {
       expect(button.props.accessibilityLabel).toBe("Help");
 
       fireEvent.press(button);
-      expect(hubSpy).toHaveBeenCalledWith("programming");
+      // Help waits for the menu to finish closing before it opens the tour.
+      await waitFor(() => expect(hubSpy).toHaveBeenCalledWith("programming"));
       hubSpy.mockRestore();
     });
 
@@ -195,7 +197,8 @@ describe("Hub Tutorial Button Acceptance (card 96d41010)", () => {
       expect(button.props.accessibilityLabel).toBe("Help");
 
       fireEvent.press(button);
-      expect(hubSpy).toHaveBeenCalledWith("nutrition");
+      // Help waits for the menu to finish closing before it opens the tour.
+      await waitFor(() => expect(hubSpy).toHaveBeenCalledWith("nutrition"));
       hubSpy.mockRestore();
     });
 
@@ -209,7 +212,8 @@ describe("Hub Tutorial Button Acceptance (card 96d41010)", () => {
       expect(button.props.accessibilityLabel).toBe("Help");
 
       fireEvent.press(button);
-      expect(hubSpy).toHaveBeenCalledWith("mind");
+      // Help waits for the menu to finish closing before it opens the tour.
+      await waitFor(() => expect(hubSpy).toHaveBeenCalledWith("mind"));
       hubSpy.mockRestore();
     });
 
@@ -223,7 +227,8 @@ describe("Hub Tutorial Button Acceptance (card 96d41010)", () => {
       expect(button.props.accessibilityLabel).toBe("Help");
 
       fireEvent.press(button);
-      expect(hubSpy).toHaveBeenCalledWith("profile");
+      // Help waits for the menu to finish closing before it opens the tour.
+      await waitFor(() => expect(hubSpy).toHaveBeenCalledWith("profile"));
       hubSpy.mockRestore();
     });
   });

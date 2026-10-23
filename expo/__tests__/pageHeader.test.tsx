@@ -99,7 +99,7 @@ describe("PageHeader", () => {
     );
     fireEvent.press(getByTestId("page-header-avatar-button"));
     await waitFor(() => {
-      expect(getByTestId("page-header-menu-sheet")).toBeTruthy();
+      expect(getByTestId("page-header-menu")).toBeTruthy();
     });
     // The user's name heads the menu, like the web's TopNav.
     expect(getByTestId("page-header-menu-title").props.children).toBe(
@@ -108,7 +108,7 @@ describe("PageHeader", () => {
     expect(getByTestId("page-header-profile-item")).toBeTruthy();
     expect(getByTestId("page-header-settings-item")).toBeTruthy();
     expect(getByTestId("page-header-food-reports-item")).toBeTruthy();
-    expect(getByTestId("page-header-feedback")).toBeTruthy();
+    expect(getByTestId("page-header-feedback-item")).toBeTruthy();
     expect(getByTestId("page-header-help-item")).toBeTruthy();
     expect(getByTestId("page-header-logout-item")).toBeTruthy();
     // No native admin route exists, so the menu carries no Admin Panel.
@@ -129,7 +129,7 @@ describe("PageHeader", () => {
         expect(getByTestId("page-header-help-item")).toBeTruthy();
       });
       fireEvent.press(getByTestId("page-header-help-item"));
-      expect(seen).toEqual(["mind"]);
+      await waitFor(() => expect(seen).toEqual(["mind"]));
     } finally {
       unsub();
     }
@@ -147,7 +147,7 @@ describe("PageHeader", () => {
         expect(getByTestId("page-header-help-item")).toBeTruthy();
       });
       fireEvent.press(getByTestId("page-header-help-item"));
-      expect(replayed).toBe(1);
+      await waitFor(() => expect(replayed).toBe(1));
     } finally {
       unsub();
     }
