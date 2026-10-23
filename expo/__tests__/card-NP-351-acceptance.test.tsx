@@ -341,7 +341,7 @@ describe("(NP-351) the bar is the web's floating glass pill", () => {
     // The two things the old bar had and this one must not.
     expect(bar).not.toContain("borderTopColor");
     expect(bar).not.toContain("borderTopWidth");
-    expect(TAB_BAR_HEIGHT / 2).toBe(28);
+    expect(TAB_BAR_HEIGHT / 2).toBe(31);
   });
 
   it("uses expo-blur's systemChromeMaterial when there is no Liquid Glass", () => {
@@ -357,7 +357,7 @@ describe("(NP-351) the bar is the web's floating glass pill", () => {
     expect(
       StyleSheet.flatten(r.getByTestId("glass-tab-bar-pill").props.style)
         .backgroundColor,
-    ).toBe(rgba(darkTokens.card, 0.6));
+    ).toBe(rgba(darkTokens.card, 0.8));
   });
 
   it("uses Apple's Liquid Glass on iOS 26+, with nothing washed over it", () => {
@@ -392,7 +392,7 @@ describe("(NP-351) the bar is the web's floating glass pill", () => {
     const pill = StyleSheet.flatten(
       r.getByTestId("glass-tab-bar-pill").props.style,
     );
-    expect(pill.backgroundColor).toBe(rgba(darkTokens.card, 0.6));
+    expect(pill.backgroundColor).toBe(rgba(darkTokens.card, 0.8));
     expect(pill.elevation).toBe(8);
   });
 
@@ -419,9 +419,9 @@ describe("(NP-351) the bar is the web's floating glass pill", () => {
       r.getByTestId("glass-tab-dashboard").props.accessibilityState,
     ).toMatchObject({ selected: false });
 
-    // The web's `bg-zinc-900/10 dark:bg-white/15`, on the active tab only.
-    expect(r.getByTestId("glass-tab-active-pill-Mind")).toBeTruthy();
-    expect(r.queryByTestId("glass-tab-active-pill-Home")).toBeNull();
+    // The web's `bg-zinc-900/10 dark:bg-white/15`: ONE pill for the whole bar,
+    // which slides to the focused tab (`glassTabBarMotion.test.tsx`).
+    expect(r.getAllByTestId("glass-tab-active-pill")).toHaveLength(1);
   });
 
   it("emits tabPress so a re-press can still scroll the tab to the top", () => {
