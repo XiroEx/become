@@ -144,7 +144,7 @@ describe("Hub Tutorial Button Acceptance (card 96d41010)", () => {
       renderResult: ReturnType<typeof render>,
     ) {
       const { getByTestId, findByTestId } = renderResult;
-      fireEvent.press(getByTestId("page-header-avatar-button"));
+      fireEvent.press(await findByTestId("page-header-avatar-button"));
       const button = await findByTestId("page-header-help-item");
       return button;
     }

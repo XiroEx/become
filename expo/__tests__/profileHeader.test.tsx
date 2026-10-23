@@ -79,7 +79,7 @@ describe("Profile reachability from headers (NP-163)", () => {
   it("Mind screen avatar menu opens /(tabs)/profile", async () => {
     const { findByTestId, getByTestId } = render(<MindRoute />);
 
-    fireEvent.press(getByTestId("page-header-avatar-button"));
+    fireEvent.press(await findByTestId("page-header-avatar-button"));
     const profileItem = await findByTestId("page-header-profile-item");
     expect(profileItem).toBeTruthy();
 
@@ -93,7 +93,7 @@ describe("Profile reachability from headers (NP-163)", () => {
   it("Dashboard avatar menu opens /(tabs)/profile", async () => {
     const { findByTestId, getByTestId } = render(<DashboardRoute />);
 
-    fireEvent.press(getByTestId("page-header-avatar-button"));
+    fireEvent.press(await findByTestId("page-header-avatar-button"));
     const profileItem = await findByTestId("page-header-profile-item");
     expect(profileItem).toBeTruthy();
 
