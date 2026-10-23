@@ -105,25 +105,13 @@ function rgbStringToArgb(rgb: string): number {
   return (((0xff << 24) | (r << 16) | (g << 8) | b) >>> 0) as number;
 }
 
-/** RN flattens `style={[a, b]}` into one object; the fill's scaleX lives in its `transform`. */
+/** RN flattens `style={[a, b]}` into one object; the fill's width is its static style plus the animated one. */
 function flattenStyle(style: unknown): Record<string, unknown> {
   if (Array.isArray(style)) {
     return Object.assign({}, ...style.map(flattenStyle));
   }
   if (style && typeof style === "object") return style as Record<string, unknown>;
   return {};
-}
-
-function fillTransformScaleX(style: unknown): number | undefined {
-  const flat = flattenStyle(style);
-  const t = flat.transform;
-  if (!Array.isArray(t)) return undefined;
-  for (const entry of t) {
-    if (entry && typeof entry === "object" && "scaleX" in entry) {
-      return (entry as { scaleX: number }).scaleX;
-    }
-  }
-  return undefined;
 }
 
 beforeEach(() => {
@@ -228,18 +216,21 @@ describe("(id: np298-guidedflow) GuidedFlow is a bare, always-dark Modal", () =>
     );
     // Step 0 in progress: its own segment is the half-filled one, in the
     // mission accent (blue-500), not a shared amber/red/success token. The
-    // fill animates via scaleX (percentage widths don't animate), so the
-    // progress reads off the transform, not a width.
+    // fill is a ProgressFill now (it eases its width), so its style is an array.
     const fillStyle = getByTestId("guided-flow-progress-0-fill").props.style;
-    expect(flattenStyle(fillStyle)).toMatchObject({ backgroundColor: accent });
-    expect(fillTransformScaleX(fillStyle)).toBeCloseTo(0.5, 5);
+    expect(flattenStyle(fillStyle)).toMatchObject({
+      width: "50%",
+      backgroundColor: accent,
+    });
     expect(accent).not.toBe(resolveToken("accent", "dark"));
 
     fireEvent.press(getByTestId("guided-flow-next"));
     // Step 0 complete, now behind us: fully filled, same accent.
     const doneStyle = getByTestId("guided-flow-progress-0-fill").props.style;
-    expect(flattenStyle(doneStyle)).toMatchObject({ backgroundColor: accent });
-    expect(fillTransformScaleX(doneStyle)).toBeCloseTo(1, 5);
+    expect(flattenStyle(doneStyle)).toMatchObject({
+      width: "100%",
+      backgroundColor: accent,
+    });
 
     fireEvent.press(getByTestId("guided-flow-next"));
     // Done: the check icon is drawn in the accent too.
@@ -339,8 +330,7 @@ describe("(id: np298-intro) ToolIntroGate's intro run is the tool's own colour",
     "%s's intro progress bar is coloured with its OWN accent (%s)",
     async (system, accent) => {
       const { getByTestId } = await openIntro(system);
-      // The fill animates via scaleX (percentage widths don't animate), so
-      // the colour reads off the flattened style.
+      // The fill's style is an array (ProgressFill), so read it flattened.
       expect(
         flattenStyle(getByTestId("guided-flow-progress-0-fill").props.style),
       ).toMatchObject({ backgroundColor: accent });

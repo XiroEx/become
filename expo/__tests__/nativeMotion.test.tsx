@@ -17,7 +17,7 @@
 // | 3 | Sheets: y 40 -> 0, spring 28/300 (ProgramNudge,   | `Modal` + `BottomSheet` rise 40pt over the RN fade/slide    | cut   |
 // |   | FoodLogSheet, MealApplySheet, CustomizeDashboard)|                                                             |       |
 // | 3 | Avatar menu: scale 0.95, y -4, 150ms (ProfileMenu)| `AvatarMenuPop` (150ms pop, origin top-right)               | cut   |
-// | 4 | Tiles: StreakTile crossfade 220ms; SmartRotating | `ProgressFill` (scaleX, 500ms) in StatTile, StreakTile,     | still |
+// | 4 | Tiles: StreakTile crossfade 220ms; SmartRotating | `ProgressFill` (width, 500ms) in StatTile, StreakTile,      | still |
 // |   | slide spring 320/34; bars `transition-all 500ms` | GuidedFlow, SelfImage evolution; rotation cadence unchanged  |       |
 // | 5 | Banners: MoodGateway y -6 220ms; Toast y 8 200ms  | `MoodGatewayBanner`, `OfflineBanner`, `StreakBanner` drop;   | cut   |
 // |   | NotificationOptIn y 16 220ms; StreakMilestone     | `Toast` rises; `StreakMilestoneModal` fire pops 0->1.3->1   |       |
