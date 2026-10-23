@@ -532,14 +532,19 @@ describe("(id: live-parity-chrome) the chrome around the name is the web's", () 
 
 describe("(id: live-parity-track-untouched) Track keeps its own row", () => {
   it("still numbers its sets and still has a checkbox per set", () => {
-    const { getByTestId } = render(<LiveWorkoutClient workout={BENCH} />);
+    const { getByTestId, getByText, queryByTestId } = render(
+      <LiveWorkoutClient workout={BENCH} />,
+    );
     expect(
       getByTestId("live-workout-bench-set-0-label").props.children,
     ).toBe(1);
     expect(getByTestId("live-workout-bench-set-0-complete")).toBeTruthy();
-    expect(
-      getByTestId("live-workout-bench-set-0-weight-label").props.children,
-    ).toBe("Weight (lbs)");
+    // The web's Track table moved the names into one header row above the
+    // grid — no stacked per-input labels.
+    expect(queryByTestId("live-workout-bench-set-0-weight-label")).toBeNull();
+    expect(getByText("Weight")).toBeTruthy();
+    expect(getByText("Reps")).toBeTruthy();
+    expect(getByText("Done")).toBeTruthy();
   });
 });
 

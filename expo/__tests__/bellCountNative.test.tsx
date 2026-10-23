@@ -255,35 +255,58 @@ describe("(id: 9d6d2d72) in-logging-row 1-vs-2 toggle removed from Live and Trac
 // ───────────────────────────────────────────────────────────────────────────
 
 describe('(id: 9d6d2d73) the \"= X total\" hint and the per-exercise memory', () => {
-  it("Track: the hint and the copy follow the choice, not the catalogue", () => {
+  it("Live: the per-set hint follows the choice, not the catalogue", () => {
+    const { getByTestId } = render(
+      <LiveWorkoutClient
+        workout={workoutOf([dbPress])}
+        initialView="live"
+        bellChoices={{ "dumbbell-bench-press": 2 }}
+      />,
+    );
+    const weight = "live-workout-live-dumbbell-bench-press-set-0-weight";
+    fireEvent.changeText(getByTestId(weight), "50");
+
+    // Two dumbbells: a combined total worth showing.
+    expect(
+      getByTestId("live-workout-live-dumbbell-bench-press-set-0-helper").props.children,
+    ).toBe("= 100 lbs total");
+
+    // One dumbbell: the number typed IS the load, so the hint goes.
+    const { queryByTestId: queryOne, getByTestId: getOne } = render(
+      <LiveWorkoutClient
+        workout={workoutOf([dbPress])}
+        initialView="live"
+        bellChoices={{ "dumbbell-bench-press": 1 }}
+      />,
+    );
+    fireEvent.changeText(getOne(weight), "50");
+    expect(
+      queryOne("live-workout-live-dumbbell-bench-press-set-0-helper"),
+    ).toBeNull();
+  });
+
+  it("Track: the per-exercise convention copy follows the choice, not the catalogue", () => {
+    // Track rows carry no per-set total line — the convention lives in the
+    // per-exercise hint above the grid.
     const { getByTestId, queryByTestId } = render(
       <LiveWorkoutClient
         workout={workoutOf([dbPress])}
         bellChoices={{ "dumbbell-bench-press": 2 }}
       />,
     );
-    const weight = "live-workout-dumbbell-bench-press-set-0-weight";
-    fireEvent.changeText(getByTestId(weight), "50");
-
-    // Two dumbbells: a combined total worth showing.
     expect(
-      getByTestId("live-workout-dumbbell-bench-press-set-0-helper").props.children,
-    ).toBe("= 100 lbs total");
+      queryByTestId("live-workout-dumbbell-bench-press-set-0-helper"),
+    ).toBeNull();
     expect(
       getByTestId("live-workout-dumbbell-bench-press-bell-hint").props.children,
     ).toBe("Enter the weight of one dumbbell — not the combined total.");
 
-    // One dumbbell: the number typed IS the load, so the hint goes.
-    const { queryByTestId: queryOne, getByTestId: getOne } = render(
+    const { getByTestId: getOne } = render(
       <LiveWorkoutClient
         workout={workoutOf([dbPress])}
         bellChoices={{ "dumbbell-bench-press": 1 }}
       />,
     );
-    fireEvent.changeText(getOne(weight), "50");
-    expect(
-      queryOne("live-workout-dumbbell-bench-press-set-0-helper"),
-    ).toBeNull();
     expect(
       getOne("live-workout-dumbbell-bench-press-bell-hint").props.children,
     ).toBe("Enter the weight of one dumbbell.");
@@ -316,16 +339,17 @@ describe('(id: 9d6d2d73) the \"= X total\" hint and the per-exercise memory', ()
     const { getByTestId } = render(
       <LiveWorkoutClient
         workout={workoutOf([dbPress])}
+        initialView="live"
         weightUnit="kg"
         bellChoices={{ "dumbbell-bench-press": 2 }}
       />,
     );
     fireEvent.changeText(
-      getByTestId("live-workout-dumbbell-bench-press-set-0-weight"),
+      getByTestId("live-workout-live-dumbbell-bench-press-set-0-weight"),
       "40",
     );
     expect(
-      getByTestId("live-workout-dumbbell-bench-press-set-0-helper").props.children,
+      getByTestId("live-workout-live-dumbbell-bench-press-set-0-helper").props.children,
     ).toBe("= 80 kg total");
   });
 
@@ -334,31 +358,33 @@ describe('(id: 9d6d2d73) the \"= X total\" hint and the per-exercise memory', ()
     const { getByTestId, queryByTestId } = render(
       <LiveWorkoutClient
         workout={workoutOf([dbPress])}
+        initialView="live"
         rememberedBells={remembered}
       />,
     );
     fireEvent.changeText(
-      getByTestId("live-workout-dumbbell-bench-press-set-0-weight"),
+      getByTestId("live-workout-live-dumbbell-bench-press-set-0-weight"),
       "50",
     );
     expect(
-      queryByTestId("live-workout-dumbbell-bench-press-set-0-helper"),
+      queryByTestId("live-workout-live-dumbbell-bench-press-set-0-helper"),
     ).toBeNull();
 
     // …and saying \"two\" in bellChoices wins over the memory.
     const { getByTestId: getByTestId2 } = render(
       <LiveWorkoutClient
         workout={workoutOf([dbPress])}
+        initialView="live"
         rememberedBells={remembered}
         bellChoices={{ "dumbbell-bench-press": 2 }}
       />,
     );
     fireEvent.changeText(
-      getByTestId2("live-workout-dumbbell-bench-press-set-0-weight"),
+      getByTestId2("live-workout-live-dumbbell-bench-press-set-0-weight"),
       "50",
     );
     expect(
-      getByTestId2("live-workout-dumbbell-bench-press-set-0-helper").props.children,
+      getByTestId2("live-workout-live-dumbbell-bench-press-set-0-helper").props.children,
     ).toBe("= 100 lbs total");
   });
 

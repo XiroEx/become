@@ -217,7 +217,7 @@ describe("(NP-332) Track view header, sets defaulting, and compact superset pari
       ],
     };
 
-    it("displays group header subtitle '— N exercises, minimal rest between exercises', compact 'lbs/DB' weight labels, skip button, and horizontal quick picks", () => {
+    it("displays group header subtitle '— N exercises, minimal rest between exercises', under-input 'lbs/DB' labels, skip button, and no quick picks (the web's Track has none)", () => {
       const { getByTestId, queryByTestId } = render(
         <LiveWorkoutClient workout={SUPERSET_WORKOUT} />,
       );
@@ -232,7 +232,7 @@ describe("(NP-332) Track view header, sets defaulting, and compact superset pari
       expect(queryByTestId("live-workout-db-bench-video")).toBeNull();
       expect(queryByTestId("live-workout-bent-row-video")).toBeNull();
 
-      // Compact weight label is "lbs/DB"
+      // Compact weight label is "lbs/DB", under the input — not above it.
       expect(
         getByTestId("live-workout-db-bench-set-0-weight-label").props.children,
       ).toBe("lbs/DB");
@@ -241,10 +241,16 @@ describe("(NP-332) Track view header, sets defaulting, and compact superset pari
       const skipBtn = getByTestId("live-workout-db-bench-set-0-skip");
       expect(skipBtn).toBeTruthy();
 
-      // Horizontal quick picks container
-      expect(getByTestId("live-workout-db-bench-set-0-quick-picks")).toBeTruthy();
-      // Clicking a quick pick fills the weight
-      fireEvent.press(getByTestId("live-workout-db-bench-set-0-quick-pick-20"));
+      // No quick-pick strip in Track: the web's picks live on the Live
+      // view's strip only.
+      expect(
+        queryByTestId("live-workout-db-bench-set-0-quick-picks"),
+      ).toBeNull();
+      // Typing fills the weight all the same.
+      fireEvent.changeText(
+        getByTestId("live-workout-db-bench-set-0-weight"),
+        "20",
+      );
       expect(getByTestId("live-workout-db-bench-set-0-weight").props.value).toBe("20");
     });
   });

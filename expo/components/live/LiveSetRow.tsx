@@ -140,6 +140,16 @@ export interface LiveSetRowProps {
    * Track keeps its checkbox: that is where a set is ticked by hand.
    */
   hideComplete?: boolean;
+  /**
+   * Web-Track table style: label-less filled inputs with centred text, a
+   * set-number chip instead of the bare number, a square done box, and no
+   * quick picks / helper / prefill / assumption lines — the web's Track row
+   * is a compact grid under one SET · WEIGHT · REPS · DONE header, not a
+   * stack of labelled boxes. Only applies when the exercise asks for weight
+   * and/or reps and nothing else; any other tracking type renders exactly as
+   * before. Defaults to false so every direct render is unchanged.
+   */
+  track?: boolean;
   /** Compact single-row layout for superset/circuit rounds (NP-332). */
   compact?: boolean;
   /** Target reps prescription string (e.g. "10-12" or "10") for placeholder prefill. */
@@ -230,6 +240,7 @@ export function LiveSetRow({
   roundLabel,
   hideComplete = false,
   compact = false,
+  track = false,
   targetReps,
   targetDuration,
   onSkip,
@@ -321,6 +332,157 @@ export function LiveSetRow({
     durationSentRef.current = { seconds: parsedSeconds, unit: durationUnit };
     onChange({ ...state, durationSec: parsedSeconds });
   };
+
+  // The web-Track table row: only when the exercise asks for weight and/or
+  // reps and nothing else. Timed / distance / speed work keeps the legacy
+  // labelled layout below, unchanged.
+  const trackTable =
+    track &&
+    (inputs.weight || inputs.reps) &&
+    !inputs.duration &&
+    !inputs.distance &&
+    !inputs.speed;
+
+  if (trackTable) {
+    return (
+      <View
+        testID={tid}
+        // A LOGGED SET LOOKS LOGGED (NP-381) — the same green wash as the
+        // legacy row, so the glance-down-the-grid read still works.
+        className={`flex-row items-center gap-2 mb-2 p-2 border rounded-xl ${
+          state.completed
+            ? "bg-green-100 dark:bg-green-900/20 border-green-300 dark:border-green-800"
+            : "bg-card border-border"
+        }`}
+      >
+        <View className="w-8 items-center justify-center rounded-md bg-muted py-1.5">
+          <Text
+            testID={`${tid}-label`}
+            className="text-foreground text-xs font-bold"
+          >
+            {setIndex + 1}
+          </Text>
+        </View>
+        {roundLabel ? (
+          <Text
+            testID={`${tid}-round`}
+            className="text-muted-foreground text-xs font-semibold"
+          >
+            {roundLabel}
+          </Text>
+        ) : null}
+        {inputs.weight ? (
+          <View style={{ flex: 1 }}>
+            <Input
+              testID={`${tid}-weight`}
+              accessibilityLabel={`Weight for set ${setIndex + 1}`}
+              keyboardType="decimal-pad"
+              value={weightDraft}
+              onChangeText={onWeightChangeText}
+              placeholder={
+                prefill?.weight !== null && prefill?.weight !== undefined
+                  ? String(prefill.weight)
+                  : "0"
+              }
+              style={{
+                backgroundColor: colors.muted,
+                borderWidth: 0,
+                textAlign: "center",
+              }}
+            />
+            {compact ? (
+              <Text
+                testID={`${tid}-weight-label`}
+                className="text-muted-foreground text-[10px] text-center mt-0.5"
+              >
+                {getWeightLabel(bell.style, true, weightUnit)}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
+        {inputs.reps ? (
+          <View style={{ flex: 1 }}>
+            <Input
+              testID={`${tid}-reps`}
+              accessibilityLabel={`Reps for set ${setIndex + 1}`}
+              keyboardType="number-pad"
+              value={state.reps !== null ? String(state.reps) : ""}
+              onChangeText={(text) => onChange({ ...state, reps: parseNum(text) })}
+              placeholder={
+                prefill?.reps !== null && prefill?.reps !== undefined
+                  ? String(prefill.reps)
+                  : targetReps != null
+                    ? String(targetReps).split("-")[0]?.replace(/[^0-9]/g, "") || "0"
+                    : "0"
+              }
+              style={{
+                backgroundColor: colors.muted,
+                borderWidth: 0,
+                textAlign: "center",
+              }}
+            />
+            {compact ? (
+              <Text
+                testID={`${tid}-reps-label`}
+                className="text-muted-foreground text-[10px] text-center mt-0.5"
+              >
+                Reps
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
+        {compact && !state.completed && !state.weight && !state.reps && !state.durationSec && !state.distance && !state.speed ? (
+          <Pressable
+            testID={`${tid}-skip`}
+            accessibilityRole="button"
+            accessibilityLabel={`Skip set ${setIndex + 1}`}
+            onPress={() => {
+              if (onSkip) {
+                onSkip();
+              } else {
+                onChange({
+                  ...state,
+                  reps: null,
+                  weight: null,
+                  durationSec: null,
+                  distance: null,
+                  speed: null,
+                  completed: true,
+                });
+              }
+            }}
+            className="w-9 h-9 rounded-lg border border-border items-center justify-center bg-card"
+          >
+            <ChevronsRight size={16} color={colors["muted-foreground"]} />
+          </Pressable>
+        ) : null}
+        {hideComplete ? null : (
+          <Pressable
+            testID={`${tid}-complete`}
+            onPress={() => onChange({ ...state, completed: !state.completed })}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: state.completed }}
+            accessibilityLabel={`Mark set ${setIndex + 1} ${state.completed ? "incomplete" : "complete"}`}
+            className={`w-9 h-9 rounded-lg items-center justify-center border ${
+              state.completed
+                ? "bg-success border-success"
+                : "bg-card border-border"
+            }`}
+          >
+            <Check
+              color={
+                state.completed
+                  ? colors["primary-foreground"]
+                  : colors["muted-foreground"]
+              }
+              size={18}
+              strokeWidth={2}
+            />
+          </Pressable>
+        )}
+      </View>
+    );
+  }
 
   return (
     <View
