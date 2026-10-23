@@ -132,7 +132,10 @@ const PILL_SPRING = { stiffness: 500, damping: 35, mass: 1 } as const;
 /** The web's `scale-[0.88]` while scrolling, over `duration-300 ease-out`. */
 const CONDENSED_SCALE = 0.88;
 const CONDENSE_MS = 300;
-const EASE_OUT = Easing.bezier(0, 0, 0.58, 1);
+// Optional-chained: several shell tests mock reanimated with only the hooks they
+// need, and a module-level `Easing.bezier` call would crash the whole tab bar
+// at import there. Without it `withTiming` falls back to its default curve.
+const EASE_OUT = Easing?.bezier?.(0, 0, 0.58, 1);
 
 /** The web's badge: `h-4 min-w-[16px]`, `right-1 top-0.5`, `text-[10px]`. */
 const BADGE_SIZE = 16;
