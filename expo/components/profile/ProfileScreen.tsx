@@ -24,7 +24,6 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   ArrowLeft,
   ChevronRight,
-  HelpCircle,
   Settings,
   Sparkles,
 } from "lucide-react-native";
@@ -45,7 +44,7 @@ import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { TAB_BAR_CONTENT_INSET } from "@/lib/navigation/tabBarInset";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
-import { requestNativeTourHub } from "@/lib/tour/nativeTourRequest";
+import { PageHeader } from "@/components/navigation/PageHeader";
 import {
   useAndroidBackHandler,
   type BackHandlerLike,
@@ -63,7 +62,6 @@ const KNOWN_ORIGIN_TABS = ["dashboard", "mind", "programming", "nutrition"];
 export interface ProfileScreenProps {
   onBack?: () => void;
   onOpenSettings?: () => void;
-  onHelp?: () => void;
   testID?: string;
   /** DI hook for tests — injects `BackHandler` for the Android hardware-back fix (NP-306). */
   backHandler?: BackHandlerLike;
@@ -72,7 +70,6 @@ export interface ProfileScreenProps {
 export function ProfileScreen({
   onBack,
   onOpenSettings,
-  onHelp,
   testID = "profile-screen",
   backHandler = BackHandler,
 }: ProfileScreenProps) {
@@ -172,14 +169,6 @@ export function ProfileScreen({
     }
   };
 
-  const handleHelp = () => {
-    if (onHelp) {
-      onHelp();
-    } else {
-      requestNativeTourHub("profile");
-    }
-  };
-
   if (loading) {
     return (
       <SafeAreaView
@@ -234,70 +223,27 @@ export function ProfileScreen({
           />
         }
       >
-        {/* Header */}
-        <View className="flex-row items-center justify-between">
-          <View className="flex-row items-center gap-3">
-            <Pressable
-              testID="profile-back-button"
-              accessibilityRole="button"
-              accessibilityLabel="Back"
-              onPress={handleBack}
-              style={[
-                minTouchTarget,
-                { alignItems: "center", justifyContent: "center" },
-              ]}
-              className="rounded-full border border-border p-2"
-            >
-              <ArrowLeft
-                size={20}
-                color={colors.foreground}
-                strokeWidth={2}
-              />
-            </Pressable>
-            <Text
-              testID="profile-title"
-              accessibilityRole="header"
-              className="text-foreground text-2xl font-bold"
-            >
-              Profile
-            </Text>
-          </View>
-          <View className="flex-row items-center gap-2">
-            <Pressable
-              testID="profile-help-button"
-              accessibilityRole="button"
-              accessibilityLabel="Profile help"
-              onPress={handleHelp}
-              style={[
-                minTouchTarget,
-                { alignItems: "center", justifyContent: "center" },
-              ]}
-              className="rounded-full border border-border p-2"
-            >
-              <HelpCircle
-                size={20}
-                color={colors["muted-foreground"]}
-                strokeWidth={1.5}
-              />
-            </Pressable>
-            <Pressable
-              testID="profile-header-settings"
-              accessibilityRole="button"
-              accessibilityLabel="Settings"
-              onPress={handleSettings}
-              style={[
-                minTouchTarget,
-                { alignItems: "center", justifyContent: "center" },
-              ]}
-              className="rounded-full border border-border p-2"
-            >
-              <Settings
-                size={20}
-                color={colors["muted-foreground"]}
-                strokeWidth={1.5}
-              />
-            </Pressable>
-          </View>
+        {/* Header: title + avatar menu (help and settings live in the
+            menu now). Back stays as a row directly below it. */}
+        <PageHeader title="Profile" helpKey="profile" />
+        <View className="flex-row items-center">
+          <Pressable
+            testID="profile-back-button"
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            onPress={handleBack}
+            style={[
+              minTouchTarget,
+              { alignItems: "center", justifyContent: "center" },
+            ]}
+            className="rounded-full border border-border p-2"
+          >
+            <ArrowLeft
+              size={20}
+              color={colors.foreground}
+              strokeWidth={2}
+            />
+          </Pressable>
         </View>
 
         {error ? (

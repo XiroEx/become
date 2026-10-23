@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import PageTransition from '@/components/PageTransition'
+import PageHeader from '@/components/PageHeader'
 import { useSwipeNav } from '@/hooks/useSwipeNav'
 import WorkoutSummary from '@/components/WorkoutSummary'
 import { useMemberWeightUnit } from '@/lib/useMemberWeightUnit'
@@ -606,12 +607,14 @@ export default function CalendarClient() {
   return (
     <PageTransition className="pb-6">
       {/* Header */}
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <BackButton />
-          <Calendar className="h-5 w-5 text-blue-500" />
-          <h1 className="text-xl font-bold text-zinc-900 dark:text-white sm:text-2xl">Calendar</h1>
-        </div>
+      <div className="mb-1">
+        <BackButton />
+      </div>
+      <PageHeader
+        title={<span className="flex items-center gap-2"><Calendar className="h-6 w-6 text-blue-500" />Calendar</span>}
+        className="mb-2"
+      />
+      <div className="mb-4 flex">
         <Link
           href="/dashboard/calendar/settings"
           className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"

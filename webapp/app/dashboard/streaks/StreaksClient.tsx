@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Flame, Dumbbell, UtensilsCrossed, Brain, Snowflake, Check, Circle, Loader2 } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
+import PageHeader from '@/components/PageHeader'
 import { Card } from '@/components/ui'
 import FireNumber from '@/components/streaks/FireNumber'
 import { streakDisplay, STREAK_VISIBLE_MIN } from '@/lib/streaks/pillars'
@@ -161,19 +162,17 @@ export default function StreaksClient() {
   return (
     <PageTransition className="pb-24">
       <div className="space-y-4">
-        <header className="flex items-center gap-3">
-          <Link
-            href="/dashboard"
-            aria-label="Back to dashboard"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-          <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Streaks</h1>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">Three in a row makes a streak</p>
-          </div>
-        </header>
+        <Link
+          href="/dashboard"
+          aria-label="Back to dashboard"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </Link>
+        <PageHeader
+          title="Streaks"
+          subtitle="Three in a row makes a streak"
+        />
 
         {error && !data && (
           <Card variant="compact">

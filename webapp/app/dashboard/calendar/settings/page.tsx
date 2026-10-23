@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import PageTransition from '@/components/PageTransition'
-import { ChevronLeft, Calendar, Save, RefreshCw } from 'lucide-react'
+import PageHeader from '@/components/PageHeader'
+import { ChevronLeft, Save, RefreshCw } from 'lucide-react'
 
 interface ScheduleData {
   _id: string
@@ -114,25 +115,20 @@ export default function CalendarSettingsPage() {
 
   return (
     <PageTransition className="pb-6">
-      {/* Header */}
-      <div className="mb-6">
-        <button
-          onClick={() => router.back()}
-          className="mb-3 flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
-        >
-          <ChevronLeft className="h-4 w-4" />
-          Back
-        </button>
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-900/30">
-            <Calendar className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-zinc-900 dark:text-white sm:text-2xl">Schedule Settings</h1>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">Manage your training schedules</p>
-          </div>
+        <div className="mb-1">
+          <button
+            onClick={() => router.back()}
+            className="flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Back
+          </button>
         </div>
-      </div>
+        <PageHeader
+          title="Schedule Settings"
+          subtitle="Manage your training schedules"
+          className="mb-6"
+        />
 
       {successMessage && (
         <div className="mb-4 rounded-xl bg-green-50 p-3 text-sm text-green-700 dark:bg-green-900/20 dark:text-green-400">

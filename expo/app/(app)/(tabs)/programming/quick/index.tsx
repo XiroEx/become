@@ -17,6 +17,7 @@ import {
   type DraftExercise,
 } from "@become/core";
 import { Text } from "@/components/Text";
+import { PageHeader } from "@/components/navigation/PageHeader";
 import { ExerciseAccordion } from "@/components/ExerciseAccordion";
 import { NativeShareButton } from "@/components/share/NativeShareButton";
 import { DatePicker } from "@/components/programs/DatePicker";
@@ -486,6 +487,14 @@ export default function QuickSessionOverviewRoute({
           paddingBottom: 120,
         }}
       >
+        {/* PageHeader sits on top; Back / Edit / Log or plan / Share
+            stay as a row directly below it. The title moves into the
+            header (keeping its `quick-session-overview-title` testID). */}
+        <PageHeader
+          testID="quick-session-overview"
+          title={session.title}
+          subtitle={`${session.exercises.length} exercise${session.exercises.length === 1 ? "" : "s"}`}
+        />
         <View
           style={{
             flexDirection: "row",
@@ -736,18 +745,7 @@ export default function QuickSessionOverviewRoute({
             {focusLabel ? ` · ${focusLabel}` : ""}
           </Text>
           <Text
-            testID="quick-session-overview-title"
-            accessibilityRole="header"
-            style={{
-              marginTop: 4,
-              fontSize: 24,
-              fontWeight: "700",
-              color: colors.foreground,
-            }}
-          >
-            {session.title}
-          </Text>
-          <Text
+            testID="quick-session-overview-subtitle"
             style={{
               marginTop: 4,
               fontSize: 14,

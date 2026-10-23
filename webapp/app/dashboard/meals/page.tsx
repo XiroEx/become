@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { AnimatePresence } from 'framer-motion'
 import PageTransition from '@/components/PageTransition'
+import PageHeader from '@/components/PageHeader'
 import MealCard from '@/components/meals/MealCard'
 import RecipeCard from '@/components/meals/RecipeCard'
 import MealApplySheet from '@/components/meals/MealApplySheet'
@@ -334,19 +335,18 @@ export default function MealsPage() {
 
   return (
     <PageTransition className="space-y-4 pb-24 sm:space-y-6">
-      <header className="mb-2 sm:mb-4">
-        <div className="flex items-center gap-3">
-          <BackButton href="/dashboard/nutrition" />
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">My Stuff</h1>
-        </div>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400 sm:text-base">
-          {tab === 'recipes'
-            ? 'Recipes become foods — save one as a food, then log it.'
-            : tab === 'meals'
-            ? 'Your saved meals — groups of foods you can log in one tap.'
-            : 'Your saved foods. Tap to log.'}
-        </p>
-      </header>
+      <div className="mb-1">
+        <BackButton href="/dashboard/nutrition" />
+      </div>
+      <PageHeader
+        title="My Stuff"
+        subtitle={tab === 'recipes'
+          ? 'Recipes become foods — save one as a food, then log it.'
+          : tab === 'meals'
+          ? 'Your saved meals — groups of foods you can log in one tap.'
+          : 'Your saved foods. Tap to log.'}
+        className="mb-2 sm:mb-4"
+      />
 
       {/* Tab strip — shared SegmentedControl */}
       <div data-tour="food-tabs">

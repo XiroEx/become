@@ -34,6 +34,7 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { ArrowRight, Check, Loader2, Sparkles } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
+import PageHeader from '@/components/PageHeader'
 import { BackButton } from '@/components/ui/BackButton'
 import { Card } from '@/components/ui'
 import LegalLinks from '@/components/legal/LegalLinks'
@@ -989,10 +990,12 @@ export default function PlanPageClient({ rows, mindTotalSessions }: PlanPageClie
   }, [portalPath])
 
   const header = (
-    <header className="flex items-center gap-3">
-      <BackButton />
-      <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">Plan</h1>
-    </header>
+    <>
+      <div className="mb-1">
+        <BackButton />
+      </div>
+      <PageHeader title="Plan" />
+    </>
   )
 
   // Snapshot unknown (cold first paint, or signed-out). Draw a neutral

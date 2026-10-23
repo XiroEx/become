@@ -26,7 +26,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <AdminGuard>
-      {/* Sub-nav tabs — sits below the dashboard TopNav, above page content.
+      {/* Sub-nav tabs — sits below the page header, above page content.
           Outer wrapper isolates horizontal overflow to the tabs strip itself
           so it never propagates to the page (which would clip page content
           behind the bottom nav on small viewports). */}

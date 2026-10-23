@@ -1,12 +1,12 @@
 // Run with: npm run test:file tests/unit/animationSweepChrome.test.ts
 //
-// BottomNav and TopNav both call next/navigation hooks (usePathname/useRouter)
+// BottomNav and ProfileMenu both call next/navigation hooks (usePathname/useRouter)
 // that require an App Router context react-dom/server can't provide outside
 // Next's own render — see tests/unit/weightLogSheet.test.tsx and friends for
 // the same constraint on router-dependent components. That leaves a source
 // scan as the safe way to pin the animation wiring these two got in the
 // sweep: BottomNav's active-tab pill now slides via a shared layoutId instead
-// of an instant class swap, and TopNav's profile dropdown now mounts/unmounts
+// of an instant class swap, and ProfileMenu's dropdown now mounts/unmounts
 // through AnimatePresence instead of a bare `isOpen &&`.
 
 import { test } from 'node:test'
@@ -36,8 +36,8 @@ test('BottomNav: unread badge still renders for every tab, not just the active o
   assert.match(src, /\(badge \?\? 0\) > 0/)
 })
 
-test('TopNav: profile dropdown animates in/out via AnimatePresence', () => {
-  const src = readSource('components/TopNav.tsx')
+test('ProfileMenu: profile dropdown animates in/out via AnimatePresence', () => {
+  const src = readSource('components/ProfileMenu.tsx')
   assert.match(src, /import \{ AnimatePresence, motion \} from 'framer-motion'/)
   const dropdownStart = src.indexOf('<AnimatePresence>')
   const dropdownEnd = src.indexOf('</AnimatePresence>')

@@ -15,6 +15,7 @@ import {
   Layers,
 } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
+import PageHeader from '@/components/PageHeader'
 import FoodThumbnail from '@/components/nutrition/FoodThumbnail'
 import FoodLogSheet from '@/components/meals/FoodLogSheet'
 import BridgeFieldGroup, { type BridgeValues } from '@/components/nutrition/BridgeFieldGroup'
@@ -384,7 +385,7 @@ export default function FoodDetailPage({ params }: { params: Promise<{ id: strin
   return (
     <PageTransition className="space-y-4 pb-32">
       {/* Top bar */}
-      <div className="flex items-center justify-between">
+      <div>
         <Link
           href="/dashboard/meals?tab=foods"
           className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
@@ -392,7 +393,9 @@ export default function FoodDetailPage({ params }: { params: Promise<{ id: strin
           <ArrowLeft className="h-4 w-4" />
           Favorites
         </Link>
-        <div className="flex items-center gap-1">
+      </div>
+      <PageHeader title={food.name} subtitle={food.brand} />
+      <div className="flex items-center gap-1">
           <button
             onClick={handleBookmarkToggle}
             disabled={bookmarking}
@@ -415,7 +418,6 @@ export default function FoodDetailPage({ params }: { params: Promise<{ id: strin
             </button>
           )}
         </div>
-      </div>
 
       {/* Hero — image or large category-tinted thumbnail */}
       <div className="overflow-hidden sm:rounded-xl sm:border sm:border-zinc-200 dark:sm:border-zinc-800">
@@ -428,28 +430,20 @@ export default function FoodDetailPage({ params }: { params: Promise<{ id: strin
         />
       </div>
 
-      {/* Title block */}
+      {/* Badges + serving line */}
       <div>
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-xl font-bold text-zinc-900 dark:text-white sm:text-2xl">{food.name}</h1>
-            {food.brand && (
-              <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">{food.brand}</p>
-            )}
-          </div>
-          <div className="flex shrink-0 flex-col items-end gap-1">
-            {food.isVerified && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
-                <ShieldCheck className="h-3 w-3" />
-                Verified
-              </span>
-            )}
-            {food.category && (
-              <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-                {food.category}
-              </span>
-            )}
-          </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {food.isVerified && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+              <ShieldCheck className="h-3 w-3" />
+              Verified
+            </span>
+          )}
+          {food.category && (
+            <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+              {food.category}
+            </span>
+          )}
         </div>
         <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-500">
           Per {defaultVariant.displayLabel || `${defaultVariant.servingSize} ${defaultVariant.servingUnit}`}

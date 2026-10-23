@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import PageTransition from '@/components/PageTransition'
+import PageHeader from '@/components/PageHeader'
 import FoodLogSheet from '@/components/meals/FoodLogSheet'
 import {
   ArrowLeft,
@@ -204,11 +205,14 @@ export default function RecipeDetailPage({ params }: { params: Promise<{ id: str
 
   return (
     <PageTransition className="space-y-4 pb-24">
-      <div className="flex items-center justify-between">
+      <div>
         <Link href="/dashboard/meals" className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800">
           <ArrowLeft className="h-4 w-4" />
           My Stuff
         </Link>
+      </div>
+      <PageHeader title={recipe.name} />
+      <div className="flex items-center gap-1">
         {isOwner && (
           <div className="flex items-center gap-1">
             <button
@@ -249,8 +253,6 @@ export default function RecipeDetailPage({ params }: { params: Promise<{ id: str
           </div>
         )}
         <div className="p-4">
-          <h1 className="text-xl font-bold text-zinc-900 dark:text-white sm:text-2xl">{recipe.name}</h1>
-
           <div className="mt-2 flex flex-wrap gap-3 text-xs text-zinc-600 dark:text-zinc-400">
             {recipe.prepTime != null && <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" /> Prep {recipe.prepTime}m</span>}
             {recipe.cookTime != null && <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" /> Cook {recipe.cookTime}m</span>}

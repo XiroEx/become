@@ -1,14 +1,14 @@
 // Run with: npm run test:file tests/unit/chromeStacking.test.ts
 //
-// The profile menu hangs out of TopNav's header and into the page. An
+// The profile menu hangs out of PageHeader's wrapper and into the page. An
 // `absolute` child can never outrank the stacking context it lives in, so the
-// menu's paint order is decided entirely by the header's own z-index. While
+// menu's paint order is decided entirely by the wrapper's own z-index. While
 // that was z-10, any in-page `sticky top-0` outranked it and painted over the
 // open menu: on the workout Track view (sticky z-20) everything above "Food
 // reports" — the member's name, Profile, Settings — was hidden behind the
 // progress header, which is what the bug report screenshot showed.
 //
-// TopNav and BottomNav are both router-dependent (usePathname/useRouter) and
+// PageHeader and BottomNav are both router-dependent (usePathname/useRouter) and
 // can't be rendered by react-dom/server outside Next's own render, so this is
 // a source scan for the same reason animationSweepChrome.test.ts is one.
 
@@ -21,7 +21,7 @@ const ROOT = path.join(__dirname, '../..')
 
 // The app's stacking tiers, as documented in BottomNav.tsx:
 //   page content and its sticky headers   z-0 .. z-30
-//   app chrome (TopNav, BottomNav)        z-40
+//   app chrome (PageHeader, BottomNav)    z-40
 //   overlays, sheets, modals              z-50 and up
 const CHROME_Z = 40
 
@@ -66,14 +66,14 @@ function hasClass(classes: string, name: string): boolean {
   return new RegExp(`(?:^|\\s)${name}(?:\\s|$)`).test(classes)
 }
 
-test('TopNav: the header sits in the app-chrome tier, so the profile menu clears page content', () => {
-  const src = readSource('components/TopNav.tsx')
-  const header = classStrings(src).find((c) => hasClass(c, 'relative') && hasClass(c, 'shrink-0') && hasClass(c, 'border-b'))
-  assert.ok(header, 'could not find the TopNav header className')
-  assert.deepEqual(zIndexes(header!), [CHROME_Z], `TopNav header must be z-${CHROME_Z}, got: ${header}`)
+test('PageHeader: the wrapper sits in the app-chrome tier, so the profile menu clears page content', () => {
+  const src = readSource('components/PageHeader.tsx')
+  const wrapper = classStrings(src).find((c) => hasClass(c, 'relative') && hasClass(c, 'z-40'))
+  assert.ok(wrapper, 'could not find the PageHeader wrapper className')
+  assert.deepEqual(zIndexes(wrapper!), [CHROME_Z], `PageHeader wrapper must be z-${CHROME_Z}, got: ${wrapper}`)
 })
 
-test('TopNav and BottomNav claim the same chrome tier', () => {
+test('PageHeader and BottomNav claim the same chrome tier', () => {
   const bottom = classStrings(readSource('components/BottomNav.tsx')).find((c) => hasClass(c, 'fixed') && hasClass(c, 'inset-x-0'))
   assert.ok(bottom, 'could not find the BottomNav pill className')
   assert.deepEqual(zIndexes(bottom!), [CHROME_Z], `BottomNav must be z-${CHROME_Z}, got: ${bottom}`)

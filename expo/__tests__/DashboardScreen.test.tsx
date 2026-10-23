@@ -2,6 +2,25 @@ import { render, fireEvent, waitFor } from "@testing-library/react-native";
 import { DashboardScreen } from "@/components/DashboardScreen";
 import type { UpcomingWorkoutSummary } from "@/lib/dashboard/types";
 
+jest.mock("expo-router", () => ({
+  useRouter: () => ({ push: jest.fn(), replace: jest.fn(), back: jest.fn() }),
+  useLocalSearchParams: () => ({}),
+}));
+
+jest.mock("@/lib/nutrition/foodFlags", () => {
+  const actual = jest.requireActual("@/lib/nutrition/foodFlags");
+  return {
+    ...actual,
+    loadMyReports: jest.fn(async () => ({
+      status: "loaded",
+      items: [],
+      unreadCount: 0,
+    })),
+    markReportsRead: jest.fn(async () => ({ status: "marked" })),
+    addReportEvidence: jest.fn(),
+  };
+});
+
 jest.mock("@/lib/auth/useAuth", () => ({
   useAuth: () => ({
     user: { _id: "u1", email: "jon@example.com" },
@@ -48,13 +67,13 @@ describe("DashboardScreen", () => {
     expect(getByTestId("tile-streak-value")).toBeTruthy();
   });
 
-  it("renders the web's static header copy regardless of userName (NP-255)", () => {
-    // Native used to show a personalized "Hey, {name}" greeting where the
-    // web shows "Dashboard" / "Track your fitness journey" — now they match.
+  it("renders the shared page header (Become + subtitle)", () => {
+    // The hand-rolled dashboard header is gone: PageHeader owns the title
+    // ("Become", not "Dashboard") and the avatar menu on every screen.
     const { getByTestId, getByText } = render(
       <DashboardScreen {...baseProps} userName="Jon" />,
     );
-    expect(getByTestId("dashboard-greeting").props.children).toBe("Dashboard");
+    expect(getByTestId("page-header-title").props.children).toBe("Become");
     expect(getByText("Track your fitness journey")).toBeTruthy();
   });
 

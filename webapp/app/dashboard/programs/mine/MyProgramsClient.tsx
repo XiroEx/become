@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Plus, Pencil, Trash2, Play, ArrowLeft, Share2, Lock } from "lucide-react";
 import PageTransition from "@/components/PageTransition";
+import PageHeader from "@/components/PageHeader";
 import { Card, EmptyState } from "@/components/ui";
 import NewProgramClient from "@/app/dashboard/programs/new/NewProgramClient";
 import ShareProgramModal from "./ShareProgramModal";
@@ -147,21 +148,21 @@ export default function MyProgramsClient({ embedded }: MyProgramsClientProps = {
           </button>
         </div>
       ) : (
-        <div className="mb-6 flex items-center gap-3">
-          <button
-            onClick={() => router.back()}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </button>
-          <div className="flex-1">
-            <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white">
-              My Programs
-            </h1>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">
-              Programs you’ve built yourself.
-            </p>
+        <>
+          <div className="mb-1">
+            <button
+              onClick={() => router.back()}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
           </div>
+          <PageHeader
+            title="My Programs"
+            subtitle="Programs you’ve built yourself."
+            className="mb-6"
+          />
+          <div className="mb-6 flex">
           {canCreate ? (
             <Link
               href="/dashboard/programs/new"
@@ -181,7 +182,8 @@ export default function MyProgramsClient({ embedded }: MyProgramsClientProps = {
               Add
             </button>
           )}
-        </div>
+          </div>
+        </>
       )}
 
       {error && (

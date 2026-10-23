@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import PageTransition from '@/components/PageTransition'
+import PageHeader from '@/components/PageHeader'
 import MealApplySheet from '@/components/meals/MealApplySheet'
 import {
   ArrowLeft,
@@ -207,7 +208,7 @@ export default function MealDetailPage({ params }: { params: Promise<{ id: strin
   return (
     <PageTransition className="space-y-4 pb-24">
       {/* Top bar */}
-      <div className="flex items-center justify-between">
+      <div>
         <Link
           href="/dashboard/meals"
           className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
@@ -215,6 +216,9 @@ export default function MealDetailPage({ params }: { params: Promise<{ id: strin
           <ArrowLeft className="h-4 w-4" />
           Meals
         </Link>
+      </div>
+      <PageHeader title={meal.name} />
+      <div className="flex items-center gap-1">
         {isOwner && (
           <div className="flex items-center gap-1" data-tour="meal-actions">
             <button
@@ -259,8 +263,6 @@ export default function MealDetailPage({ params }: { params: Promise<{ id: strin
           </div>
         )}
         <div className="p-4">
-          <h1 className="text-xl font-bold text-zinc-900 dark:text-white sm:text-2xl">{meal.name}</h1>
-
           {meal.tags?.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1.5">
               {meal.tags.map(tag => (

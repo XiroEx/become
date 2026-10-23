@@ -18,7 +18,6 @@ import {
   ChevronDown,
   Clock,
   Copy,
-  HelpCircle,
   History,
   ImagePlus,
   Pencil,
@@ -110,8 +109,7 @@ import { ScanHistorySheet } from "@/components/nutrition/ScanHistorySheet";
 import { WaterTracker } from "@/components/nutrition/WaterTracker";
 import { QuickAddSheet, type QuickAddData } from "@/components/nutrition/QuickAddSheet";
 import { invalidateMindSession } from "@/lib/mind/sessionCache";
-import { minTouchTarget } from "@/lib/a11y/touchTarget";
-import { requestNativeTourHub } from "@/lib/tour/nativeTourRequest";
+import { PageHeader } from "@/components/navigation/PageHeader";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { TAB_BAR_CONTENT_INSET } from "@/lib/navigation/tabBarInset";
 import { useTabBarScreenInset } from "@/lib/navigation/tabBarInset";
@@ -1825,45 +1823,23 @@ export default function NutritionIndexRoute() {
       style={{ flex: 1, backgroundColor: colors.background }}
       testID="nutrition-index-route"
     >
-      {/* Header */}
+      {/* Header: title + avatar menu (help lives in the menu). My Stuff
+          and the Timeline control sit in a pill row directly under the
+          subtitle, the way the web keeps them right after its title area. */}
       <View
         style={{
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "center",
           paddingHorizontal: 16,
           paddingTop: 12,
           paddingBottom: 8,
+          gap: 10,
         }}
       >
-        <View style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
-          <Text className="text-foreground text-2xl font-bold" numberOfLines={1}>
-            Nutrition
-          </Text>
-          <Text className="text-muted-foreground text-sm mt-1" numberOfLines={1}>
-            Track your food, macros, and hydration
-          </Text>
-        </View>
+        <PageHeader
+          title="Nutrition"
+          subtitle="Track your food, macros, and hydration"
+          helpKey="nutrition"
+        />
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <Pressable
-            testID="nutrition-help-button"
-            accessibilityRole="button"
-            accessibilityLabel="Nutrition help"
-            onPress={() => requestNativeTourHub("nutrition")}
-            style={[
-              minTouchTarget,
-              {
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: colors.border,
-                backgroundColor: colors.card,
-              },
-            ]}
-          >
-            <HelpCircle size={18} color={colors["muted-foreground"]} strokeWidth={1.5} />
-          </Pressable>
           {/* My Stuff header action */}
           <Pressable
             testID="nutrition-my-stuff-button"

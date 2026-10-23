@@ -65,28 +65,30 @@ describe("NP-355: Workout tab spacing, typography & layout parity", () => {
     mockApiFetch.mockReset();
   });
 
-  describe("(id: np355-01) Header Chrome & History pill in title row, 3-chip quick links row", () => {
-    it("source places History pill in the top header row, leaving exactly 3 chips in quick links", () => {
+  describe("(id: np355-01) PageHeader title row, History pill in the quick-links row", () => {
+    it("source places PageHeader on top and History pill in quick links, not the header", () => {
       const src = readExpo("app/(app)/(tabs)/programming/index.tsx");
 
-      // Verify Top Header contains History pill
+      // Verify the top header is the shared PageHeader (title + avatar
+      // menu) — the hand-rolled History pill and calendar button are gone.
       const headerSection = src.slice(
-        src.indexOf("{/* Top Header */}"),
+        src.indexOf("{/* Top Header:"),
         src.indexOf("{/* Quick Links Hub"),
       );
-      expect(headerSection).toContain('testID="workout-open-history"');
-      expect(headerSection).toContain('testID="programming-open-calendar"');
+      expect(headerSection).toContain("<PageHeader");
+      expect(headerSection).not.toContain('testID="workout-open-history"');
+      expect(headerSection).not.toContain('testID="programming-open-calendar"');
       // Search and Saved (favorite) icons are hidden from the Workout tab
       // header for now.
       expect(headerSection).not.toContain('testID="programming-open-search"');
       expect(headerSection).not.toContain('testID="programming-open-saved"');
 
-      // Verify Quick Links section has Workouts, Programs, Generate and NOT History
+      // Verify Quick Links section has Workouts, Programs, History and Generate.
       const quickLinksSection = src.slice(
         src.indexOf("{/* Quick Links Hub"),
         src.indexOf("{/* 1. Resume Workout Pill"),
       );
-      expect(quickLinksSection).not.toContain('testID="workout-open-history"');
+      expect(quickLinksSection).toContain('testID="workout-open-history"');
       expect(quickLinksSection).toContain('testID="workout-open-exercises"');
       expect(quickLinksSection).toContain('testID="workout-open-mine"');
       expect(quickLinksSection).toContain('testID="workout-open-generate"');

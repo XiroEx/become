@@ -3,7 +3,7 @@
 // An equipped photo is a POINTER at a blob-store object, and the pointer
 // outlives the object: avatars uploaded before ~2026-06-21 are in neither
 // MinIO today, so `/api/blob/avatars/<id>/<rand>.jpg` answers 404 and every
-// surface that draws an avatar — TopNav, the profile card, the icon picker's
+// surface that draws an avatar — the PageHeader avatar button, the profile card, the icon picker's
 // preview, the picker's own "custom" slot — rendered the browser's
 // broken-image box at once.
 //

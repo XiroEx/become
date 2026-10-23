@@ -23,6 +23,7 @@ import {
   CopyPlus,
 } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
+import PageHeader from '@/components/PageHeader'
 import { useSwipeNav, slideVariants } from '@/hooks/useSwipeNav'
 import CalorieRing from '@/components/nutrition/CalorieRing'
 import EditFoodModal from '@/components/nutrition/EditFoodModal'
@@ -957,22 +958,19 @@ function TimelineClient() {
       <PageTransition className="pb-6">
        <div className="space-y-4 sm:space-y-6" {...swipe.handlers}>
         {/* Header */}
-        <header className="mb-2 sm:mb-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <BackButton />
-              <div>
-                <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">Timeline</h1>
-                <p className="text-sm text-zinc-500 dark:text-zinc-400 sm:text-base">
-                  Your eating history, in chronological order
-                </p>
-              </div>
-            </div>
-            <HeaderPillLink href={`/dashboard/nutrition?date=${formatDateParam(selectedDate)}`} Icon={UtensilsCrossed}>
-              Log
-            </HeaderPillLink>
-          </div>
-        </header>
+        <div className="mb-1">
+          <BackButton />
+        </div>
+        <PageHeader
+          title="Timeline"
+          subtitle="Your eating history, in chronological order"
+          className="mb-2 sm:mb-4"
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <HeaderPillLink href={`/dashboard/nutrition?date=${formatDateParam(selectedDate)}`} Icon={UtensilsCrossed}>
+            Log
+          </HeaderPillLink>
+        </div>
 
         {/* View-mode toggle — shared SegmentedControl */}
         <SegmentedControl

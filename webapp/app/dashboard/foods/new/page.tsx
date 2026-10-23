@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import PageTransition from '@/components/PageTransition'
+import PageHeader from '@/components/PageHeader'
 import { ArrowLeft, Loader2, Save, AlertCircle } from 'lucide-react'
 import BridgeFieldGroup, { type BridgeValues } from '@/components/nutrition/BridgeFieldGroup'
 import UpgradeSheet from '@/components/UpgradeSheet'
@@ -157,24 +158,18 @@ export default function NewCustomFoodPage() {
   return (
     <PageTransition className="space-y-5 pb-24">
       <UpgradeSheet open={!!gate} gate={gate} onClose={() => setGate(null)} />
-      <header className="flex items-center justify-between">
-        <button
-          onClick={() => router.back()}
-          className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back
-        </button>
-        <h1 className="text-lg font-bold text-zinc-900 dark:text-white sm:text-xl">
-          New Custom Food
-        </h1>
-        <div className="w-16" />
-      </header>
-
-      <p className="text-sm text-zinc-500 dark:text-zinc-400">
-        Add a food not in our database — Grandma&rsquo;s pancake mix, your homemade
-        sauce, anything you eat that you can&rsquo;t find.
-      </p>
+      <button
+        onClick={() => router.back()}
+        className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back
+      </button>
+      <PageHeader
+        title="New Custom Food"
+        subtitle="Add a food not in our database — Grandma&rsquo;s pancake mix, your homemade
+        sauce, anything you eat that you can&rsquo;t find."
+      />
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Name */}

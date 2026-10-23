@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import PageTransition from '@/components/PageTransition'
+import PageHeader from '@/components/PageHeader'
 import { BackButton } from '@/components/ui/BackButton'
 import Avatar from '@/components/Avatar'
 import IconPicker from '@/components/profile/IconPicker'
@@ -84,11 +85,13 @@ export default function ProfilePage() {
   return (
     <PageTransition className="space-y-5 pb-10">
       {/* Header */}
-      <header className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <BackButton />
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">Profile</h1>
-        </div>
+      <div className="mb-1">
+        <BackButton />
+      </div>
+      <PageHeader
+        title="Profile"
+      />
+      <div className="mt-2 flex">
         <Link
           href="/dashboard/settings"
           aria-label="Settings"
@@ -96,7 +99,7 @@ export default function ProfilePage() {
         >
           <Settings className="h-4 w-4" />
         </Link>
-      </header>
+      </div>
 
       {/* Identity hero */}
       <section data-tour="profile-identity" className="flex flex-col items-center rounded-2xl border border-zinc-200 bg-white p-6 text-center dark:border-zinc-800 dark:bg-zinc-900">

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { CalendarDays, MessageCircle, Users, ArrowRight } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
+import PageHeader from '@/components/PageHeader'
 import { Card } from '@/components/ui'
 import { CommunityEvent, CommunityGroup, formatEventTime, getToken } from '@/components/community/types'
 import FeatureGuard from '@/components/FeatureGuard'
@@ -37,10 +38,11 @@ export default function CommunityPage() {
       icon={<Users className="h-10 w-10" />}
     >
     <PageTransition>
-      <div className="mb-5">
-        <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white">Community</h1>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Events, groups, and chats in one place.</p>
-      </div>
+      <PageHeader
+        title="Community"
+        subtitle="Events, groups, and chats in one place."
+        className="mb-5"
+      />
 
       <div className="grid gap-3 sm:grid-cols-3" data-tour="community-tiles">
         {tiles.map((tile) => {

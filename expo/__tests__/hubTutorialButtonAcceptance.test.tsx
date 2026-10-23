@@ -139,10 +139,19 @@ describe("Hub Tutorial Button Acceptance (card 96d41010)", () => {
     return utils;
   }
 
-  describe("(id: 96d41011) Each of the five hubs has a small help button in its header with an accessibility label", () => {
-    it("DashboardScreen header has dashboard-help-button with accessibility label and role", async () => {
+  describe("(id: 96d41011) Each of the five hubs has Help in the avatar menu with an accessibility label", () => {
+    async function openMenuAndHelp(
+      renderResult: ReturnType<typeof render>,
+    ) {
+      const { getByTestId, findByTestId } = renderResult;
+      fireEvent.press(await findByTestId("page-header-avatar-button"));
+      const button = await findByTestId("page-header-help-item");
+      return button;
+    }
+
+    it("DashboardScreen menu has Help with accessibility label and role", async () => {
       const hubSpy = jest.spyOn(tourRequest, "requestNativeTourHub");
-      const { getByTestId } = render(
+      const rendered = render(
         <DashboardScreen
           streakDays={5}
           todayWorkout={null}
@@ -152,66 +161,66 @@ describe("Hub Tutorial Button Acceptance (card 96d41010)", () => {
         />,
       );
 
-      const button = getByTestId("dashboard-help-button");
+      const button = await openMenuAndHelp(rendered);
       expect(button).toBeTruthy();
       expect(button.props.accessibilityRole).toBe("button");
-      expect(button.props.accessibilityLabel).toBe("Dashboard help");
+      expect(button.props.accessibilityLabel).toBe("Help");
 
       fireEvent.press(button);
       expect(hubSpy).toHaveBeenCalledWith("dashboard");
       hubSpy.mockRestore();
     });
 
-    it("ProgrammingIndexRoute header has programming-help-button with accessibility label and role", async () => {
+    it("ProgrammingIndexRoute menu has Help with accessibility label and role", async () => {
       const hubSpy = jest.spyOn(tourRequest, "requestNativeTourHub");
-      const { getByTestId } = render(<ProgrammingIndexRoute />);
+      const rendered = render(<ProgrammingIndexRoute />);
 
-      const button = getByTestId("programming-help-button");
+      const button = await openMenuAndHelp(rendered);
       expect(button).toBeTruthy();
       expect(button.props.accessibilityRole).toBe("button");
-      expect(button.props.accessibilityLabel).toBe("Training help");
+      expect(button.props.accessibilityLabel).toBe("Help");
 
       fireEvent.press(button);
       expect(hubSpy).toHaveBeenCalledWith("programming");
       hubSpy.mockRestore();
     });
 
-    it("NutritionIndexRoute header has nutrition-help-button with accessibility label and role", async () => {
+    it("NutritionIndexRoute menu has Help with accessibility label and role", async () => {
       const hubSpy = jest.spyOn(tourRequest, "requestNativeTourHub");
-      const { getByTestId } = render(<NutritionIndexRoute />);
+      const rendered = render(<NutritionIndexRoute />);
 
-      const button = getByTestId("nutrition-help-button");
+      const button = await openMenuAndHelp(rendered);
       expect(button).toBeTruthy();
       expect(button.props.accessibilityRole).toBe("button");
-      expect(button.props.accessibilityLabel).toBe("Nutrition help");
+      expect(button.props.accessibilityLabel).toBe("Help");
 
       fireEvent.press(button);
       expect(hubSpy).toHaveBeenCalledWith("nutrition");
       hubSpy.mockRestore();
     });
 
-    it("MindRoute header has mind-help-button with accessibility label and role", async () => {
+    it("MindRoute menu has Help with accessibility label and role", async () => {
       const hubSpy = jest.spyOn(tourRequest, "requestNativeTourHub");
-      const { findByTestId } = render(<MindRoute />);
+      const rendered = render(<MindRoute />);
 
-      const button = await findByTestId("mind-help-button");
+      const button = await openMenuAndHelp(rendered);
       expect(button).toBeTruthy();
       expect(button.props.accessibilityRole).toBe("button");
-      expect(button.props.accessibilityLabel).toBe("Mind help");
+      expect(button.props.accessibilityLabel).toBe("Help");
 
       fireEvent.press(button);
       expect(hubSpy).toHaveBeenCalledWith("mind");
       hubSpy.mockRestore();
     });
 
-    it("ProfileScreen header has profile-help-button with accessibility label and role", async () => {
+    it("ProfileScreen menu has Help with accessibility label and role", async () => {
       const hubSpy = jest.spyOn(tourRequest, "requestNativeTourHub");
-      const { findByTestId } = render(<ProfileScreen />);
+      const rendered = render(<ProfileScreen />);
 
-      const button = await findByTestId("profile-help-button");
+      const button = await openMenuAndHelp(rendered);
       expect(button).toBeTruthy();
       expect(button.props.accessibilityRole).toBe("button");
-      expect(button.props.accessibilityLabel).toBe("Profile help");
+      expect(button.props.accessibilityLabel).toBe("Help");
 
       fireEvent.press(button);
       expect(hubSpy).toHaveBeenCalledWith("profile");

@@ -654,8 +654,11 @@ describe("sign-in through to Home, by role and name only", () => {
       }),
     );
     expect(onStartWorkout).toHaveBeenCalled();
+    // Settings lives in the avatar menu now: the menu button opens it, the
+    // menu item routes to /settings.
+    fireEvent.press(screen.getByRole("button", { name: "Your menu" }));
     fireEvent.press(screen.getByRole("button", { name: "Settings" }));
-    expect(onOpenSettings).toHaveBeenCalled();
+    expect(mockPush).toHaveBeenCalledWith("/settings");
     screen.unmount();
 
     // Check-in modal when prompted (NP-211)

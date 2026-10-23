@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation'
 import { Dumbbell, Sparkles, Clock, Calendar, History as HistoryIcon } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
 import { Card, EmptyState } from '@/components/ui'
+import PageHeader from '@/components/PageHeader'
 import { BackButton } from '@/components/ui/BackButton'
 import QuickSessionSummary from '@/components/QuickSessionSummary'
 import { continueQuickSession } from '@/lib/quickSession/openQuick'
@@ -97,18 +98,14 @@ export default function HistoryClient() {
 
   return (
     <PageTransition className="pb-6">
-      <header className="mb-4">
-        <div className="flex items-center gap-3">
-          <BackButton />
-          <h1 className="flex items-center gap-2 text-2xl font-extrabold text-zinc-900 dark:text-white sm:text-3xl">
-            <HistoryIcon className="h-6 w-6 text-green-600 dark:text-green-400" />
-            History
-          </h1>
-        </div>
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          Every session you&apos;ve completed — programs and quick workouts.
-        </p>
-      </header>
+      <div className="mb-1">
+        <BackButton />
+      </div>
+      <PageHeader
+        title={<span className="flex items-center gap-2"><HistoryIcon className="h-6 w-6 text-green-600 dark:text-green-400" />History</span>}
+        subtitle="Every session you&apos;ve completed — programs and quick workouts."
+        className="mb-4"
+      />
 
       {/* Filter toggles */}
       {/* data-tour anchors the tracking onboarding segment */}
