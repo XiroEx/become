@@ -86,6 +86,10 @@ export interface FeedbackSheetProps {
     | { status: "failed"; message: string }
   >;
   testID?: string;
+  /** Controlled open state for callers that draw their own entry point (the
+   * page header's profile menu). With `visible` set, the row is not drawn. */
+  visible?: boolean;
+  onClose?: () => void;
 }
 
 export function FeedbackSheet({
@@ -93,9 +97,20 @@ export function FeedbackSheet({
   sendImpl = sendFeedback,
   pickImpl = pickFeedbackScreenshot,
   testID = "feedback",
+  visible,
+  onClose,
 }: FeedbackSheetProps) {
   const { colors } = useThemeTokens();
-  const [open, setOpen] = useState(false);
+  const [ownOpen, setOwnOpen] = useState(false);
+  const controlled = visible !== undefined;
+  const open = controlled ? visible : ownOpen;
+  const setOpen = (next: boolean) => {
+    if (controlled) {
+      if (!next) onClose?.();
+    } else {
+      setOwnOpen(next);
+    }
+  };
   const [type, setType] = useState<FeedbackType>("general");
   const [message, setMessage] = useState("");
   const [images, setImages] = useState<FeedbackImage[]>([]);
@@ -194,6 +209,7 @@ export function FeedbackSheet({
 
   return (
     <View testID={testID}>
+      {controlled ? null : (
       <Pressable
         testID={`${testID}-row`}
         accessibilityRole="button"
@@ -217,6 +233,7 @@ export function FeedbackSheet({
         </Text>
         <Text className="text-muted-foreground text-sm">›</Text>
       </Pressable>
+      )}
 
       <Modal
         testID={`${testID}-modal`}
