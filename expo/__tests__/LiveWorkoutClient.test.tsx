@@ -44,24 +44,40 @@ describe("LiveWorkoutClient", () => {
     }
   });
 
-  it("renders last-performance prefill on db-row sets that have it", () => {
+  it("renders last-performance prefill as input placeholders on db-row sets that have it", () => {
     const { getByTestId, queryByTestId } = render(
       <LiveWorkoutClient workout={baseWorkout} />,
     );
-    expect(
-      getByTestId("live-workout-db-row-set-0-prefill"),
-    ).toBeTruthy();
-    expect(
-      getByTestId("live-workout-db-row-set-1-prefill"),
-    ).toBeTruthy();
-    expect(
-      queryByTestId("live-workout-db-row-set-2-prefill"),
-    ).toBeNull();
-    // bench has no prefill at all
-    expect(queryByTestId("live-workout-bench-set-0-prefill")).toBeNull();
+    // Track rows carry no "Last:" line — the web's Track shows the reference
+    // as the input placeholder instead.
+    expect(queryByTestId("live-workout-db-row-set-0-prefill")).toBeNull();
+    expect(getByTestId("live-workout-db-row-set-0-weight").props.placeholder).toBe(
+      "50",
+    );
+    expect(getByTestId("live-workout-db-row-set-0-reps").props.placeholder).toBe(
+      "10",
+    );
+    expect(getByTestId("live-workout-db-row-set-1-weight").props.placeholder).toBe(
+      "50",
+    );
+    // Set 3 has no prefill: the reps box falls back to the prescription
+    // target ("8-10" → "8"), the weight box to 0.
+    expect(getByTestId("live-workout-db-row-set-2-weight").props.placeholder).toBe(
+      "0",
+    );
+    expect(getByTestId("live-workout-db-row-set-2-reps").props.placeholder).toBe(
+      "8",
+    );
+    // bench has no prefill at all: 0 and its own prescription target.
+    expect(getByTestId("live-workout-bench-set-0-weight").props.placeholder).toBe(
+      "0",
+    );
+    expect(getByTestId("live-workout-bench-set-0-reps").props.placeholder).toBe(
+      "5",
+    );
   });
 
-  it("dumbbell label appears on db-row, barbell label on bench", () => {
+  it("bell convention is announced per exercise in Track, not per input", () => {
     const dbWorkout: LiveWorkoutViewModel = {
       ...baseWorkout,
       exercises: [
@@ -72,16 +88,21 @@ describe("LiveWorkoutClient", () => {
         },
       ],
     };
-    const { getByTestId } = render(<LiveWorkoutClient workout={dbWorkout} />);
+    const { getByTestId, queryByTestId } = render(
+      <LiveWorkoutClient workout={dbWorkout} />,
+    );
+    // No stacked per-input labels in Track — the convention lives in the
+    // per-exercise hint above the grid.
+    expect(queryByTestId("live-workout-db-row-set-0-weight-label")).toBeNull();
+    expect(queryByTestId("live-workout-bench-set-0-weight-label")).toBeNull();
     expect(
-      getByTestId("live-workout-db-row-set-0-weight-label").props.children,
-    ).toBe("Weight per DB (lbs)");
-    expect(
-      getByTestId("live-workout-bench-set-0-weight-label").props.children,
-    ).toBe("Weight (lbs)");
+      getByTestId("live-workout-db-row-bell-hint").props.children,
+    ).toContain("one dumbbell");
+    // A barbell lift names no per-implement convention: no hint.
+    expect(queryByTestId("live-workout-bench-bell-hint")).toBeNull();
   });
 
-  it("equipment-aware weight logging: per-DB labels, totals, quick picks, assumption chip", () => {
+  it("equipment-aware weight logging: per-exercise convention hint, no per-input labels or chips", () => {
     const workout: LiveWorkoutViewModel = {
       programId: "prog-1",
       workoutTitle: "Arms",
@@ -116,44 +137,47 @@ describe("LiveWorkoutClient", () => {
     const { getByTestId, queryByTestId } = render(
       <LiveWorkoutClient workout={workout} />,
     );
-    // Single-Arm Dumbbell Row: per-DB label, no doubled total.
+    // Single-Arm Dumbbell Row: the per-exercise hint names one dumbbell, and
+    // Track carries no per-set total line.
     expect(
-      getByTestId("live-workout-single-arm-row-set-0-weight-label").props
-        .children,
-    ).toBe("Weight per DB (lbs)");
+      getByTestId("live-workout-single-arm-row-bell-hint").props.children,
+    ).toBe("Enter the weight of one dumbbell.");
+    expect(
+      queryByTestId("live-workout-single-arm-row-set-0-weight-label"),
+    ).toBeNull();
     expect(queryByTestId("live-workout-single-arm-row-set-0-helper")).toBeNull();
-    // Dumbbell Bench Press: per-DB label with the doubled total once a
-    // weight is typed (the total is a hint; the saved number stays per-DB).
+    // Dumbbell Bench Press: the pair convention in the per-exercise hint,
+    // and no quick-pick strip or per-input label in Track.
     expect(
-      getByTestId("live-workout-db-bench-set-0-weight-label").props.children,
-    ).toBe("Weight per DB (lbs)");
+      getByTestId("live-workout-db-bench-bell-hint").props.children,
+    ).toBe("Enter the weight of one dumbbell — not the combined total.");
     expect(
-      getByTestId("live-workout-db-bench-set-0-quick-picks"),
-    ).toBeTruthy();
-    expect(
-      getByTestId("live-workout-db-bench-set-0-quick-pick-30"),
-    ).toBeTruthy();
-    // Barbell Bench Press: plain label and the barbell quick picks.
-    expect(
-      getByTestId("live-workout-bb-bench-set-0-weight-label").props.children,
-    ).toBe("Weight (lbs)");
-    expect(
-      getByTestId("live-workout-bb-bench-set-0-quick-pick-135"),
-    ).toBeTruthy();
-    // Rear Delt Fly: the name never says dumbbell, so the assumption chip shows.
-    expect(
-      getByTestId("live-workout-rear-delt-fly-set-0-assumption").props.children,
-    ).toBe("Logging as Dumbbell");
-    // …while the self-disclosing names get no chip.
-    expect(
-      queryByTestId("live-workout-db-bench-set-0-assumption"),
+      queryByTestId("live-workout-db-bench-set-0-weight-label"),
     ).toBeNull();
     expect(
-      queryByTestId("live-workout-bb-bench-set-0-assumption"),
+      queryByTestId("live-workout-db-bench-set-0-quick-picks"),
+    ).toBeNull();
+    // Barbell Bench Press: no per-implement convention to announce, and no
+    // per-input label.
+    expect(queryByTestId("live-workout-bb-bench-bell-hint")).toBeNull();
+    expect(
+      queryByTestId("live-workout-bb-bench-set-0-weight-label"),
+    ).toBeNull();
+    expect(
+      queryByTestId("live-workout-bb-bench-set-0-quick-pick-135"),
+    ).toBeNull();
+    // Rear Delt Fly: the name never says dumbbell, so the assumption
+    // disclosure is gone with the per-input labels — the per-exercise hint
+    // still names the implement.
+    expect(
+      getByTestId("live-workout-rear-delt-fly-bell-hint").props.children,
+    ).toContain("one dumbbell");
+    expect(
+      queryByTestId("live-workout-rear-delt-fly-set-0-assumption"),
     ).toBeNull();
   });
 
-  it("quick picks fill the per-implement weight without changing the convention", () => {
+  it("typing fills the per-implement weight and the session saves the per-DB number", () => {
     const onGridChange = jest.fn();
     const workout: LiveWorkoutViewModel = {
       programId: "prog-1",
@@ -170,15 +194,12 @@ describe("LiveWorkoutClient", () => {
     const { getByTestId } = render(
       <LiveWorkoutClient workout={workout} onGridChange={onGridChange} />,
     );
-    fireEvent.press(getByTestId("live-workout-db-bench-set-0-quick-pick-30"));
+    fireEvent.changeText(getByTestId("live-workout-db-bench-set-0-weight"), "30");
     expect(onGridChange).toHaveBeenCalled();
     const lastGrid =
       onGridChange.mock.calls[onGridChange.mock.calls.length - 1]![0];
     // The saved number is the per-DB pick itself — never the doubled total.
     expect(lastGrid["db-bench"]![0]!.weight).toBe(30);
-    expect(
-      getByTestId("live-workout-db-bench-set-0-helper").props.children,
-    ).toBe("= 60 lbs total");
   });
 
   it("marking a set complete fires onSetComplete", async () => {

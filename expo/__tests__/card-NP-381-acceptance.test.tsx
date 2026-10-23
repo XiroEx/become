@@ -421,12 +421,9 @@ describe("(id: np381-variation) a logged set looks logged", () => {
     expect(get2("live-workout-bench-set-1").props.className).toContain("bg-card");
   });
 
-  it("Track's quick-pick loads are ONE scrolling strip, not a wrapping grid that doubles the row", () => {
-    const { getByTestId } = render(<LiveWorkoutClient workout={BENCH} />);
-    const strip = getByTestId("live-workout-bench-set-0-quick-picks");
-    expect(strip.props.horizontal).toBe(true);
-    expect(styleOf(strip).flexWrap).toBeUndefined();
-    // The picks still fill the box they belong to.
-    expect(getByTestId("live-workout-bench-set-0-quick-pick-135")).toBeTruthy();
+  it("Track carries no quick-pick strip — the web's picks live on the Live view only", () => {
+    const { queryByTestId } = render(<LiveWorkoutClient workout={BENCH} />);
+    expect(queryByTestId("live-workout-bench-set-0-quick-picks")).toBeNull();
+    expect(queryByTestId("live-workout-bench-set-0-quick-pick-135")).toBeNull();
   });
 });

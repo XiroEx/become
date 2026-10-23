@@ -1754,8 +1754,6 @@ export function LiveWorkoutClient({
               testID={testID}
               exercises={workout.exercises}
               grid={grid}
-              workoutFlow={workoutFlow}
-              flowIndexByKey={flowIndexByKey}
               weightUnit={weightUnit}
               bellChoices={bellChoices}
               {...(rememberedBells ? { rememberedBells } : {})}

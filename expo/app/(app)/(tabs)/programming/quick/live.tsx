@@ -489,6 +489,13 @@ export default function QuickLiveRoute({
         onGridChange={onGridChange}
         onFinish={handleFinish}
         onRequestSwap={onRequestSwap}
+        // The structure controls (Move up / Move down / Remove, Ungroup, the
+        // superset toggle) — the program route passes its own
+        // `applyExerciseChange` here; the quick session has the same hook with
+        // the same persistence (stash + progress + debounced server save), so
+        // it passes its own. Without this the Track cards render with none of
+        // those controls.
+        onExerciseChange={applyExerciseChange}
         jumpRequest={jumpRequest}
         finishing={finishing || promptFinishing}
         saveError={saveError}
