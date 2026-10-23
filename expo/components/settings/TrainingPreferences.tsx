@@ -12,6 +12,7 @@ import { AI_CONSENT_SENDS } from "@become/core";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { ScreenState } from "@/components/ScreenState";
+import { WeeklyHighlight } from "@/components/settings/WeeklyHighlight";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
@@ -81,12 +82,24 @@ function isEquipmentValue(value: unknown): value is EquipmentValue {
 export function TrainingPreferencesScreen({
   testID = "training-preferences",
   embedded = false,
+  highlightWeekly = false,
+  HighlightWrap,
 }: {
   testID?: string;
   /** True when rendered inside Settings > Training (NP-302): skips the
    * screen's own SafeAreaView/ScreenState chrome and "Training" title,
    * since the host screen already supplies those. */
   embedded?: boolean;
+  /** Pulse the weekly-availability field (the Becoming's training-nudge
+   * deep link) — the web's `settings-highlight-pulse`. */
+  highlightWeekly?: boolean;
+  /** Wrapper that draws the highlight; injected so unit tests stay free of
+   * the animation runtime. Defaults to the real `WeeklyHighlight`. */
+  HighlightWrap?: React.ComponentType<{
+    active: boolean;
+    children: React.ReactNode;
+    testID?: string;
+  }>;
 }) {
   const { colors, tint } = useThemeTokens();
   const { token, refresh } = useAuth();
@@ -117,6 +130,7 @@ export function TrainingPreferencesScreen({
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
 
   const seededRef = useRef(false);
+  const Highlight = HighlightWrap ?? WeeklyHighlight;
 
   // Seed the form from the profile the first time it arrives, the way the
   // web's fetchProfile does (goals fall back to the lone fitnessGoal).
@@ -428,6 +442,10 @@ export function TrainingPreferencesScreen({
               <Text className="text-foreground text-sm font-medium">
                 Weekly Availability
               </Text>
+              <Highlight
+                active={highlightWeekly}
+                testID={`${testID}-weekly-highlight`}
+              >
               <View
                 testID={`${testID}-weekly-availability`}
                 style={{
@@ -504,6 +522,7 @@ export function TrainingPreferencesScreen({
                   </Text>
                 </Pressable>
               </View>
+              </Highlight>
             </View>
           </View>
 

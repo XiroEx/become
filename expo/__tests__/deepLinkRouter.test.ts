@@ -14,7 +14,8 @@ describe("routeForNotification with the url the server actually sends", () => {
     ["/dashboard/nutrition", "/(tabs)/nutrition"],
     ["/dashboard/mind", "/(tabs)/mind"],
     ["/dashboard/streaks", "/(tabs)/dashboard/streaks"],
-    ["/dashboard/settings?tab=training", "/(tabs)/dashboard?tab=training"],
+    // Settings is a real native route now, and the Training tab pulses weekly availability.
+    ["/dashboard/settings?tab=training", "/settings?tab=training&highlight=weekly"],
     ["/dashboard/workout", "/(tabs)/programming"],
     ["/dashboard/progress", "/progress"],
     [

@@ -41,6 +41,7 @@ import { mindAccentColor } from "@/lib/mind/accents";
 import { reflectOnAnswers } from "@/lib/mind/reflect";
 import { dailyPick } from "@/lib/mind/rotation";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { ProgressFill } from "@/components/motion/ProgressFill";
 import { tzOffsetMinutes } from "@/lib/time/localDay";
 
 const DONE_TEXT = "That’s who you are now.";
@@ -700,9 +701,10 @@ export default function SelfImageDashboard() {
               </Text>
             </View>
             <View className="h-2 w-full overflow-hidden rounded-full bg-violet-500/20">
-              <View
-                className="h-full rounded-full bg-violet-500"
-                style={{ width: `${Math.min(evo, 100)}%` }}
+              <ProgressFill
+                pct={Math.min(evo, 100)}
+                color={colors["mind-violet"]}
+                testID="self-image-evolution-fill"
               />
             </View>
             <Text className="mt-1 text-[11px] text-muted-foreground">

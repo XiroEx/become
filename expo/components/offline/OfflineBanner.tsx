@@ -1,5 +1,18 @@
+import { useEffect } from "react";
 import { View } from "react-native";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "@/lib/motion/reanimated";
 import { Text } from "@/components/Text";
+import { useReducedMotion } from "@/lib/a11y/reducedMotion";
+import {
+  BANNER_ENTER_DISTANCE,
+  BANNER_MS,
+  motionMs,
+} from "@/lib/motion/motion";
 
 /**
  * THE BANNER. Presentational: it knows whether the device is online and
@@ -10,6 +23,9 @@ import { Text } from "@/components/Text";
  * is something to say. It says two things, because one without the other is
  * either alarming or useless: the connection is gone, AND what they log is
  * kept and will be sent.
+ *
+ * It drops 6pt in over 220ms like the dashboard's gateway banner — a banner
+ * arriving is motion like any other, and a cut under Reduce Motion.
  */
 export interface OfflineBannerProps {
   online: boolean;
@@ -23,28 +39,55 @@ export function OfflineBanner({
   topInset = 0,
   testID = "offline-banner",
 }: OfflineBannerProps) {
+  const reduced = useReducedMotion();
+  const t = useSharedValue(reduced ? 1 : 0);
+
+  useEffect(() => {
+    if (reduced) {
+      t.set(1);
+      return;
+    }
+    t.set(0);
+    t.set(
+      withTiming(1, {
+        duration: motionMs(BANNER_MS, false),
+        easing: Easing.out(Easing.quad),
+      }),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- t is a stable shared value
+  }, [reduced, online]);
+
+  const drop = useAnimatedStyle(() => ({
+    opacity: t.value,
+    transform: [{ translateY: BANNER_ENTER_DISTANCE * (1 - t.value) }],
+  }));
+
   if (online) return null;
   return (
-    <View
-      testID={testID}
-      accessibilityRole="alert"
-      accessibilityLiveRegion="polite"
-      accessibilityLabel="No connection. Your check-ins are saved and will sync when you're back online."
-      className="bg-card border-b border-border px-4 pb-2"
-      style={{ paddingTop: topInset + 8 }}
-    >
-      <Text
-        testID={`${testID}-title`}
-        className="text-foreground text-xs font-semibold"
+    // The drop rides a wrapper so the banner itself keeps a plain style:
+    // its safe-area padding is a fact a test (and a reader) can see whole.
+    <Animated.View style={reduced ? undefined : drop}>
+      <View
+        testID={testID}
+        accessibilityRole="alert"
+        accessibilityLiveRegion="polite"
+        accessibilityLabel="No connection. Your check-ins are saved and will sync when you're back online."
+        className="bg-card border-b border-border px-4 pb-2"
+        style={{ paddingTop: topInset + 8 }}
       >
-        No connection
-      </Text>
-      <Text
-        testID={`${testID}-detail`}
-        className="text-muted-foreground text-[11px]"
-      >
-        Your check-ins are saved and will sync when you&apos;re back online.
-      </Text>
-    </View>
+        <Text
+          testID={`${testID}-title`}
+          className="text-foreground text-xs font-semibold"
+        >
+          No connection
+        </Text>
+        <Text
+          testID={`${testID}-detail`}
+          className="text-muted-foreground text-[11px]"
+        >
+          Your check-ins are saved and will sync when you&apos;re back online.
+        </Text>
+      </View>
+    </Animated.View>
   );
 }

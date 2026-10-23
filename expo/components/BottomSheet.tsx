@@ -14,6 +14,14 @@ import {
   modalAnimation,
   useReducedMotion,
 } from "@/lib/a11y/reducedMotion";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "@/lib/motion/reanimated";
+import { useEffect } from "react";
+import { SHEET_ENTER_DISTANCE, motionMs } from "@/lib/motion/motion";
 import { handleSheetRequestClose } from "@/lib/keyboard/handleSheetRequestClose";
 
 /**
@@ -123,6 +131,33 @@ export function BottomSheet({
     overflow: "hidden",
     ...StyleSheet.flatten(sheetStyle),
   };
+  // The web's sheet springs up 40pt (`initial={{ y: 40, opacity: 0 }}`,
+  // spring damping 28 / stiffness 300); the RN `slide` covers the travel and
+  // this rise carries the content. Under Reduce Motion the sheet draws in
+  // place.
+  const riseT = useSharedValue(reduceMotion || !visible ? 1 : 0);
+
+  useEffect(() => {
+    if (!visible) return;
+    if (reduceMotion) {
+      riseT.set(1);
+      return;
+    }
+    riseT.set(0);
+    riseT.set(
+      withTiming(1, {
+        duration: motionMs(350, false),
+        easing: Easing.out(Easing.quad),
+      }),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- riseT is a stable shared value
+  }, [visible, reduceMotion]);
+
+  const rise = useAnimatedStyle(() => ({
+    opacity: riseT.value,
+    transform: [{ translateY: SHEET_ENTER_DISTANCE * (1 - riseT.value) }],
+  }));
+
   return (
     <RNModal
       visible={visible}
@@ -139,6 +174,10 @@ export function BottomSheet({
         importantForAccessibility="no"
         className="flex-1 bg-foreground/40 justify-end"
       >
+        <Animated.View
+          testID={testID ? `${testID}-rise` : undefined}
+          style={[reduceMotion ? undefined : rise, { width: "100%" }]}
+        >
         <Pressable
           testID={testID ? `${testID}-sheet` : undefined}
           accessibilityRole="none"
@@ -175,6 +214,7 @@ export function BottomSheet({
           ) : null}
           <View style={{ flexShrink: 1, flexGrow: 1, minHeight: 0 }}>{children}</View>
         </Pressable>
+        </Animated.View>
       </Pressable>
     </RNModal>
   );

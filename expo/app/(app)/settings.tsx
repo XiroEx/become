@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppState, Linking, View, ScrollView, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter, useFocusEffect } from "expo-router";
+import { useRouter, useFocusEffect, useLocalSearchParams } from "expo-router";
 import Constants from "expo-constants";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
@@ -20,6 +20,8 @@ import {
 import { Text } from "@/components/Text";
 import { Button } from "@/components/Button";
 import { Toggle } from "@/components/Toggle";
+import { ScreenEnter } from "@/components/motion/ScreenEnter";
+import { WeeklyHighlight } from "@/components/settings/WeeklyHighlight";
 import { DangerZone } from "@/components/settings/DangerZone";
 import { DiagnosticsSection } from "@/components/settings/DiagnosticsSection";
 import { BiometricUnlockSection } from "@/components/settings/BiometricUnlockSection";
@@ -118,6 +120,21 @@ export default function SettingsScreen({
   const [activeTab, setActiveTab] = useState<"profile" | "training" | "settings">(
     "profile",
   );
+  // The Becoming's training nudge deep-links here (`highlight=weekly`):
+  // open on Training and pulse the weekly-availability field three times so
+  // it is found, not just landed on — the web's `?tab=training
+  // #weekly-availability` + `settings-highlight-pulse`. Settles by itself
+  // after 3s, like the web's timeout.
+  const params = useLocalSearchParams<{ highlight?: string }>();
+  const [highlightWeekly, setHighlightWeekly] = useState(false);
+  useEffect(() => {
+    if (params.highlight !== "weekly") return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync from a route param outside React
+    setActiveTab("training");
+    setHighlightWeekly(true);
+    const id = setTimeout(() => setHighlightWeekly(false), 3000);
+    return () => clearTimeout(id);
+  }, [params.highlight]);
   // The DI seam (PushOptInCard's `deps` pattern): unit tests never import
   // `expo-notifications` (no native module under Jest — even a dynamic
   // `import()` throws without --experimental-vm-modules), so they inject
@@ -647,9 +664,17 @@ export default function SettingsScreen({
       </View>
 
       {activeTab === "profile" ? (
-        <ProfileSettingsScreen embedded />
+        <ScreenEnter>
+          <ProfileSettingsScreen embedded />
+        </ScreenEnter>
       ) : activeTab === "training" ? (
-        <TrainingPreferencesScreen embedded />
+        <ScreenEnter>
+          <TrainingPreferencesScreen
+            embedded
+            highlightWeekly={highlightWeekly}
+            HighlightWrap={WeeklyHighlight}
+          />
+        </ScreenEnter>
       ) : (
       <ScreenState
         loading={initialLoading}

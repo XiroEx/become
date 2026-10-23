@@ -23,6 +23,7 @@ import {
   type StreaksLite,
 } from "@become/core";
 import { FireNumber } from "@/components/streaks/FireNumber";
+import { ProgressFill } from "@/components/motion/ProgressFill";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import type { DashboardStatData } from "@/lib/dashboard/types";
 
@@ -330,14 +331,10 @@ export function StreakTile({
                 { backgroundColor: colors.muted, width: 80 },
               ]}
             >
-              <View
-                style={[
-                  styles.barFill,
-                  {
-                    backgroundColor: ink.bar,
-                    width: `${Math.max(0, Math.min(100, p.pct))}%`,
-                  },
-                ]}
+              <ProgressFill
+                pct={p.pct}
+                color={ink.bar}
+                testID="tile-streak-fill"
               />
             </View>
             {pages.length > 1 ? (
@@ -395,16 +392,12 @@ export function StreakTile({
             </View>
           </View>
           <View style={styles.bottomCol}>
-            {/* Progress bar */}
+            {/* Progress bar — eases over 500ms like the web's `transition-all duration-500`. */}
             <View style={[styles.barTrack, { backgroundColor: colors.muted }]}>
-              <View
-                style={[
-                  styles.barFill,
-                  {
-                    backgroundColor: ink.bar,
-                    width: `${Math.max(0, Math.min(100, p.pct))}%`,
-                  },
-                ]}
+              <ProgressFill
+                pct={p.pct}
+                color={ink.bar}
+                testID="tile-streak-fill"
               />
             </View>
             <View
@@ -541,10 +534,6 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
     overflow: "hidden",
-  },
-  barFill: {
-    height: "100%",
-    borderRadius: 3,
   },
 });
 
