@@ -1,7 +1,20 @@
+import { useEffect } from "react";
 import { View } from "react-native";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "@/lib/motion/reanimated";
 import { Text } from "@/components/Text";
 import { Flame, Snowflake } from "lucide-react-native";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { useReducedMotion } from "@/lib/a11y/reducedMotion";
+import {
+  BANNER_ENTER_DISTANCE,
+  BANNER_MS,
+  motionMs,
+} from "@/lib/motion/motion";
 
 export interface StreakBannerProps {
   streakDays: number;
@@ -46,14 +59,40 @@ export function StreakBanner({
 }: StreakBannerProps) {
   const { colors } = useThemeTokens();
   const isActive = streakDays > 0;
+  // Banners drop 6pt in over 220ms (the gateway banner's entrance); a cut
+  // under Reduce Motion.
+  const reduced = useReducedMotion();
+  const t = useSharedValue(reduced ? 1 : 0);
+
+  useEffect(() => {
+    if (reduced) {
+      t.set(1);
+      return;
+    }
+    t.set(0);
+    t.set(
+      withTiming(1, {
+        duration: motionMs(BANNER_MS, false),
+        easing: Easing.out(Easing.quad),
+      }),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- t is a stable shared value
+  }, [reduced]);
+
+  const drop = useAnimatedStyle(() => ({
+    opacity: t.value,
+    transform: [{ translateY: BANNER_ENTER_DISTANCE * (1 - t.value) }],
+  }));
+
   return (
-    <View
+    <Animated.View
       testID={testID}
       // `accessible` is what makes the group ONE element: without it the label
       // below is ignored on iOS and VoiceOver reads the children instead.
       accessible
       accessibilityRole="text"
       accessibilityLabel={streakAccessibilityLabel(streakDays, freezeAvailable)}
+      style={reduced ? undefined : drop}
       className="bg-card border border-border rounded-2xl p-4 flex-row items-center"
     >
       <Flame
@@ -84,6 +123,6 @@ export function StreakBanner({
           />
         </View>
       ) : null}
-    </View>
+    </Animated.View>
   );
 }

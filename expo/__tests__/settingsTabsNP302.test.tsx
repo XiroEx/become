@@ -4,6 +4,8 @@ import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
 jest.mock("expo-router", () => ({
+  // Settings reads `highlight=weekly` (the Becoming nudge's deep link).
+  useLocalSearchParams: () => ({}),
   useRouter: () => ({
     push: mockPush,
     replace: mockReplace,
