@@ -1,7 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { View, Pressable, StyleSheet, Animated } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { Text } from "@/components/Text";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import {
+  becomingStageTokens,
+  onDarkForeground,
+  rgbOf,
+} from "@/lib/theme/tokens";
 import { useRouter } from "expo-router";
 import {
   Compass,
@@ -18,7 +24,10 @@ import type {
 import { fmtUnit, readReached } from "@become/core";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { usePressed } from "@/lib/a11y/usePressed";
-import { markBecomingSeen } from "@/lib/becoming/storage";
+import {
+  checkBecomingUnread,
+  markBecomingSeen,
+} from "@/lib/becoming/storage";
 import { useReducedMotion } from "@/lib/a11y/reducedMotion";
 
 export interface BecomingDoorProps {
@@ -46,11 +55,42 @@ export function BecomingDoor({
   onPress,
   testID = "becoming-door",
 }: BecomingDoorProps) {
-  const { colors, tint, isDark } = useThemeTokens();
+  const { colors, tint } = useThemeTokens();
   const router = useRouter();
   const reduced = useReducedMotion();
   const [isUnread, setIsUnread] = useState(false);
   const cardPress = usePressed();
+
+  // The web's unread state is a violet gradient (`bg-gradient-to-br
+  // from-violet-600 to-violet-500`, `doorClassName` in
+  // `webapp/components/dashboard/BecomingDoor.tsx`) — white ink on violet in
+  // BOTH modes, like the Becoming stage's night sky. The stops are the
+  // mode-invariant violet tokens, so no colour literal is written here.
+  // `mind-violet` is violet-500 in both modes; the `from` stop is violet-600,
+  // which the web draws only here, so it lives beside the stage's own
+  // always-dark triplets in `tokens.ts` rather than as a full theme token.
+  const unreadGradient = [
+    rgbOf(becomingStageTokens.doorVioletFrom),
+    colors["mind-violet"],
+  ] as const;
+  // White ink at the web's own alphas (`text-white`, `text-white/60`,
+  // `text-white/65`, `text-white/85`, `bg-white/10`, `bg-white/15`) — the
+  // stage's ink (white in both modes) at an alpha, never a literal.
+  const unreadInk = onDarkForeground;
+  const unreadInk70 = rgbOf(becomingStageTokens.ink, 0.7);
+  const unreadInk65 = rgbOf(becomingStageTokens.ink, 0.65);
+  const unreadInk85 = rgbOf(becomingStageTokens.ink, 0.85);
+  const unreadInk80 = rgbOf(becomingStageTokens.ink, 0.8);
+  const unreadWash10 = rgbOf(becomingStageTokens.ink, 0.1);
+  const unreadWash15 = rgbOf(becomingStageTokens.ink, 0.15);
+
+  useEffect(() => {
+    // Sync from storage (AsyncStorage), not from render — the unread flag
+    // lands after mount, like the web's `useSyncExternalStore` read of
+    // localStorage. (No set-state-in-effect suppression: this effect never
+    // re-runs, so the state it sets cannot loop.)
+    void checkBecomingUnread().then(setIsUnread);
+  }, []);
 
   const pulseAnim = useMemo(() => new Animated.Value(1), []);
 
@@ -166,14 +206,14 @@ export function BecomingDoor({
         style={[
           minTouchTarget,
           styles.card,
+          // The unread card is the gradient itself: the Pressable is
+          // transparent and the LinearGradient beneath paints edge to edge
+          // (the web's `overflow-hidden` rounded card). The calm card keeps
+          // its token surface and border.
           isUnread
             ? {
-                backgroundColor: isDark
-                  ? "hsl(258, 45%, 15%)"
-                  : "hsl(258, 90%, 96%)",
-                borderColor: isDark
-                  ? "hsl(258, 80%, 65%)"
-                  : "hsl(258, 80%, 55%)",
+                backgroundColor: "transparent",
+                borderColor: "transparent",
               }
             : {
                 backgroundColor: colors.card,
@@ -184,6 +224,16 @@ export function BecomingDoor({
           },
         ]}
       >
+        {isUnread ? (
+          <LinearGradient
+            testID="becoming-door-gradient"
+            colors={[...unreadGradient]}
+            // `bg-gradient-to-br`: top-left → bottom-right.
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+        ) : null}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <View
@@ -191,22 +241,14 @@ export function BecomingDoor({
                 styles.iconBadge,
                 {
                   backgroundColor: isUnread
-                    ? isDark
-                      ? "hsla(258, 80%, 70%, 0.25)"
-                      : "hsla(258, 80%, 50%, 0.15)"
+                    ? unreadWash15
                     : tint("mind-violet", 0.15),
                 },
               ]}
             >
               <Compass
                 size={18}
-                color={
-                  isUnread
-                    ? isDark
-                      ? "hsl(258, 90%, 80%)"
-                      : "hsl(258, 90%, 45%)"
-                    : colors["mind-violet"]
-                }
+                color={isUnread ? unreadInk : colors["mind-violet"]}
               />
             </View>
             <View style={styles.headerMeta}>
@@ -214,11 +256,7 @@ export function BecomingDoor({
                 style={[
                   styles.kicker,
                   {
-                    color: isUnread
-                      ? isDark
-                        ? "hsl(258, 90%, 80%)"
-                        : "hsl(258, 90%, 45%)"
-                      : colors["mind-violet"],
+                    color: isUnread ? unreadInk70 : colors["mind-violet"],
                   },
                 ]}
               >
@@ -227,7 +265,7 @@ export function BecomingDoor({
               <Text
                 style={[
                   styles.titleText,
-                  { color: colors.foreground },
+                  { color: isUnread ? unreadInk : colors.foreground },
                 ]}
               >
                 Then → now → next, across all three
@@ -236,45 +274,36 @@ export function BecomingDoor({
           </View>
           <ArrowRight
             size={18}
-            color={
-              isUnread
-                ? isDark
-                  ? "hsl(258, 90%, 80%)"
-                  : "hsl(258, 90%, 45%)"
-                : colors["muted-foreground"]
-            }
+            color={isUnread ? unreadInk80 : colors["muted-foreground"]}
           />
         </View>
 
         <View testID="becoming-door-chips" style={styles.chipRow}>
-          {/* Mind chip */}
+          {/* Mind chip — the web's `bg-white/10` on the gradient, `bg-zinc-50
+              dark:bg-zinc-800/60` when calm. */}
           <View
             style={[
               styles.chip,
               {
                 backgroundColor: isUnread
-                  ? isDark
-                    ? "hsla(258, 60%, 70%, 0.15)"
-                    : "hsla(258, 60%, 50%, 0.08)"
+                  ? unreadWash10
                   : tint("muted", 0.3),
               },
             ]}
           >
             <Brain
               size={14}
-              color={
-                isUnread
-                  ? isDark
-                    ? "hsl(258, 80%, 75%)"
-                    : "hsl(258, 70%, 45%)"
-                  : colors.accent
-              }
+              color={isUnread ? unreadInk : colors.accent}
             />
             <View style={styles.chipContent}>
               <Text
                 style={[
                   styles.chipLabel,
-                  { color: colors["muted-foreground"] },
+                  {
+                    color: isUnread
+                      ? unreadInk65
+                      : colors["muted-foreground"],
+                  },
                 ]}
               >
                 Mind
@@ -282,7 +311,7 @@ export function BecomingDoor({
               <Text
                 style={[
                   styles.chipValue,
-                  { color: colors.foreground },
+                  { color: isUnread ? unreadInk : colors.foreground },
                 ]}
               >
                 {mindChip.value}
@@ -291,7 +320,11 @@ export function BecomingDoor({
                 <Text
                   style={[
                     styles.chipSub,
-                    { color: colors["muted-foreground"] },
+                    {
+                      color: isUnread
+                        ? unreadInk65
+                        : colors["muted-foreground"],
+                    },
                   ]}
                 >
                   {mindChip.sub}
@@ -306,28 +339,24 @@ export function BecomingDoor({
               styles.chip,
               {
                 backgroundColor: isUnread
-                  ? isDark
-                    ? "hsla(258, 60%, 70%, 0.15)"
-                    : "hsla(258, 60%, 50%, 0.08)"
+                  ? unreadWash10
                   : tint("muted", 0.3),
               },
             ]}
           >
             <UtensilsCrossed
               size={14}
-              color={
-                isUnread
-                  ? isDark
-                    ? "hsl(38, 90%, 65%)"
-                    : "hsl(38, 90%, 45%)"
-                  : colors.primary
-              }
+              color={isUnread ? unreadInk : colors.primary}
             />
             <View style={styles.chipContent}>
               <Text
                 style={[
                   styles.chipLabel,
-                  { color: colors["muted-foreground"] },
+                  {
+                    color: isUnread
+                      ? unreadInk65
+                      : colors["muted-foreground"],
+                  },
                 ]}
               >
                 Nutrition
@@ -336,8 +365,11 @@ export function BecomingDoor({
                 style={[
                   styles.chipValue,
                   {
-                    color:
-                      n?.pace?.status === "behind"
+                    color: isUnread
+                      ? n?.pace?.status === "behind"
+                        ? colors.amber
+                        : unreadInk
+                      : n?.pace?.status === "behind"
                         ? colors.accent
                         : colors.foreground,
                   },
@@ -349,7 +381,11 @@ export function BecomingDoor({
                 <Text
                   style={[
                     styles.chipSub,
-                    { color: colors["muted-foreground"] },
+                    {
+                      color: isUnread
+                        ? unreadInk65
+                        : colors["muted-foreground"],
+                    },
                   ]}
                 >
                   {nutritionChip.sub}
@@ -364,28 +400,24 @@ export function BecomingDoor({
               styles.chip,
               {
                 backgroundColor: isUnread
-                  ? isDark
-                    ? "hsla(258, 60%, 70%, 0.15)"
-                    : "hsla(258, 60%, 50%, 0.08)"
+                  ? unreadWash10
                   : tint("muted", 0.3),
               },
             ]}
           >
             <Dumbbell
               size={14}
-              color={
-                isUnread
-                  ? isDark
-                    ? "hsl(142, 70%, 65%)"
-                    : "hsl(142, 70%, 40%)"
-                  : colors.success
-              }
+              color={isUnread ? unreadInk : colors.success}
             />
             <View style={styles.chipContent}>
               <Text
                 style={[
                   styles.chipLabel,
-                  { color: colors["muted-foreground"] },
+                  {
+                    color: isUnread
+                      ? unreadInk65
+                      : colors["muted-foreground"],
+                  },
                 ]}
               >
                 Training
@@ -393,7 +425,7 @@ export function BecomingDoor({
               <Text
                 style={[
                   styles.chipValue,
-                  { color: colors.foreground },
+                  { color: isUnread ? unreadInk : colors.foreground },
                 ]}
               >
                 {trainingChip.value}
@@ -402,7 +434,11 @@ export function BecomingDoor({
                 <Text
                   style={[
                     styles.chipSub,
-                    { color: colors["muted-foreground"] },
+                    {
+                      color: isUnread
+                        ? unreadInk65
+                        : colors["muted-foreground"],
+                    },
                   ]}
                 >
                   {trainingChip.sub}
@@ -416,13 +452,7 @@ export function BecomingDoor({
           <View testID="becoming-door-next" style={styles.nextRow}>
             <Sparkles
               size={14}
-              color={
-                isUnread
-                  ? isDark
-                    ? "hsl(38, 90%, 65%)"
-                    : "hsl(38, 90%, 45%)"
-                  : colors["mind-violet"]
-              }
+              color={isUnread ? colors.amber : colors["mind-violet"]}
             />
             {/* One truncated line, like the web's `truncate` paragraph — two
                 SEPARATELY-styled Text nodes nested inside one outer Text so
@@ -434,12 +464,22 @@ export function BecomingDoor({
               ellipsizeMode="tail"
             >
               <Text
-                style={[styles.nextTitle, { color: colors.foreground }]}
+                style={[
+                  styles.nextTitle,
+                  { color: isUnread ? unreadInk85 : colors.foreground },
+                ]}
               >
                 {top.title}
               </Text>
               <Text
-                style={[styles.nextSub, { color: colors["muted-foreground"] }]}
+                style={[
+                  styles.nextSub,
+                  {
+                    color: isUnread
+                      ? unreadInk65
+                      : colors["muted-foreground"],
+                  },
+                ]}
               >
                 {" "}· {top.sub}
               </Text>
