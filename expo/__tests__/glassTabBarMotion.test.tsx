@@ -313,15 +313,7 @@ describe("an icon shrinks while pressed and springs back", () => {
     expect(iconScale(r, "mind")).toBe(1);
   });
 
-  it("keeps the haptic on press", () => {
-    const Haptics = jest.requireMock("expo-haptics") as {
-      impactAsync: jest.Mock;
-    };
-    Haptics.impactAsync.mockClear();
-    const r = render(<GlassTabBar {...barProps("dashboard")} />);
-    fireEvent.press(r.getByTestId("glass-tab-mind"));
-    expect(Haptics.impactAsync).toHaveBeenCalled();
-  });
+  // The haptic on press is pinned by NP-351 ("taps the phone on every press").
 
   it("does not shrink under Reduce Motion", async () => {
     mockReduceMotion(true);
