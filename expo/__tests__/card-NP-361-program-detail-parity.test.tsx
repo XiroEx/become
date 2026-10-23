@@ -80,7 +80,10 @@ describe("(NP-361) Program Detail spacing/type parity", () => {
       const cover = getByTestId("program-detail-hero-cover");
       expect(cover.props.source).toEqual({ uri: sample.coverImage });
 
-      expect(within(hero).UNSAFE_getByType(LinearGradient)).toBeTruthy();
+      // The scrim, the web's base `bg-linear-to-br` ground behind the photo
+      // and the Start pill's own gradient — all inside the hero.
+      expect(within(hero).UNSAFE_getAllByType(LinearGradient).length).toBeGreaterThanOrEqual(1);
+      expect(getByTestId("program-detail-hero-base-gradient")).toBeTruthy();
     });
 
     it("falls back to the dark-pinned card colour with no cover photo", () => {

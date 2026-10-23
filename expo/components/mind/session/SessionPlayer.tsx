@@ -63,7 +63,14 @@ import { WEBAPP_BASE_URL } from "@/lib/config";
 import { announce } from "@/lib/a11y/announce";
 import { modalAnimation, useReducedMotion } from "@/lib/a11y/reducedMotion";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
-import { onDarkForeground, resolveToken, tintToken } from "@/lib/theme/tokens";
+import {
+  onDarkForeground,
+  resolveToken,
+  rgbOf,
+  tintToken,
+  webGradientTokens,
+} from "@/lib/theme/tokens";
+import { WebGradient } from "@/components/WebGradient";
 import { tzOffsetMinutes } from "@/lib/time/localDay";
 import { reflectOnAnswers } from "@/lib/mind/reflect";
 import {
@@ -1022,8 +1029,15 @@ export function SessionPlayer({
                         }
                       }}
                       style={minTouchTarget}
-                      className="mt-8 w-full max-w-xs flex-row items-center justify-center gap-2 rounded-2xl bg-amber-400 py-4"
+                      className="mt-8 w-full max-w-xs flex-row items-center justify-center gap-2 overflow-hidden rounded-2xl bg-amber-400 py-4"
                     >
+                      {/* The web's `bg-gradient-to-r from-amber-400 to-amber-500`. */}
+                      <WebGradient
+                        testID={`${testID}-payoff-chapter-unlock-gradient`}
+                        fill
+                        direction="r"
+                        colors={[PLAYER_AMBER, rgbOf(webGradientTokens.amber500)]}
+                      />
                       <ChevronUp size={20} color={PLAYER_BLACK} />
                       <Text className="text-base font-bold text-black">
                         New chapter unlocked

@@ -3,6 +3,7 @@ import { Pressable, ScrollView, TextInput, View } from "react-native";
 import Animated, { FadeIn, FadeInUp } from "react-native-reanimated";
 import { Check, Keyboard } from "lucide-react-native";
 import { Text } from "@/components/Text";
+import { DoneBadge } from "@/components/mind/session/scenes/DoneBadge";
 import { useReducedMotion } from "@/lib/a11y/reducedMotion";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { resolveToken } from "@/lib/theme/tokens";
@@ -65,9 +66,7 @@ export function WriteAffirm({
           entering={reduced ? undefined : FadeIn.duration(250)}
           className="w-full max-w-sm items-center"
         >
-          <View className="h-16 w-16 items-center justify-center rounded-full bg-green-500/20">
-            <Check size={32} color={C.success} strokeWidth={3} />
-          </View>
+          <DoneBadge tone="violet" testID={`${testID}-done-badge`} />
           <Text className="mt-4 text-center text-lg font-bold text-white">
             Written in.
           </Text>

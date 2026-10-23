@@ -44,7 +44,8 @@ import {
 } from '@/lib/becoming/weekSummary'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useThemeTokens } from '@/lib/theme/useThemeTokens'
-import type { TokenName } from '@/lib/theme/tokens'
+import { becomingStageTokens, onDarkForeground, rgbOf, type TokenName } from '@/lib/theme/tokens'
+import { WebGradient } from '@/components/WebGradient'
 import { minTouchTarget } from '@/lib/a11y/touchTarget'
 import { useAuth } from '@/lib/auth/useAuth'
 import { WEBAPP_BASE_URL } from '@/lib/config'
@@ -1115,51 +1116,50 @@ export function BecomingDetails({
           {/* ── MIND SCREEN ── */}
           {tab === 'mind' && (
             <View style={styles.tabContent}>
-              {/* Score banner */}
-              <View
-                style={[
-                  styles.scoreBanner,
-                  {
-                    backgroundColor: isDark ? 'hsl(258, 45%, 22%)' : 'hsl(258, 80%, 94%)',
-                    borderWidth: 1,
-                    borderColor: isDark ? 'hsl(258, 80%, 65%)' : 'hsl(258, 80%, 55%)',
-                  },
-                ]}
-              >
+              {/* Score banner — the web's `bg-gradient-to-br from-violet-600
+                  to-violet-500` with white ink in BOTH modes, like the door
+                  and the stage it opens (the ink is the stage's white at the
+                  web's own alphas, never a literal). */}
+              <View testID="mind-score-banner" style={[styles.scoreBanner, { overflow: 'hidden' }]}>
+                <WebGradient
+                  testID="mind-score-banner-gradient"
+                  fill
+                  colors={[rgbOf(becomingStageTokens.doorVioletFrom), colors['mind-violet']]}
+                />
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Trophy size={14} color={isDark ? 'hsl(258, 90%, 80%)' : 'hsl(258, 90%, 45%)'} />
+                      <Trophy size={14} color={rgbOf(becomingStageTokens.ink, 0.7)} />
                       <Text
                         style={[
                           styles.scoreKicker,
-                          { color: isDark ? 'hsl(258, 90%, 80%)' : 'hsl(258, 90%, 45%)' },
+                          { color: rgbOf(becomingStageTokens.ink, 0.7) },
                         ]}
                       >
                         Becoming score
                       </Text>
                     </View>
-                    <Text style={[styles.scoreNumber, { color: colors.foreground }]}>{score.toLocaleString()}</Text>
+                    <Text style={[styles.scoreNumber, { color: onDarkForeground }]}>{score.toLocaleString()}</Text>
                   </View>
                   {streak > 0 && (
                     <View
                       style={[
                         styles.streakTile,
-                        { backgroundColor: isDark ? tint('foreground', 0.15) : tint('muted', 0.6) },
+                        { backgroundColor: rgbOf(becomingStageTokens.ink, 0.15) },
                       ]}
                       testID="mind-streak-tile"
                       accessibilityLabel={`${streak} day streak`}
                     >
                       <Flame size={18} color={STREAK_INK.day.hsl} />
-                      <Text style={[styles.streakNumber, { color: colors.foreground }]}>{streak}</Text>
-                      <Text style={[styles.streakLabel, { color: colors['muted-foreground'] }]}>
+                      <Text style={[styles.streakNumber, { color: onDarkForeground }]}>{streak}</Text>
+                      <Text style={[styles.streakLabel, { color: rgbOf(becomingStageTokens.ink, 0.7) }]}>
                         {streak === 1 ? '1 DAY STREAK' : `${streak} DAY STREAK`}
                       </Text>
                     </View>
                   )}
                 </View>
                 {identity ? (
-                  <Text style={[styles.scoreIdentity, { color: colors.foreground }]}>“{identity}”</Text>
+                  <Text style={[styles.scoreIdentity, { color: rgbOf(becomingStageTokens.ink, 0.9) }]}>“{identity}”</Text>
                 ) : null}
               </View>
 

@@ -20,7 +20,14 @@ import { Button } from "@/components/Button";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { TAB_BAR_CONTENT_INSET } from "@/lib/navigation/tabBarInset";
 import { workoutDayLabel } from "@/lib/programs/dayLabel";
-import { getTokens, rgbOf, tintToken, type TokenName } from "@/lib/theme/tokens";
+import {
+  getTokens,
+  rgbOf,
+  tintToken,
+  webGradientTokens,
+  type TokenName,
+} from "@/lib/theme/tokens";
+import { WebGradient } from "@/components/WebGradient";
 import { ExerciseAccordion } from "@/components/ExerciseAccordion";
 import { NativeShareButton } from "@/components/share/NativeShareButton";
 import { useSingleVideoPlayer } from "@/lib/video/useSingleVideoPlayer";
@@ -212,7 +219,7 @@ export function ProgramDetail({
   shareGetToken,
   testID = "program-detail",
 }: ProgramDetailProps) {
-  const { colors, tint } = useThemeTokens();
+  const { colors, tint, isDark } = useThemeTokens();
 
   // The hero is ALWAYS dark (a dark-gradient-over-photo card on the web, same
   // in light and dark app mode) — so its own text/icon/badge colours are
@@ -228,6 +235,20 @@ export function ProgramDetail({
     (name: TokenName, alpha: number) => tintToken(name, "dark", alpha),
     [],
   );
+
+  // The web's gradients on this screen, all mode-invariant stops except the
+  // hero's base: `bg-linear-to-br from-zinc-900 via-zinc-800 to-zinc-900
+  // dark:from-black dark:via-zinc-900 dark:to-black` behind the cover photo,
+  // the Start/Continue pill's `from-green-500 to-emerald-600` and the progress
+  // bar's `from-green-400 to-emerald-400`.
+  const heroBaseGradient = isDark
+    ? [rgbOf(webGradientTokens.black), heroRgb("card"), rgbOf(webGradientTokens.black)]
+    : [heroRgb("card"), heroRgb("muted"), heroRgb("card")];
+  const ctaGradient = [heroRgb("mind-green"), rgbOf(webGradientTokens.emerald600)];
+  const progressGradient = [
+    rgbOf(webGradientTokens.green400),
+    rgbOf(webGradientTokens.emerald400),
+  ];
 
   // Determine smart defaults matching web parity
   const defaultPhaseIndex = useMemo(() => {
@@ -512,6 +533,11 @@ export function ProgramDetail({
           overflow: "hidden",
         }}
       >
+        <WebGradient
+          testID={`${testID}-hero-base-gradient`}
+          fill
+          colors={heroBaseGradient}
+        />
         {program.coverImage ? (
           <Image
             testID={`${testID}-hero-cover`}
@@ -688,10 +714,17 @@ export function ProgramDetail({
                   paddingHorizontal: 20,
                   paddingVertical: 12,
                   borderRadius: 9999,
+                  overflow: "hidden",
                   backgroundColor: heroRgb("success"),
                   opacity: actionPending ? 0.6 : 1,
                 }}
               >
+                <WebGradient
+                  testID={`${testID}-continue-gradient`}
+                  fill
+                  direction="r"
+                  colors={ctaGradient}
+                />
                 <Text style={{ fontSize: 15, fontWeight: "700", color: heroRgb("foreground") }}>
                   Continue
                 </Text>
@@ -708,10 +741,17 @@ export function ProgramDetail({
                   paddingHorizontal: 20,
                   paddingVertical: 12,
                   borderRadius: 9999,
+                  overflow: "hidden",
                   backgroundColor: heroRgb("success"),
                   opacity: actionPending ? 0.6 : 1,
                 }}
               >
+                <WebGradient
+                  testID={`${testID}-start-gradient`}
+                  fill
+                  direction="r"
+                  colors={ctaGradient}
+                />
                 <Text style={{ fontSize: 15, fontWeight: "700", color: heroRgb("foreground") }}>
                   {onEnroll ? "Enroll in program" : "Start program"}
                 </Text>
@@ -814,8 +854,16 @@ export function ProgramDetail({
                       width: `${Math.min(100, Math.round(((activeProgram.completedWorkouts ?? 0) / activeProgram.totalWorkouts) * 100))}%`,
                       backgroundColor: heroRgb("success"),
                       borderRadius: 3,
+                      overflow: "hidden",
                     }}
-                  />
+                  >
+                    <WebGradient
+                      testID={`${testID}-progress-gradient`}
+                      fill
+                      direction="r"
+                      colors={progressGradient}
+                    />
+                  </View>
                 </View>
               ) : null}
             </View>

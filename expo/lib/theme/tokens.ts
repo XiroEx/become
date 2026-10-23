@@ -343,6 +343,36 @@ export function skiaRgbOf(triplet: string, alpha = 1): string {
 }
 
 /**
+ * THE STOPS THE WEB'S GRADIENTS USE THAT NO THEME TOKEN IS (gradients port).
+ *
+ * The web paints its green CTAs, progress bars and completion badges as
+ * `from-green-500 to-emerald-600`-style gradients with NO `dark:` variant, so
+ * every stop is the same in both modes and none of them is a surface token.
+ * Where a stop already is one (`mind-green` = green-500, `mind-emerald` =
+ * emerald-500, `mind-violet` = violet-500, `amber` = amber-400) the call site
+ * reads the token; these are only the shades native had no name for. Triplets,
+ * like `becomingStageTokens`, so alpha composes through `rgbOf`.
+ */
+export const webGradientTokens = {
+  /** green-600 — the web's `from-green-600` on the quick session's Start CTA */
+  green600: "22 163 74",
+  /** green-400 — the web's `from-green-400` on the program progress bar */
+  green400: "74 222 128",
+  /** emerald-400 — the web's `to-emerald-400` on the program progress bar */
+  emerald400: "52 211 153",
+  /** emerald-600 — the web's `to-emerald-600` on Start / Continue / Finish */
+  emerald600: "5 150 105",
+  /** amber-500 — the web's `to-amber-500` / `from-amber-500` stops */
+  amber500: "245 158 11",
+  /** red-500 — the web's `from-red-500` on the Challenge scene's badge */
+  red500: "239 68 68",
+  /** sky-500 — the web's `from-sky-500` on the Assemble scene's badge */
+  sky500: "14 165 233",
+  /** black — the web's `from-black/…` photo scrims */
+  black: "0 0 0",
+} as const;
+
+/**
  * The modal scrim. `--backdrop` in the web's redstyle tokens is
  * `rgba(0,0,0,0.5)` on dark; light gets a stronger wash than the web's 0.2
  * because a white sheet over a near-white page needs the separation on a phone,

@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import Animated, { FadeIn, FadeInUp } from "react-native-reanimated";
-import { ArrowRight, Check, Target } from "lucide-react-native";
+import { ArrowRight, Target } from "lucide-react-native";
 import { CONTRAST_OBSTACLES, CONTRAST_PLANS } from "@become/core";
 import { Text } from "@/components/Text";
+import { DoneBadge } from "@/components/mind/session/scenes/DoneBadge";
 import type { MindSceneProps } from "@/components/mind/session/scenes/types";
 import { useReducedMotion } from "@/lib/a11y/reducedMotion";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
@@ -182,9 +183,7 @@ export function ContrastScene({
           entering={reduced ? undefined : FadeIn.duration(250)}
           className="w-full max-w-sm items-center"
         >
-          <View className="h-16 w-16 items-center justify-center rounded-full bg-green-500/20">
-            <Check size={32} color={C.success} strokeWidth={3} />
-          </View>
+          <DoneBadge tone="contrast" testID={`${testID}-done-badge`} />
           <Text className="mt-4 text-center text-lg font-bold text-white">
             Plan set.
           </Text>

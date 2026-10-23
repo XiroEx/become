@@ -26,6 +26,8 @@ import { SessionEditor } from "@/components/workout/SessionEditor";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { onDarkForeground, rgbOf, webGradientTokens } from "@/lib/theme/tokens";
+import { WebGradient } from "@/components/WebGradient";
 import {
   clearQuickSession,
   quickSessionLiveHref,
@@ -814,12 +816,20 @@ export default function QuickSessionOverviewRoute({
             justifyContent: "center",
             gap: 8,
             borderRadius: 12,
+            overflow: "hidden",
             paddingVertical: 12,
             backgroundColor: colors.success,
           }}
         >
-          <Play size={16} color={colors["primary-foreground"]} />
-          <Text style={{ fontSize: 14, fontWeight: "600", color: colors["primary-foreground"] }}>
+          {/* The web's `bg-gradient-to-r from-green-600 to-green-500`. */}
+          <WebGradient
+            testID="quick-session-overview-start-gradient"
+            fill
+            direction="r"
+            colors={[rgbOf(webGradientTokens.green600), colors["mind-green"]]}
+          />
+          <Play size={16} color={onDarkForeground} />
+          <Text style={{ fontSize: 14, fontWeight: "600", color: onDarkForeground }}>
             {hasStarted ? "Continue workout" : "Start workout"}
           </Text>
         </Pressable>
