@@ -4,6 +4,12 @@ import {
   Pressable,
   View,
 } from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withTiming,
+} from "@/lib/motion/reanimated";
 import { Text } from "@/components/Text";
 import {
   celebrationHaptic,
@@ -13,6 +19,11 @@ import {
   modalAnimation,
   useReducedMotion,
 } from "@/lib/a11y/reducedMotion";
+import {
+  MOTION_MS,
+  SHEET_ENTER_TRAVEL,
+  motionMs,
+} from "@/lib/motion/motion";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 export const MILESTONE_LABELS: Record<number, string> = {
@@ -64,6 +75,40 @@ export function StreakMilestoneModal({
     }
   }, [isOpen, milestone, haptic]);
 
+  // THE FIRE POP — the web scales 🔥 0→1.3→1 over 0.5s while the card
+  // rises 40pt. Reduced motion shows both at rest.
+  const fireScale = useSharedValue(reduceMotion ? 1 : 0);
+  const cardRise = useSharedValue(reduceMotion ? 0 : SHEET_ENTER_TRAVEL);
+  const cardOpacity = useSharedValue(reduceMotion ? 1 : 0);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (reduceMotion) {
+      fireScale.set(1);
+      cardRise.set(0);
+      cardOpacity.set(1);
+      return;
+    }
+    fireScale.set(
+      withSequence(
+        withTiming(1.3, { duration: motionMs(MOTION_MS.firePop * 0.6, false) }),
+        withTiming(1, { duration: motionMs(MOTION_MS.firePop * 0.4, false) }),
+      ),
+    );
+    cardRise.set(withTiming(0, { duration: motionMs(MOTION_MS.sheet, false) }));
+    cardOpacity.set(withTiming(1, { duration: motionMs(MOTION_MS.sheet, false) }));
+    // Mount-only enter, like the web's AnimatePresence mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, reduceMotion]);
+
+  const fireStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: fireScale.value }],
+  }));
+  const cardStyle = useAnimatedStyle(() => ({
+    opacity: cardOpacity.value,
+    transform: [{ translateY: cardRise.value }],
+  }));
+
   if (!isOpen || !milestone) {
     return null;
   }
@@ -94,6 +139,9 @@ export function StreakMilestoneModal({
           paddingHorizontal: 20,
         }}
       >
+        <Animated.View
+          style={reduceMotion ? undefined : cardStyle}
+        >
         <Pressable
           testID={`${testID}-card`}
           accessibilityRole="alert"
@@ -117,6 +165,7 @@ export function StreakMilestoneModal({
 
           <View className="w-full px-6 py-7 items-center">
             {/* Fire icon / emoji */}
+            <Animated.View style={reduceMotion ? undefined : fireStyle}>
             <Text
               testID={`${testID}-fire`}
               className="text-6xl text-center mb-3"
@@ -124,6 +173,7 @@ export function StreakMilestoneModal({
             >
               🔥
             </Text>
+            </Animated.View>
 
             <Text
               testID={`${testID}-label`}
@@ -177,6 +227,7 @@ export function StreakMilestoneModal({
             </Pressable>
           </View>
         </Pressable>
+        </Animated.View>
       </Pressable>
     </RNModal>
   );

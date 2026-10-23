@@ -25,6 +25,7 @@ import {
 import { FireNumber } from "@/components/streaks/FireNumber";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import type { DashboardStatData } from "@/lib/dashboard/types";
+import { ProgressFill } from "@/components/motion/ProgressFill";
 
 export interface StreakTileProps {
   tile?: DashboardTile;
@@ -330,14 +331,10 @@ export function StreakTile({
                 { backgroundColor: colors.muted, width: 80 },
               ]}
             >
-              <View
-                style={[
-                  styles.barFill,
-                  {
-                    backgroundColor: ink.bar,
-                    width: `${Math.max(0, Math.min(100, p.pct))}%`,
-                  },
-                ]}
+              <ProgressFill
+                fraction={Math.max(0, Math.min(100, p.pct)) / 100}
+                color={ink.bar}
+                testID="tile-streak-fill"
               />
             </View>
             {pages.length > 1 ? (
@@ -397,14 +394,10 @@ export function StreakTile({
           <View style={styles.bottomCol}>
             {/* Progress bar */}
             <View style={[styles.barTrack, { backgroundColor: colors.muted }]}>
-              <View
-                style={[
-                  styles.barFill,
-                  {
-                    backgroundColor: ink.bar,
-                    width: `${Math.max(0, Math.min(100, p.pct))}%`,
-                  },
-                ]}
+              <ProgressFill
+                fraction={Math.max(0, Math.min(100, p.pct)) / 100}
+                color={ink.bar}
+                testID="tile-streak-fill"
               />
             </View>
             <View

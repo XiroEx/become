@@ -23,6 +23,7 @@ import {
 } from "@become/api-client";
 import { Text } from "@/components/Text";
 import GuidedFlow, { type GuidedStep } from "@/components/mind/system/GuidedFlow";
+import { ProgressFill } from "@/components/motion/ProgressFill";
 import ProtocolUnlockModal, {
   useProtocolUnlocks,
 } from "@/components/mind/system/ProtocolUnlock";
@@ -700,9 +701,10 @@ export default function SelfImageDashboard() {
               </Text>
             </View>
             <View className="h-2 w-full overflow-hidden rounded-full bg-violet-500/20">
-              <View
-                className="h-full rounded-full bg-violet-500"
-                style={{ width: `${Math.min(evo, 100)}%` }}
+              <ProgressFill
+                fraction={Math.min(evo, 100) / 100}
+                testID="self-image-evolution-fill"
+                className="bg-violet-500"
               />
             </View>
             <Text className="mt-1 text-[11px] text-muted-foreground">

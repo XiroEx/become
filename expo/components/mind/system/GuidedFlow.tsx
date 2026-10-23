@@ -16,6 +16,7 @@ import { Text } from "@/components/Text";
 import { useAndroidBackHandler, type BackHandlerLike } from "@/lib/android/backHandler";
 import { onDarkForeground, resolveToken, tintToken } from "@/lib/theme/tokens";
 import type { GuidedStep } from "@/lib/ai/sanitize";
+import { ProgressFill } from "@/components/motion/ProgressFill";
 
 export type { GuidedStep };
 
@@ -231,16 +232,10 @@ export default function GuidedFlow({
                   testID={`guided-flow-progress-${i}`}
                   className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/15"
                 >
-                  <View
+                  <ProgressFill
+                    fraction={i < idx || done ? 1 : i === idx ? 0.5 : 0}
+                    color={i <= idx || done ? accent : undefined}
                     testID={`guided-flow-progress-${i}-fill`}
-                    className="h-full rounded-full"
-                    style={
-                      i < idx || done
-                        ? { width: "100%", backgroundColor: accent }
-                        : i === idx
-                          ? { width: "50%", backgroundColor: accent }
-                          : { width: "0%" }
-                    }
                   />
                 </View>
               ))}

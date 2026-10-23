@@ -9,6 +9,9 @@ jest.mock("expo-router", () => ({
     replace: mockReplace,
     back: jest.fn(),
   }),
+  // Settings reads deep-link params (`?tab=training&highlight=weekly`); no
+  // params here, so the default tab/highlight behaviour is what is tested.
+  useLocalSearchParams: () => ({}),
   useFocusEffect: (effect: () => void | (() => void)) => {
     const React = jest.requireActual("react");
     React.useEffect(effect, [effect]);

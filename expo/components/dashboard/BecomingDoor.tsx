@@ -1,6 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { View, Pressable, StyleSheet, Animated } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import AnimatedRe, {
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from "@/lib/motion/reanimated";
 import { Text } from "@/components/Text";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import {
@@ -8,6 +15,7 @@ import {
   onDarkForeground,
   rgbOf,
 } from "@/lib/theme/tokens";
+import { MOTION_MS, motionMs } from "@/lib/motion/motion";
 import { useRouter } from "expo-router";
 import {
   Compass,
@@ -135,6 +143,54 @@ export function BecomingDoor({
   const top = topSuggestion(goals);
   const reached = readReached(n?.status, n?.pace?.status);
 
+  // THE BREATH — the web's `becoming-door-pulse` (2.4s loud) /
+  // `becoming-door-nudge` (3.2s calm) halo, ported to Reanimated so it runs
+  // on the UI thread. Loud = unread week (full halo swell); calm = a "what
+  // to work on" line is showing (half amplitude, slower). Reduced motion
+  // holds the card still at full opacity.
+  const breath = useSharedValue(0);
+  const hasWorkLine = top !== null;
+
+  useEffect(() => {
+    if (reduced) {
+      breath.set(0);
+      return;
+    }
+    if (isUnread) {
+      breath.set(
+        withRepeat(
+          withSequence(
+            withTiming(1, { duration: motionMs(MOTION_MS.becomingLoud / 2, false) }),
+            withTiming(0, { duration: motionMs(MOTION_MS.becomingLoud / 2, false) }),
+          ),
+          -1,
+          false,
+        ),
+      );
+    } else if (hasWorkLine) {
+      breath.set(
+        withRepeat(
+          withSequence(
+            withTiming(1, { duration: motionMs(MOTION_MS.becomingCalm / 2, false) }),
+            withTiming(0, { duration: motionMs(MOTION_MS.becomingCalm / 2, false) }),
+          ),
+          -1,
+          false,
+        ),
+      );
+    } else {
+      breath.set(0);
+    }
+    // Re-run when the unread/work state flips, like the web's class swap.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isUnread, hasWorkLine, reduced]);
+
+  const breathStyle = useAnimatedStyle(() => ({
+    // Loud swells the halo to full; calm breathes at half amplitude.
+    opacity: isUnread ? 0.55 + 0.45 * breath.value : 0.96 + 0.04 * breath.value,
+    transform: [{ scale: 1 + (isUnread ? 0.02 : 0.008) * breath.value }],
+  }));
+
   const mindChip = mind
     ? {
         value: `Lv ${mind.level}`,
@@ -187,6 +243,7 @@ export function BecomingDoor({
         };
 
   return (
+    <AnimatedRe.View testID={isUnread ? "becoming-door-breath" : undefined} style={reduced ? undefined : breathStyle}>
     <Animated.View
       style={{
         opacity: isUnread && !reduced ? pulseAnim : 1,
@@ -488,6 +545,7 @@ export function BecomingDoor({
         ) : null}
       </Pressable>
     </Animated.View>
+    </AnimatedRe.View>
   );
 }
 

@@ -1,7 +1,19 @@
+import { useEffect } from "react";
 import { View } from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "@/lib/motion/reanimated";
 import { Text } from "@/components/Text";
 import { Flame, Snowflake } from "lucide-react-native";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { useReducedMotion } from "@/lib/a11y/reducedMotion";
+import {
+  BANNER_ENTER_TRAVEL,
+  MOTION_MS,
+  motionMs,
+} from "@/lib/motion/motion";
 
 export interface StreakBannerProps {
   streakDays: number;
@@ -46,8 +58,31 @@ export function StreakBanner({
 }: StreakBannerProps) {
   const { colors } = useThemeTokens();
   const isActive = streakDays > 0;
+  // THE DROP — banners settle from 6pt up, like the web's gateway banner.
+  const reduced = useReducedMotion();
+  const opacity = useSharedValue(reduced ? 1 : 0);
+  const travel = useSharedValue(reduced ? 0 : BANNER_ENTER_TRAVEL);
+
+  useEffect(() => {
+    if (reduced) {
+      opacity.set(1);
+      travel.set(0);
+      return;
+    }
+    const duration = motionMs(MOTION_MS.banner, false);
+    opacity.set(withTiming(1, { duration }));
+    travel.set(withTiming(0, { duration }));
+    // Mount-only enter, like the web's banner mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reduced]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateY: travel.value }],
+  }));
+
   return (
-    <View
+    <Animated.View
       testID={testID}
       // `accessible` is what makes the group ONE element: without it the label
       // below is ignored on iOS and VoiceOver reads the children instead.
@@ -55,6 +90,7 @@ export function StreakBanner({
       accessibilityRole="text"
       accessibilityLabel={streakAccessibilityLabel(streakDays, freezeAvailable)}
       className="bg-card border border-border rounded-2xl p-4 flex-row items-center"
+      style={reduced ? undefined : animatedStyle}
     >
       <Flame
         color={isActive ? colors.primary : colors["muted-foreground"]}
@@ -84,6 +120,6 @@ export function StreakBanner({
           />
         </View>
       ) : null}
-    </View>
+    </Animated.View>
   );
 }

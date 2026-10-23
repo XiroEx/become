@@ -16,6 +16,7 @@ import {
 } from "lucide-react-native";
 import { describeGoal } from "@become/core";
 import { useUnits } from "@/lib/hooks/useUnits";
+import { ProgressFill } from "@/components/motion/ProgressFill";
 import { MoodLogSheet } from "./MoodLogSheet";
 import type { MoodLevel } from "@/components/CheckInModal";
 import { MOOD_LABELS } from "@/components/CheckInModal";
@@ -423,14 +424,10 @@ export function StatTile({
                 beside the value column rather than a short fixed width. */}
             <View style={styles.wideRight}>
               <View style={[styles.barTrack, { backgroundColor: colors.muted }]}>
-                <View
-                  style={[
-                    styles.barFill,
-                    {
-                      backgroundColor: barColor,
-                      width: `${Math.max(0, Math.min(100, pct))}%`,
-                    },
-                  ]}
+                <ProgressFill
+                  fraction={Math.max(0, Math.min(100, pct)) / 100}
+                  color={barColor}
+                  testID={`${rootTestId}-fill`}
                 />
               </View>
             </View>
@@ -467,14 +464,10 @@ export function StatTile({
             </View>
             <View style={styles.bottomCol}>
               <View style={[styles.barTrack, { backgroundColor: colors.muted }]}>
-                <View
-                  style={[
-                    styles.barFill,
-                    {
-                      backgroundColor: barColor,
-                      width: `${Math.max(0, Math.min(100, pct))}%`,
-                    },
-                  ]}
+                <ProgressFill
+                  fraction={Math.max(0, Math.min(100, pct)) / 100}
+                  color={barColor}
+                  testID={`${rootTestId}-fill`}
                 />
               </View>
               {footer ? (

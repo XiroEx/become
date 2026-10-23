@@ -110,6 +110,8 @@ export const NATIVE_ROUTES = {
   chat: "/(tabs)/chat",
   profile: "/(tabs)/profile",
   becoming: "/becoming",
+  /** Native Settings — `app/(app)/settings.tsx` (NP-302's Profile / Training / Settings tabs). */
+  settings: "/settings",
   /**
    * The plan screen — `app/(app)/plan.tsx` (NP-053). The landing for every
    * billing return (NP-054): the only screen that tells a member which plan
@@ -624,6 +626,22 @@ function matchPath(incoming: Incoming, options: ResolveOptions): ResolvedTarget 
 
   // ── Home's own rooms: settings, customize ───────────────────────────────────
   if (section === "settings" || section === "customize") {
+    // Native Settings is a real screen (`app/(app)/settings.tsx`, NP-302's
+    // Profile / Training / Settings tabs) — the old Home fallback predates
+    // it. The Becoming training suggestion deep-links to
+    // `/dashboard/settings?tab=training#weekly-availability`: the web opens
+    // its Training tab and pulses the weekly availability row. The fragment
+    // never reaches a resolver, so the native twin reads
+    // `?tab=training&highlight=weekly` and glows the same row for 3s via
+    // WeeklyHighlight (`app/(app)/settings.tsx`).
+    if (section === "settings") {
+      const tab = lower(params.tab ?? "");
+      const highlight = lower(params.highlight ?? "");
+      const out: Record<string, string> = {};
+      if (tab) out.tab = tab;
+      if (highlight) out.highlight = highlight;
+      return native(NATIVE_ROUTES.settings, out, "exact");
+    }
     return native(NATIVE_ROUTES.home, params, "nearest");
   }
 

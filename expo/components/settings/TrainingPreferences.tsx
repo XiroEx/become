@@ -18,6 +18,7 @@ import { useFetch } from "@/lib/hooks/useFetch";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { WRAPPABLE_TEXT } from "@/lib/a11y/dynamicType";
+import { WeeklyHighlight } from "@/components/settings/WeeklyHighlight";
 import {
   DEFAULT_WEEKLY_AVAILABILITY,
   EQUIPMENT_OPTIONS,
@@ -81,12 +82,18 @@ function isEquipmentValue(value: unknown): value is EquipmentValue {
 export function TrainingPreferencesScreen({
   testID = "training-preferences",
   embedded = false,
+  highlightWeekly = false,
 }: {
   testID?: string;
   /** True when rendered inside Settings > Training (NP-302): skips the
    * screen's own SafeAreaView/ScreenState chrome and "Training" title,
    * since the host screen already supplies those. */
   embedded?: boolean;
+  /** True while the weekly-availability row is highlighted (3s glow from the
+   * Becoming training suggestion's `?tab=training&highlight=weekly`
+   * deep-link — the native twin of the web's `#weekly-availability`
+   * pulse). */
+  highlightWeekly?: boolean;
 }) {
   const { colors, tint } = useThemeTokens();
   const { token, refresh } = useAuth();
@@ -428,6 +435,10 @@ export function TrainingPreferencesScreen({
               <Text className="text-foreground text-sm font-medium">
                 Weekly Availability
               </Text>
+              <WeeklyHighlight
+                active={highlightWeekly}
+                testID={`${testID}-weekly-highlight`}
+              >
               <View
                 testID={`${testID}-weekly-availability`}
                 style={{
@@ -504,6 +515,7 @@ export function TrainingPreferencesScreen({
                   </Text>
                 </Pressable>
               </View>
+              </WeeklyHighlight>
             </View>
           </View>
 

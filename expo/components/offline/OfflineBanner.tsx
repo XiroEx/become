@@ -1,5 +1,16 @@
-import { View } from "react-native";
+import { useEffect } from "react";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "@/lib/motion/reanimated";
 import { Text } from "@/components/Text";
+import { useReducedMotion } from "@/lib/a11y/reducedMotion";
+import {
+  BANNER_ENTER_TRAVEL,
+  MOTION_MS,
+  motionMs,
+} from "@/lib/motion/motion";
 
 /**
  * THE BANNER. Presentational: it knows whether the device is online and
@@ -23,15 +34,38 @@ export function OfflineBanner({
   topInset = 0,
   testID = "offline-banner",
 }: OfflineBannerProps) {
+  // THE DROP — banners settle from 6pt up, like the web's gateway banner.
+  const reduced = useReducedMotion();
+  const opacity = useSharedValue(reduced ? 1 : 0);
+  const travel = useSharedValue(reduced ? 0 : BANNER_ENTER_TRAVEL);
+
+  useEffect(() => {
+    if (reduced) {
+      opacity.set(1);
+      travel.set(0);
+      return;
+    }
+    const duration = motionMs(MOTION_MS.banner, false);
+    opacity.set(withTiming(1, { duration }));
+    travel.set(withTiming(0, { duration }));
+    // Mount-only enter: the banner mounts when connectivity drops.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reduced]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateY: travel.value }],
+  }));
+
   if (online) return null;
   return (
-    <View
+    <Animated.View
       testID={testID}
       accessibilityRole="alert"
       accessibilityLiveRegion="polite"
       accessibilityLabel="No connection. Your check-ins are saved and will sync when you're back online."
       className="bg-card border-b border-border px-4 pb-2"
-      style={{ paddingTop: topInset + 8 }}
+      style={[{ paddingTop: topInset + 8 }, reduced ? undefined : animatedStyle]}
     >
       <Text
         testID={`${testID}-title`}
@@ -45,6 +79,6 @@ export function OfflineBanner({
       >
         Your check-ins are saved and will sync when you&apos;re back online.
       </Text>
-    </View>
+    </Animated.View>
   );
 }

@@ -23,6 +23,8 @@ import {
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { WRAPPABLE_TEXT } from "@/lib/a11y/dynamicType";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { useReducedMotion, modalAnimation } from "@/lib/a11y/reducedMotion";
+import { AvatarMenuPop } from "@/components/navigation/AvatarMenuPop";
 
 /**
  * THE page header: one top line on every native screen (2026-10-23).
@@ -119,6 +121,8 @@ export function PageHeader({
   };
   const [menuOpen, setMenuOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  // The menu pop honours Reduce Motion (the rule that travels).
+  const menuReduced = useReducedMotion();
   // Where the avatar sits on screen, so the menu drops down from it like the
   // web's TopNav dropdown instead of rising as a drawer.
   const avatarRef = useRef<View>(null);
@@ -311,7 +315,7 @@ export function PageHeader({
       <Modal
         visible={menuOpen}
         transparent
-        animationType="fade"
+        animationType={modalAnimation("fade", menuReduced)}
         onRequestClose={closeMenu}
       >
         <Pressable
@@ -323,6 +327,15 @@ export function PageHeader({
           onPress={closeMenu}
           style={{ flex: 1 }}
         >
+          <AvatarMenuPop
+            testID={`${testID}-menu-pop`}
+            style={{
+              position: "absolute",
+              top: anchor?.top ?? 96,
+              right: anchor?.right ?? 16,
+              width: 220,
+            }}
+          >
           <Pressable
             testID={`${testID}-menu`}
             accessibilityViewIsModal
@@ -330,10 +343,6 @@ export function PageHeader({
             // Swallow taps inside the menu so they don't close it.
             onPress={() => {}}
             style={{
-              position: "absolute",
-              top: anchor?.top ?? 96,
-              right: anchor?.right ?? 16,
-              width: 220,
               paddingVertical: 4,
               borderRadius: 12,
               borderWidth: 1,
@@ -449,6 +458,7 @@ export function PageHeader({
           </Pressable>
         ) : null}
           </Pressable>
+          </AvatarMenuPop>
         </Pressable>
       </Modal>
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppState, Linking, View, ScrollView, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter, useFocusEffect } from "expo-router";
+import { useRouter, useFocusEffect, useLocalSearchParams } from "expo-router";
 import Constants from "expo-constants";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
@@ -118,6 +118,23 @@ export default function SettingsScreen({
   const [activeTab, setActiveTab] = useState<"profile" | "training" | "settings">(
     "profile",
   );
+  // Weekly-report highlight: the Becoming training suggestion deep-links to
+  // Settings > `?tab=training&highlight=weekly` (the native twin of the
+  // web's `?tab=training#weekly-availability`). The web scrolls the weekly
+  // availability row into view and pulses it for 3s; native switches to the
+  // Training tab and glows the same row for 3s via WeeklyHighlight.
+  const searchParams = useLocalSearchParams<{ tab?: string; highlight?: string }>();
+  const [highlightWeekly, setHighlightWeekly] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.tab === "training" && searchParams.highlight === "weekly") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sync from route params outside React
+      setActiveTab("training");
+      setHighlightWeekly(true);
+      const timer = setTimeout(() => setHighlightWeekly(false), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [searchParams.tab, searchParams.highlight]);
   // The DI seam (PushOptInCard's `deps` pattern): unit tests never import
   // `expo-notifications` (no native module under Jest — even a dynamic
   // `import()` throws without --experimental-vm-modules), so they inject
@@ -649,7 +666,7 @@ export default function SettingsScreen({
       {activeTab === "profile" ? (
         <ProfileSettingsScreen embedded />
       ) : activeTab === "training" ? (
-        <TrainingPreferencesScreen embedded />
+        <TrainingPreferencesScreen embedded highlightWeekly={highlightWeekly} />
       ) : (
       <ScreenState
         loading={initialLoading}
