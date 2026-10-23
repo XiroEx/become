@@ -17,7 +17,7 @@ import Animated, {
   withRepeat,
   withSequence,
   withTiming,
-} from "react-native-reanimated";
+} from "@/lib/motion/reanimated";
 import type { StyleProp, ViewStyle } from "react-native";
 import { useReducedMotion } from "@/lib/a11y/reducedMotion";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";

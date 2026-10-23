@@ -3,7 +3,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withTiming,
-} from "react-native-reanimated";
+} from "@/lib/motion/reanimated";
 import { useEffect } from "react";
 import { AlertCircle, Check, Info } from "lucide-react-native";
 import { Text } from "@/components/Text";

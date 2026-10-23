@@ -5,7 +5,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withTiming,
-} from "react-native-reanimated";
+} from "@/lib/motion/reanimated";
 import { Text } from "@/components/Text";
 import { Flame, Snowflake } from "lucide-react-native";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";

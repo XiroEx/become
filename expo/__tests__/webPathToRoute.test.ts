@@ -218,7 +218,7 @@ describe("the table", () => {
     ["/dashboard/settings", "/settings", "exact"],
     ["/dashboard/profile", "/(tabs)/profile", "exact"],
     ["/profile", "/(tabs)/profile", "exact"],
-    ["/dashboard/customize", "/settings", "exact"],
+    ["/dashboard/customize", "/(tabs)/dashboard", "nearest"],
     // Calendar
     ["/dashboard/calendar", "/(tabs)/calendar", "exact"],
     ["/dashboard/calendar?date=2026-09-29", "/(tabs)/calendar?date=2026-09-29", "exact"],

@@ -4,7 +4,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withTiming,
-} from "react-native-reanimated";
+} from "@/lib/motion/reanimated";
 import { useEffect } from "react";
 import { Text } from "@/components/Text";
 import type { ReactNode } from "react";

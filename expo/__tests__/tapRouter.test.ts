@@ -95,7 +95,8 @@ describe("every notification type the server sends taps to its screen", () => {
     ["mind-reminder", "/dashboard/mind", "/(tabs)/mind"],
     ["super-streak-at-risk", "/dashboard/streaks", "/(tabs)/dashboard/streaks"],
     ["goal-nudge", "/dashboard/nutrition/goals", "/(tabs)/nutrition/goals"],
-    ["goal-nudge", "/dashboard/settings", "/(tabs)/dashboard"],
+    // Settings is a real native route now (the motion card's deep link).
+    ["goal-nudge", "/dashboard/settings", "/settings"],
     ["goal-nudge", "/dashboard/workout", "/(tabs)/programming"],
     ["goal-nudge", "/dashboard/progress", "/progress"],
     ["chat-c1", "/dashboard/chat", "/(tabs)/dashboard"],

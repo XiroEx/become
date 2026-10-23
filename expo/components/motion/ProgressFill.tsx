@@ -3,11 +3,10 @@
  * `transition-all duration-500` bars.
  *
  * The web's streak, stat and metric bars ease their width over 500ms whenever
- * the percentage changes. Percentage widths do not animate on `Animated.View`
- * (layout props are not animatable), so this fill animates a scaleX from the
- * left edge instead: visually identical for a bar anchored at the left, and
- * the end state is exact. Under Reduce Motion the fill draws at its width
- * with no travel.
+ * the percentage changes. Reanimated drives the percentage width itself (a
+ * worklet writes the string each frame), so the bar grows from its left edge
+ * exactly as the web's does and the end state is exact. Under Reduce Motion
+ * the fill draws at its width with no travel.
  */
 
 import React, { useEffect } from "react";
@@ -16,7 +15,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withTiming,
-} from "react-native-reanimated";
+} from "@/lib/motion/reanimated";
 import type { StyleProp, ViewStyle } from "react-native";
 import { useReducedMotion } from "@/lib/a11y/reducedMotion";
 import { PROGRESS_FILL_MS, motionMs } from "@/lib/motion/motion";
@@ -26,74 +25,66 @@ export interface ProgressFillProps {
   pct: number;
   /** The fill colour (the track is the caller's). */
   color: string;
+  /**
+   * Passed through for callers that size the fill with classes (GuidedFlow's
+   * `h-full rounded-full`). The fill's own style already says the same, so
+   * the class is never what makes it visible.
+   */
+  className?: string;
   style?: StyleProp<ViewStyle>;
   testID?: string;
 }
 
-export function ProgressFill({ pct, color, style, testID }: ProgressFillProps) {
-  const reduced = useReducedMotion();
-  const clamped = Math.max(0, Math.min(100, pct));
-  const target = clamped / 100;
-  // The mock Reanimated in jest applies `withTiming` synchronously, but the
-  // real runtime animates from the previous value; starting at the target
-  // keeps the first paint honest in both. `key` remounts the fill when the
-  // target changes, so the shared value is always created at the value the
-  // test (and the first frame) reads.
-  return (
-    <ProgressFillInner
-      key={target}
-      target={target}
-      reduced={reduced}
-      color={color}
-      style={style}
-      testID={testID}
-    />
-  );
-}
-
-function ProgressFillInner({
-  target,
-  reduced,
+export function ProgressFill({
+  pct,
   color,
+  className,
   style,
   testID,
-}: {
-  target: number;
-  reduced: boolean;
-  color: string;
-  style: StyleProp<ViewStyle>;
-  testID?: string;
-}) {
-  const t = useSharedValue(target);
+}: ProgressFillProps) {
+  const reduced = useReducedMotion();
+  const clamped = Math.max(0, Math.min(100, pct));
+
+  // The bar eases from wherever it is NOW to the new width: `from` is where
+  // it was when the last move started, `p` how far that move has got, and
+  // the target is this render's `clamped`. Declared before the animated
+  // style so a new move is armed (p = 0) before the style that reads it is.
+  const from = useSharedValue(clamped);
+  const to = useSharedValue(clamped);
+  const p = useSharedValue(1);
 
   useEffect(() => {
-    t.set(
-      withTiming(target, {
+    if (to.get() === clamped) return;
+    const now = from.get() + (to.get() - from.get()) * p.get();
+    from.set(now);
+    to.set(clamped);
+    p.set(0);
+    p.set(
+      withTiming(1, {
         duration: motionMs(PROGRESS_FILL_MS, reduced),
         easing: Easing.out(Easing.quad),
       }),
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- t is a stable shared value
-  }, [target, reduced]);
+  }, [clamped, reduced, from, to, p]);
 
   const fill = useAnimatedStyle(() => ({
-    transform: [{ scaleX: t.value }],
+    width: `${from.value + (clamped - from.value) * p.value}%`,
   }));
 
   return (
     <Animated.View
       testID={testID}
-      accessibilityElementsHidden={false}
-      importantForAccessibility="auto"
+      className={className}
       style={[
         {
           backgroundColor: color,
-          width: "100%",
+          // The exact end state: what Reduce Motion, a still frame and the
+          // first paint all draw.
+          width: `${clamped}%`,
           height: "100%",
           borderRadius: 9999,
-          transformOrigin: "left center",
         } as ViewStyle,
-        reduced ? { transform: [{ scaleX: target }] } : fill,
+        reduced ? undefined : fill,
         style,
       ]}
     />

@@ -625,7 +625,12 @@ function matchPath(incoming: Incoming, options: ResolveOptions): ResolvedTarget 
   }
 
   // ── Home's own rooms: settings, customize ───────────────────────────────────
-  if (section === "settings" || section === "customize") {
+  // Customize is the web's dashboard-tile editor, which natively is a sheet
+  // on Home (NP-157), not a route.
+  if (section === "customize") {
+    return native(NATIVE_ROUTES.home, params, "nearest");
+  }
+  if (section === "settings") {
     // The Becoming's training nudge deep-links to weekly availability
     // (`?tab=training#weekly-availability` on the web); the Training tab
     // pulses that field (`highlight=weekly`), everything else lands plain.

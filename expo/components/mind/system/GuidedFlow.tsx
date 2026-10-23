@@ -236,6 +236,7 @@ export default function GuidedFlow({
                   <ProgressFill
                     pct={i < idx || done ? 100 : i === idx ? 50 : 0}
                     color={accent}
+                    className="h-full rounded-full"
                     testID={`guided-flow-progress-${i}-fill`}
                   />
                 </View>

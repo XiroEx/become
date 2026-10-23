@@ -10,7 +10,7 @@ import Animated, {
   useSharedValue,
   withSequence,
   withTiming,
-} from "react-native-reanimated";
+} from "@/lib/motion/reanimated";
 import { Text } from "@/components/Text";
 import {
   celebrationHaptic,

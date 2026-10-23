@@ -12,7 +12,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withTiming,
-} from "react-native-reanimated";
+} from "@/lib/motion/reanimated";
 import { useRouter } from "expo-router";
 import { ArrowRight, Brain, X } from "lucide-react-native";
 import { Text } from "@/components/Text";

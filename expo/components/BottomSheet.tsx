@@ -19,7 +19,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withTiming,
-} from "react-native-reanimated";
+} from "@/lib/motion/reanimated";
 import { useEffect } from "react";
 import { SHEET_ENTER_DISTANCE, motionMs } from "@/lib/motion/motion";
 import { handleSheetRequestClose } from "@/lib/keyboard/handleSheetRequestClose";

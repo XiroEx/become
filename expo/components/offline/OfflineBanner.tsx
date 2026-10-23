@@ -1,10 +1,11 @@
 import { useEffect } from "react";
+import { View } from "react-native";
 import Animated, {
   Easing,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
-} from "react-native-reanimated";
+} from "@/lib/motion/reanimated";
 import { Text } from "@/components/Text";
 import { useReducedMotion } from "@/lib/a11y/reducedMotion";
 import {
@@ -63,26 +64,30 @@ export function OfflineBanner({
 
   if (online) return null;
   return (
-    <Animated.View
-      testID={testID}
-      accessibilityRole="alert"
-      accessibilityLiveRegion="polite"
-      accessibilityLabel="No connection. Your check-ins are saved and will sync when you're back online."
-      className="bg-card border-b border-border px-4 pb-2"
-      style={[{ paddingTop: topInset + 8 }, reduced ? undefined : drop]}
-    >
-      <Text
-        testID={`${testID}-title`}
-        className="text-foreground text-xs font-semibold"
+    // The drop rides a wrapper so the banner itself keeps a plain style:
+    // its safe-area padding is a fact a test (and a reader) can see whole.
+    <Animated.View style={reduced ? undefined : drop}>
+      <View
+        testID={testID}
+        accessibilityRole="alert"
+        accessibilityLiveRegion="polite"
+        accessibilityLabel="No connection. Your check-ins are saved and will sync when you're back online."
+        className="bg-card border-b border-border px-4 pb-2"
+        style={{ paddingTop: topInset + 8 }}
       >
-        No connection
-      </Text>
-      <Text
-        testID={`${testID}-detail`}
-        className="text-muted-foreground text-[11px]"
-      >
-        Your check-ins are saved and will sync when you&apos;re back online.
-      </Text>
+        <Text
+          testID={`${testID}-title`}
+          className="text-foreground text-xs font-semibold"
+        >
+          No connection
+        </Text>
+        <Text
+          testID={`${testID}-detail`}
+          className="text-muted-foreground text-[11px]"
+        >
+          Your check-ins are saved and will sync when you&apos;re back online.
+        </Text>
+      </View>
     </Animated.View>
   );
 }
