@@ -291,6 +291,15 @@ export const becomingStageTokens = {
   /** violet-400 — the web's `#a78bfa` */
   violet: "167 139 250",
   /**
+   * violet-600 — the web's `from-violet-600` on The Becoming door's unread
+   * gradient (`bg-gradient-to-br from-violet-600 to-violet-500`,
+   * `doorClassName` in `webapp/components/dashboard/BecomingDoor.tsx`).
+   * The door is white ink on violet in both modes, like the stage it opens,
+   * so this lives with the stage's own always-dark triplets rather than as a
+   * full theme token.
+   */
+  doorVioletFrom: "124 58 237",
+  /**
    * violet-300 — the web's `border-violet-300/60`, the Horizon card's dashed
    * border while it is the focused card (NP-344)
    */
