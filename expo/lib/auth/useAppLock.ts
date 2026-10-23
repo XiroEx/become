@@ -244,6 +244,11 @@ export function useAppLock(options: UseAppLockOptions): UseAppLockResult {
           // already dropped the JWT and called onLocked above, so the
           // sign-out is already under way by the time the overlay clears.
           setLocked(false);
+        } catch {
+          // The keychain refused a read (the device locked again mid-check).
+          // Never strand the overlay over the app: clear it, and the next
+          // foreground runs the check again.
+          setLocked(false);
         } finally {
           inFlightRef.current = false;
         }
