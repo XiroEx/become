@@ -5,16 +5,18 @@
 // progress per ACCOUNT via /api/tutorial-progress (localStorage is only the
 // offline fallback), so tours don't replay on every device.
 
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { usePathname } from 'next/navigation'
 import {
   TutorialProvider,
+  useTutorial,
   createFetchAdapter,
   createLocalStorageAdapter,
   type TutorialTheme,
 } from '@redbtn/redtutorial'
 import { getToken } from '@/lib/clientAuth'
-import { becomeTutorials } from '@/lib/tutorials/becomeTour'
+import { becomeOnboardingTour, becomeTutorials } from '@/lib/tutorials/becomeTour'
+import { TOUR_HELP_EVENT } from '@/lib/tutorials/segmentForPath'
 
 // BECOME's tutorial look: a darker spotlight backdrop for stronger contrast, and
 // black primary buttons (the library default accent is red) to match the app.
@@ -22,6 +24,21 @@ const becomeTutorialTheme: TutorialTheme = {
   overlayOpacity: 0.85,
   accent: '#000000',
   accentFg: '#ffffff',
+}
+
+// Help in the profile menu asks for the current page's segment by event, so
+// the menu never has to load the tutorial package itself.
+function TourHelpBridge() {
+  const tutorial = useTutorial()
+  useEffect(() => {
+    const onHelp = (e: Event) => {
+      const segment = (e as CustomEvent<{ segment?: string }>).detail?.segment
+      if (segment) tutorial.start(becomeOnboardingTour.id, { segment, force: true })
+    }
+    window.addEventListener(TOUR_HELP_EVENT, onHelp)
+    return () => window.removeEventListener(TOUR_HELP_EVENT, onHelp)
+  }, [tutorial])
+  return null
 }
 
 export default function TutorialRoot({ children }: { children: React.ReactNode }) {
@@ -48,6 +65,7 @@ export default function TutorialRoot({ children }: { children: React.ReactNode }
       path={pathname}
       theme={becomeTutorialTheme}
     >
+      <TourHelpBridge />
       {children}
     </TutorialProvider>
   )

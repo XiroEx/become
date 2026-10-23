@@ -4,9 +4,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { AnimatePresence, motion } from 'framer-motion'
 import { LogOut, MessageSquareText, Settings, ShieldCheck, UserRound, Bell, HelpCircle } from 'lucide-react'
-import { useTutorialMaybe } from '@redbtn/redtutorial'
-import { becomeOnboardingTour } from '@/lib/tutorials/becomeTour'
-import { segmentForPath } from '@/lib/tutorials/segmentForPath'
+import { segmentForPath, TOUR_HELP_EVENT } from '@/lib/tutorials/segmentForPath'
 import FoodReportsPanel from './nutrition/FoodReportsPanel'
 import FeedbackModal from './FeedbackModal'
 import Avatar from './Avatar'
@@ -31,7 +29,6 @@ export default function ProfileMenu() {
   const dropdownRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const pathname = usePathname()
-  const tutorial = useTutorialMaybe()
   const helpSegment = segmentForPath(pathname)
 
   useEffect(() => {
@@ -184,12 +181,13 @@ export default function ProfileMenu() {
               <MessageSquareText className="h-4 w-4" />
               Send Feedback
             </button>
-            {tutorial && helpSegment && (
+            {helpSegment && (
               <button
                 data-testid="profile-menu-help"
                 onClick={() => {
                   setIsOpen(false)
-                  tutorial.start(becomeOnboardingTour.id, { segment: helpSegment, force: true })
+                  // TutorialRoot owns the engine and starts the segment.
+                  window.dispatchEvent(new CustomEvent(TOUR_HELP_EVENT, { detail: { segment: helpSegment } }))
                 }}
                 className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-zinc-700 transition-colors hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-700"
               >
