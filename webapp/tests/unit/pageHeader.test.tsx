@@ -70,7 +70,7 @@ test('PageHeader wiring holds even without an App Router context', () => {
   assert.match(pageHeaderSrc, /<ProfileMenu \/>/)
   assert.match(pageHeaderSrc, /relative z-40/)
   // The menu button keeps its accessible name and test hooks.
-  assert.match(profileMenuSrc, /aria-label=\{[^}]*'User menu'/)
+  assert.match(profileMenuSrc, /aria-label=\{[\s\S]*?: 'User menu'\}/)
   assert.match(profileMenuSrc, /data-testid="open-food-reports"/)
   assert.match(profileMenuSrc, /data-testid="reports-badge"/)
 })
