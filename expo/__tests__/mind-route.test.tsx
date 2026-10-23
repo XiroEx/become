@@ -40,7 +40,6 @@ jest.mock("expo-secure-store", () => ({
 
 import { apiFetch } from "@become/api-client";
 import { allowanceLine } from "@become/core";
-import { WEBAPP_BASE_URL } from "@/lib/config";
 import {
   getUpgradeSheetGate,
   hideUpgradeSheet,
@@ -75,14 +74,6 @@ describe("MindRoute", () => {
       const method = (init as { method?: string } | undefined)?.method ?? "GET";
       const cleanPath = path.split("?")[0]!;
 
-      if (cleanPath === "/api/progress" && method === "GET") {
-        return Promise.resolve({
-          moodData: [
-            { date: "Jun 1", value: 3 },
-            { date: "Jun 2", value: 5 },
-          ],
-        });
-      }
       if (cleanPath === "/api/mind/identity" && method === "GET") {
         return Promise.resolve({
           profile: {
@@ -140,20 +131,20 @@ describe("MindRoute", () => {
     });
   });
 
-  it("GETs /api/progress with baseUrl + token and renders the history strip", async () => {
+  it("does not fetch /api/progress and renders no Recent moods strip (NP-222: web parity)", async () => {
+    const { getByTestId, queryByTestId, queryByText } = render(<MindRoute />);
+    await waitFor(() => {
+      expect(getByTestId("mind-session-card")).toBeTruthy();
+    });
+    expect(getsTo("/api/progress").length).toBe(0);
+    expect(queryByTestId("mind-recent-moods")).toBeNull();
+    expect(queryByText("Recent moods")).toBeNull();
+  });
+
+  it("renders the brain icon beside the Mindset title (NP-222: web parity)", async () => {
     const { getByTestId } = render(<MindRoute />);
     await waitFor(() => {
-      expect(getsTo("/api/progress").length).toBeGreaterThan(0);
-    });
-    const opts = getsTo("/api/progress")[0]![2] as {
-      baseUrl?: string;
-      getToken?: () => string | undefined;
-    };
-    expect(opts).toEqual(expect.objectContaining({ baseUrl: WEBAPP_BASE_URL }));
-    expect(opts.getToken?.()).toBe(mockToken);
-    await waitFor(() => {
-      expect(getByTestId("mood-history-point-0")).toBeTruthy();
-      expect(getByTestId("mood-history-point-1")).toBeTruthy();
+      expect(getByTestId("mind-header-icon")).toBeTruthy();
     });
   });
 
