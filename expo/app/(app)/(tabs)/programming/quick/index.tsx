@@ -793,6 +793,7 @@ export default function QuickSessionOverviewRoute({
           so the button sits ~12pt above the bar). Adding `tabBarInset` here
           again lifted it by a whole tab bar, over the middle of the list. */}
       <View
+        testID="quick-session-overview-cta"
         style={{
           position: "absolute",
           left: 0,

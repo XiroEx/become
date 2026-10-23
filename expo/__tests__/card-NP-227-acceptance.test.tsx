@@ -428,7 +428,7 @@ describe("(bug fix) Start/Continue floats just above the tab bar, not over the m
     });
 
     const wrapperStyle = StyleSheet.flatten(
-      getByTestId("quick-session-overview-start").parent!.props.style,
+      getByTestId("quick-session-overview-cta").props.style,
     );
     expect(wrapperStyle.position).toBe("absolute");
     const ctaBottom = Number(wrapperStyle.bottom);
