@@ -316,6 +316,9 @@ export function PageHeader({
       >
         <Pressable
           testID={`${testID}-menu-backdrop`}
+          // "none": the backdrop wraps the menu, so a button role here would
+          // also answer to every item's name. VoiceOver closes it via escape.
+          accessibilityRole="none"
           accessibilityLabel="Close menu"
           onPress={closeMenu}
           style={{ flex: 1 }}
@@ -323,6 +326,7 @@ export function PageHeader({
           <Pressable
             testID={`${testID}-menu`}
             accessibilityViewIsModal
+            accessibilityRole="menu"
             // Swallow taps inside the menu so they don't close it.
             onPress={() => {}}
             style={{
@@ -356,7 +360,7 @@ export function PageHeader({
               >
                 <Text
                   testID={`${testID}-menu-title`}
-                  className="text-foreground text-sm font-semibold"
+                  className="text-foreground text-sm font-medium"
                 >
                   {name}
                 </Text>
@@ -374,7 +378,7 @@ export function PageHeader({
           style={menuRow}
         >
           <UserRound size={16} color={colors.foreground} />
-          <Text className="text-foreground text-sm font-medium">Profile</Text>
+          <Text className="text-foreground text-sm">Profile</Text>
         </Pressable>
         {/* Settings — account, units, reminders, billing, delete account. */}
         <Pressable
@@ -388,12 +392,13 @@ export function PageHeader({
           style={menuRow}
         >
           <Settings size={16} color={colors.foreground} />
-          <Text className="text-foreground text-sm font-medium">Settings</Text>
+          <Text className="text-foreground text-sm">Settings</Text>
         </Pressable>
         {/* Food reports — the member's flag outcomes, with the unread count
             on the item itself (the web's TopNav rule). */}
         <FoodReportsBadge
           variant="row"
+          plainLabel
           testID={`${testID}-food-reports-item`}
           token={token}
           refreshKey={refreshKey}
@@ -409,7 +414,7 @@ export function PageHeader({
           style={[menuRow, { opacity: token ? 1 : 0.5 }]}
         >
           <MessageSquareText size={16} color={colors.foreground} />
-          <Text className="text-foreground text-sm font-medium">
+          <Text className="text-foreground text-sm">
             Send feedback
           </Text>
         </Pressable>
@@ -424,7 +429,7 @@ export function PageHeader({
           style={menuRow}
         >
           <HelpCircle size={16} color={colors.foreground} />
-          <Text className="text-foreground text-sm font-medium">Help</Text>
+          <Text className="text-foreground text-sm">Help</Text>
         </Pressable>
         {/* Log out — the settings sign-out path (logout + /login).
             Hidden without a session (provider-less renders). */}
@@ -438,7 +443,7 @@ export function PageHeader({
             style={[menuRow, { opacity: signingOut ? 0.5 : 1 }]}
           >
             <LogOut size={16} color={colors.destructive} />
-            <Text className="text-destructive text-sm font-medium">
+            <Text className="text-destructive text-sm">
               {signingOut ? "Signing out…" : "Log out"}
             </Text>
           </Pressable>
