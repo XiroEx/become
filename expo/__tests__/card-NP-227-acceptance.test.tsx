@@ -48,6 +48,7 @@ jest.mock("@become/api-client", () => {
 });
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { ScrollView, StyleSheet } from "react-native";
 import { apiFetch } from "@become/api-client";
 import { fallbackQuickSessionName } from "@become/core";
 import QuickSessionOverviewRoute from "../app/(app)/(tabs)/programming/quick/index";
@@ -406,6 +407,41 @@ describe("resume pill routes a quick session to the overview", () => {
     fireEvent.press(getByTestId("resume-workout-pill"));
     expect(mockPush).toHaveBeenCalledWith(
       quickSessionOverviewHref("qs-2", { saved: true }) as never,
+    );
+  });
+});
+
+describe("(bug fix) Start/Continue floats just above the tab bar, not over the middle of the list", () => {
+  // The CTA wrapper sat at `bottom: tabBarInset + 24`, but this screen is a
+  // PUSHED screen of the programming tab and `TabStack` already pads its
+  // container by the full tab-bar band — so the button was lifted by a whole
+  // tab bar and drawn over the exercises, with one visible below it.
+  it("the CTA wrapper clears only the capsule, and the scroll content clears the CTA", async () => {
+    await seedNamed("qs-cta-offset");
+    mockParams = { session: "qs-cta-offset" };
+    const { getByTestId, UNSAFE_getByType } = render(
+      <QuickSessionOverviewRoute />,
+    );
+    await waitFor(() => {
+      expect(getByTestId("quick-session-overview-title")).toBeTruthy();
+    });
+
+    const wrapperStyle = StyleSheet.flatten(
+      getByTestId("quick-session-overview-cta").props.style,
+    );
+    expect(wrapperStyle.position).toBe("absolute");
+    const ctaBottom = Number(wrapperStyle.bottom);
+    // No `tabBarInset` here: TabStack's padding already leaves the content
+    // gap above the capsule, so the button sits flush on it.
+    expect(ctaBottom).toBe(0);
+
+    const contentStyle = StyleSheet.flatten(
+      UNSAFE_getByType(ScrollView).props.contentContainerStyle,
+    );
+    // The last exercise must scroll fully clear of the CTA: the content
+    // padding covers the float plus the ~44pt button plus breathing room.
+    expect(Number(contentStyle.paddingBottom) - ctaBottom).toBeGreaterThanOrEqual(
+      64,
     );
   });
 });
