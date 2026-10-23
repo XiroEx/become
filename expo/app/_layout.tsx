@@ -110,8 +110,9 @@ function raiseUpgradeSheet(error: PlanGateError): void {
  * cold open or warm — because nothing stayed up while the verdict was
  * pending. `AppLockOverlay` is now up for `resolving || locked`: `resolving`
  * covers cold open (true until `useColdOpenRedirect`'s verdict lands),
- * `locked` covers the warm re-lock (true the instant the app leaves the
- * foreground, cleared only once a re-verification settles either way — see
+ * `locked` covers the warm re-lock (true the instant the app enters the
+ * background, only when a lock could follow, cleared once a re-verification
+ * settles either way — see
  * `useAppLock`). It comes down on success (dashboard already mounted behind
  * it) and on failure (the sign-out below has already fired, so what is
  * revealed is sign-in, not a flash of dashboard).
