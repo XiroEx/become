@@ -23,7 +23,7 @@
  */
 
 import { useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import * as Reanimated from "react-native-reanimated";
 
 const real = Reanimated as Partial<typeof Reanimated>;
@@ -80,7 +80,6 @@ const staticEasing = {
 
 const staticAnimated = {
   View,
-  Text,
   ScrollView,
   createAnimatedComponent: <C>(c: C) => c,
 };
