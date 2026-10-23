@@ -94,19 +94,24 @@ export default function ProgrammingIndexRoute() {
         {/* Top Header: title + avatar menu (help lives in the menu;
             history moved to the quick-links pills below; the calendar is
             reached from the week strip below, like the web's next-workout
-            card links to /dashboard/calendar). */}
-        <PageHeader
-          title="Workout"
-          subtitle="Choose your training path and start building."
-          helpKey="programming"
-        />
+            card links to /dashboard/calendar). The web keeps `mb-4` under
+            its header on phone widths; this wrapper is that margin (the
+            container carries no gap). */}
+        <View testID="workout-header-wrap" className="mb-4">
+          <PageHeader
+            title="Workout"
+            subtitle="Choose your training path and start building."
+            helpKey="programming"
+          />
+        </View>
 
         {/* Quick Links Hub — Workouts (hub Exercises), Programs
             (hub Programs), History and Generate chips, matching the web's
             icons/colours exactly
             (Workouts green dumbbell, Programs amber sparkles, History info,
-            Generate purple Wand2) on a single horizontal row (NP-355). */}
-        <View className="flex-row flex-wrap items-center gap-2 mb-5">
+            Generate purple Wand2) on a single horizontal row (NP-355).
+            `mb-4` matches the web's links wrapper on phone widths. */}
+        <View className="flex-row flex-wrap items-center gap-2 mb-4">
           <Pressable
             testID="workout-open-exercises"
             accessibilityRole="button"
@@ -160,18 +165,19 @@ export default function ProgrammingIndexRoute() {
           </Pressable>
         </View>
 
-        {/* 1. Resume Workout Pill (if active or planned) */}
-        <View className="mb-5">
-          <ResumeWorkoutPill />
-        </View>
+        {/* 1. Resume Workout Pill (if active or planned). The `mb-6` lives on
+            the pill itself — the way the web's `ResumeWorkoutButton` carries
+            its own `mb-6` — so an absent pill (it returns null with no
+            workout) leaves zero space instead of an empty margined wrapper. */}
+        <ResumeWorkoutPill className="mb-6" />
 
-        {/* 2. Upcoming Week Strip */}
-        <View className="mb-5">
+        {/* 2. Upcoming Week Strip (`mb-6`, the web's upcoming `mb-6`). */}
+        <View testID="workout-upcoming-wrap" className="mb-6">
           <UpcomingWeekStrip />
         </View>
 
-        {/* 3. Continue Training Cards */}
-        <View className="mb-5">
+        {/* 3. Continue Training Cards (`mb-6`, the web's continue `mb-6`). */}
+        <View testID="workout-continue-wrap" className="mb-6">
           <ContinueTrainingSection onWorkoutNow={handleWorkoutNow} />
         </View>
 
