@@ -420,7 +420,7 @@ export function TrackWorkoutView({
               </Pressable>
             ) : null}
             <Pressable
-              testID={`${testID}-exercise-${ex.slug}-swap`}
+              testID={`${testID}-${ex.slug}-swap`}
               onPress={() => onRequestSwap?.(ex.slug)}
               accessibilityRole="button"
               accessibilityLabel={`Swap ${ex.name}`}
