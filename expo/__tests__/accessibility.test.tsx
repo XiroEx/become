@@ -657,7 +657,8 @@ describe("sign-in through to Home, by role and name only", () => {
     // Settings lives in the avatar menu now: the menu button opens it, the
     // menu item routes to /settings.
     fireEvent.press(screen.getByRole("button", { name: "Your menu" }));
-    fireEvent.press(screen.getByRole("button", { name: "Settings" }));
+    // The menu opens once the avatar is measured, a beat after the press.
+    fireEvent.press(await screen.findByRole("button", { name: "Settings" }));
     expect(mockPush).toHaveBeenCalledWith("/settings");
     screen.unmount();
 

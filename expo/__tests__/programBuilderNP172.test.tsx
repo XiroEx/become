@@ -703,14 +703,12 @@ describe("(id: e015ca84) A grouped block built natively runs as interleaved roun
     expect(
       getByTestId("live-workout-group-group-1-subtitle").props.children,
     ).toBe("— 2 exercises, minimal rest between exercises");
+    expect(getByTestId("live-workout-group-group-1-round-1")).toBeTruthy();
     expect(getByTestId("live-workout-group-group-1-round-3")).toBeTruthy();
-    // Each grouped set names its round; the solo row names none.
-    expect(
-      getByTestId("live-workout-bench-press-set-0-round").props.children,
-    ).toBe("Round 1");
-    expect(
-      getByTestId("live-workout-bent-row-set-2-round").props.children,
-    ).toBe("Round 3");
+    // The ROUND n heading carries the round now — no per-row round label,
+    // and the solo row names none either.
+    expect(queryByTestId("live-workout-bench-press-set-0-round")).toBeNull();
+    expect(queryByTestId("live-workout-bent-row-set-2-round")).toBeNull();
     expect(queryByTestId("live-workout-back-squat-set-0-round")).toBeNull();
   });
 

@@ -274,8 +274,10 @@ export function TileGrid({
 
   const { width: windowWidth } = useWindowDimensions();
   const [measuredWidth, setMeasuredWidth] = useState<number>(0);
+  // Falls back to the phone width minus the page side padding (12 + 12, the
+  // web's `px-3`) until onLayout measures the grid itself.
   const availableWidth =
-    measuredWidth > 0 ? measuredWidth : Math.max(0, windowWidth - 32);
+    measuredWidth > 0 ? measuredWidth : Math.max(0, windowWidth - 24);
   const GAP = 8;
   const col1Width = Math.floor((availableWidth - GAP) / 2);
 
@@ -467,14 +469,18 @@ const styles = StyleSheet.create({
   // (NP-352). A `minHeight` here would let a tile with more content (Super
   // Streak's dots row) grow past its siblings again; this must stay a fixed
   // `height`, and every tile renderer fills it with `height: "100%"`.
+  // Spacing between rows is the container's `rowGap` (the web's `gap-2`) and
+  // NOTHING on the cell: a `marginBottom` here doubled every inter-row gap to
+  // 16 and left a trailing 8 below the grid, which stacked with Customize's
+  // `mt-2` into the 16pt band above "Customize tiles".
   cell: {
     height: 96,
-    marginBottom: 8,
   },
   cell1x1: {},
   cell2x1: {},
   suggestionsContainer: {
-    marginTop: 4,
+    // The web's suggestion stack is `mt-2 space-y-2` (8 above, 8 between).
+    marginTop: 8,
     gap: 8,
   },
   suggestionItem: {

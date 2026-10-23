@@ -441,7 +441,9 @@ export function DashboardScreen({
       >
         <View
           testID="dashboard-skeleton"
-          style={{ padding: 16, gap: 16 }}
+          // Web phone padding: `px-3 py-4` (12 sides, 16 top) — the skeleton
+          // paints the same box the loaded page scrolls in.
+          style={{ paddingHorizontal: 12, paddingTop: 16, gap: 16 }}
           // Three grey rectangles are nothing at all to a screen reader unless
           // they are one element that says what is happening.
           accessible
@@ -481,7 +483,12 @@ export function DashboardScreen({
       <ScrollView
         testID="dashboard-scroll"
         contentContainerStyle={{
-          padding: 16,
+          // Web phone padding: `px-3 py-4` in app/dashboard/layout.tsx (12
+          // sides, 16 top) with `space-y-4` (16) between sections. The bottom
+          // stays TAB_BAR_CONTENT_INSET — that clears the floating glass bar,
+          // not the page rhythm.
+          paddingHorizontal: 12,
+          paddingTop: 16,
           gap: 16,
           // Clear the floating glass tab bar (NP-351): it is absolutely
           // positioned, so content scrolls UNDER it and nothing reserves the
@@ -526,10 +533,10 @@ export function DashboardScreen({
           </View>
         ) : null}
         {/* The page title and the avatar menu (help, profile and
-            settings all live in the menu now). The web keeps an extra 8
-            below its header (`mb-2` on top of `space-y-4`); the wrapper
-            below is that `mb-2`, the container gap is the `space-y-4`. */}
-        <View testID="dashboard-header-wrap" style={{ marginBottom: 8 }}>
+            settings all live in the menu now). Only the container's 16pt gap
+            sits under it: the owner cut the web's extra `mb-2` on device
+            (2026-10-23), the subtitle read as floating above the cards. */}
+        <View testID="dashboard-header-wrap">
           <PageHeader
             title="Become"
             subtitle="Track your fitness journey"

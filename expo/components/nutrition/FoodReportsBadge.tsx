@@ -42,6 +42,8 @@ export interface FoodReportsBadgeProps {
    * Timeline dropdown).
    */
   variant?: "pill" | "row";
+  /** Regular-weight label, to sit among the profile menu's items. */
+  plainLabel?: boolean;
   testID?: string;
 }
 
@@ -51,6 +53,7 @@ export function FoodReportsBadge({
   loadImpl = loadMyReports,
   refreshKey,
   variant = "pill",
+  plainLabel = false,
   testID = "food-reports-badge",
 }: FoodReportsBadgeProps) {
   const { colors } = useThemeTokens();
@@ -107,7 +110,10 @@ export function FoodReportsBadge({
         }}
       >
         <Flag size={16} color={colors.foreground} />
-        <Text className="text-sm font-medium text-foreground" style={{ flex: 1 }}>
+        <Text
+          className={`text-sm text-foreground ${plainLabel ? "" : "font-medium"}`}
+          style={{ flex: 1 }}
+        >
           Food reports
         </Text>
         {unread > 0 ? (

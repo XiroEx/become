@@ -1,4 +1,5 @@
 import React from "react";
+import { StyleSheet } from "react-native";
 import { render, fireEvent } from "@testing-library/react-native";
 import { StatTile } from "@/components/dashboard/StatTile";
 import { SuggestionTile } from "@/components/dashboard/SuggestionTile";
@@ -377,6 +378,15 @@ describe("NP-210: Home Dashboard Parity & Stat Tiles", () => {
       expect(getByTestId("becoming-door-next")).toBeTruthy();
       expect(getByText("Upper Body Focus")).toBeTruthy();
 
+      // Web rhythm inside the card (`p-3.5`, chips `mt-2.5`, next line
+      // `mt-2`) — not one uniform gap.
+      expect(
+        StyleSheet.flatten(getByTestId("becoming-door-chips").props.style),
+      ).toMatchObject({ marginTop: 10 });
+      expect(
+        StyleSheet.flatten(getByTestId("becoming-door-next").props.style),
+      ).toMatchObject({ marginTop: 8 });
+
       // Tap navigates
       fireEvent.press(getByTestId("becoming-door"));
       expect(onPress).toHaveBeenCalledTimes(1);
@@ -511,6 +521,25 @@ describe("NP-210: Home Dashboard Parity & Stat Tiles", () => {
       // Smart tile shows real suggestion
       expect(getByTestId("tile-smart")).toBeTruthy();
       expect(queryByText("Bring core back in")).toBeTruthy();
+
+      // Web grid rhythm: cells carry no bottom margin (the container's
+      // rowGap — the web's `gap-2` — separates rows), and the suggestion
+      // stack sits `mt-2` under the grid (`mt-2 space-y-2`).
+      const gridChildren = getByTestId("tilegrid").props.children as Array<{
+        props: { style: unknown };
+      }>;
+      for (const cell of gridChildren) {
+        expect(
+          (
+            StyleSheet.flatten(cell.props.style as never) as {
+              marginBottom?: number;
+            }
+          ).marginBottom ?? 0,
+        ).toBe(0);
+      }
+      expect(
+        StyleSheet.flatten(getByTestId("dashboard-suggestions").props.style),
+      ).toMatchObject({ marginTop: 8, gap: 8 });
     });
   });
 });

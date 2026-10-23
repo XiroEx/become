@@ -246,7 +246,7 @@ export function BecomingDoor({
           />
         </View>
 
-        <View style={styles.chipRow}>
+        <View testID="becoming-door-chips" style={styles.chipRow}>
           {/* Mind chip */}
           <View
             style={[
@@ -458,7 +458,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 14,
     borderWidth: 1,
-    gap: 12,
+    // No `gap`: the web stacks header / chips / next line with plain margins
+    // (`p-3.5`, chips `mt-2.5`, next line `mt-2`), and a uniform gap fits
+    // neither pair (10, then 8).
   },
   header: {
     flexDirection: "row",
@@ -495,6 +497,8 @@ const styles = StyleSheet.create({
   chipRow: {
     flexDirection: "row",
     gap: 6,
+    // The web's `mt-2.5` (10) between the header and the chips.
+    marginTop: 10,
   },
   chip: {
     flex: 1,
@@ -528,6 +532,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
+    // The web's `mt-2` (8) between the chips and the "work on next" line.
+    marginTop: 8,
   },
   nextTextWrap: {
     flex: 1,

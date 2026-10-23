@@ -1,10 +1,15 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { Pressable, View } from "react-native";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { Modal, Pressable, View, useWindowDimensions } from "react-native";
 import { useRouter } from "expo-router";
-import { HelpCircle, LogOut, Settings, UserRound } from "lucide-react-native";
+import {
+  HelpCircle,
+  LogOut,
+  MessageSquareText,
+  Settings,
+  UserRound,
+} from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { Avatar } from "@/components/Avatar";
-import { BottomSheet } from "@/components/BottomSheet";
 import { FoodReportsBadge } from "@/components/nutrition/FoodReportsBadge";
 import { FoodReportsSheet } from "@/components/nutrition/FoodReportsSheet";
 import { FeedbackSheet } from "@/components/settings/FeedbackSheet";
@@ -35,6 +40,17 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
  * sheet is the same gesture on every screen and the one VoiceOver already
  * confines (`Modal.accessibilityViewIsModal`).
  */
+
+const menuRow = [
+  minTouchTarget,
+  {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+];
 
 export interface PageHeaderProps {
   /** Page title, left, 28pt bold. */
@@ -94,7 +110,7 @@ export function PageHeader({
   userName,
   testID = "page-header",
 }: PageHeaderProps) {
-  const { colors } = useThemeTokens();
+  const { colors, isDark } = useThemeTokens();
   const router = useRouter();
   const { token, user, logout } = useOptionalAuth() ?? {
     token: null,
@@ -102,6 +118,17 @@ export function PageHeader({
     logout: null,
   };
   const [menuOpen, setMenuOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  // Where the avatar sits on screen, so the menu drops down from it like the
+  // web's TopNav dropdown instead of rising as a drawer.
+  const avatarRef = useRef<View>(null);
+  const [anchor, setAnchor] = useState<{ top: number; right: number } | null>(
+    null,
+  );
+  const { width: windowWidth } = useWindowDimensions();
+  const menuEdge = isDark
+    ? colors["muted-foreground"].replace(")", " / 0.25)")
+    : colors.border;
   const [reportsOpen, setReportsOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   // Unread food-report outcomes for the red badge on the avatar (the web's
@@ -134,14 +161,31 @@ export function PageHeader({
   const openMenu = useCallback(() => {
     // Re-read the badge on every open so the dot cannot go stale.
     setRefreshKey((k) => k + 1);
-    setMenuOpen(true);
-  }, []);
+    let shown = false;
+    const show = () => {
+      if (shown) return;
+      shown = true;
+      setMenuOpen(true);
+    };
+    // Measure first so the menu opens under the avatar; if the measurement
+    // never comes back (it can't in tests), open where it last was.
+    avatarRef.current?.measureInWindow?.((x, y, w, h) => {
+      setAnchor({ top: y + h + 6, right: Math.max(8, windowWidth - (x + w)) });
+      show();
+    });
+    setTimeout(show, 60);
+  }, [windowWidth]);
   const closeMenu = useCallback(() => setMenuOpen(false), []);
 
-  const openReports = useCallback(() => {
+  // iOS will not present a sheet while the menu's own modal is still fading
+  // out, so a sheet opened from the menu waits for that to finish.
+  const afterMenuClose = useCallback((fn: () => void) => {
     setMenuOpen(false);
-    setReportsOpen(true);
+    setTimeout(fn, 320);
   }, []);
+  const openReports = useCallback(() => {
+    afterMenuClose(() => setReportsOpen(true));
+  }, [afterMenuClose]);
   const closeReports = useCallback(() => {
     setReportsOpen(false);
     // Opening the list IS reading it (the sheet marks read on open), so the
@@ -150,10 +194,11 @@ export function PageHeader({
   }, []);
 
   const handleHelp = useCallback(() => {
-    setMenuOpen(false);
-    if (helpKey) requestNativeTourHub(helpKey);
-    else requestNativeTourReplay();
-  }, [helpKey]);
+    afterMenuClose(() => {
+      if (helpKey) requestNativeTourHub(helpKey);
+      else requestNativeTourReplay();
+    });
+  }, [afterMenuClose, helpKey]);
 
   const handleLogout = useCallback(() => {
     if (!logout || signingOut) return;
@@ -214,6 +259,7 @@ export function PageHeader({
           ) : null}
         </View>
         <Pressable
+          ref={avatarRef}
           testID={`${testID}-avatar-button`}
           accessibilityRole="button"
           accessibilityLabel={
@@ -262,12 +308,64 @@ export function PageHeader({
         </Pressable>
       </View>
 
-      <BottomSheet
+      <Modal
         visible={menuOpen}
-        onClose={closeMenu}
-        title={name ?? "Your menu"}
-        testID={`${testID}-menu`}
+        transparent
+        animationType="fade"
+        onRequestClose={closeMenu}
       >
+        <Pressable
+          testID={`${testID}-menu-backdrop`}
+          // "none": the backdrop wraps the menu, so a button role here would
+          // also answer to every item's name. VoiceOver closes it via escape.
+          accessibilityRole="none"
+          accessibilityLabel="Close menu"
+          onPress={closeMenu}
+          style={{ flex: 1 }}
+        >
+          <Pressable
+            testID={`${testID}-menu`}
+            accessibilityViewIsModal
+            accessibilityRole="menu"
+            // Swallow taps inside the menu so they don't close it.
+            onPress={() => {}}
+            style={{
+              position: "absolute",
+              top: anchor?.top ?? 96,
+              right: anchor?.right ?? 16,
+              width: 220,
+              paddingVertical: 4,
+              borderRadius: 12,
+              borderWidth: 1,
+              // The web's dropdown: white / zinc-200 in light, zinc-800 with a
+              // zinc-700-ish edge in dark. The shadow is black in both (a
+              // foreground-coloured one glowed white in dark mode).
+              borderColor: menuEdge,
+              backgroundColor: isDark ? colors.muted : colors.card,
+              shadowColor: "black",
+              shadowOpacity: isDark ? 0.5 : 0.15,
+              shadowRadius: 16,
+              shadowOffset: { width: 0, height: 8 },
+              elevation: 8,
+            }}
+          >
+            {name ? (
+              <View
+                style={{
+                  paddingHorizontal: 16,
+                  paddingVertical: 10,
+                  borderBottomWidth: 1,
+                  borderBottomColor: menuEdge,
+                }}
+              >
+                <Text
+                  testID={`${testID}-menu-title`}
+                  className="text-foreground text-sm font-medium"
+                >
+                  {name}
+                </Text>
+              </View>
+            ) : null}
         {/* Profile — the member's identity card. */}
         <Pressable
           testID={`${testID}-profile-item`}
@@ -277,13 +375,10 @@ export function PageHeader({
             closeMenu();
             router.push("/(tabs)/profile" as never);
           }}
-          style={[
-            minTouchTarget,
-            { flexDirection: "row", alignItems: "center", gap: 12 },
-          ]}
+          style={menuRow}
         >
-          <UserRound size={18} color={colors.foreground} />
-          <Text className="text-foreground text-sm font-medium">Profile</Text>
+          <UserRound size={16} color={colors.foreground} />
+          <Text className="text-foreground text-sm">Profile</Text>
         </Pressable>
         {/* Settings — account, units, reminders, billing, delete account. */}
         <Pressable
@@ -294,25 +389,35 @@ export function PageHeader({
             closeMenu();
             router.push("/settings" as never);
           }}
-          style={[
-            minTouchTarget,
-            { flexDirection: "row", alignItems: "center", gap: 12 },
-          ]}
+          style={menuRow}
         >
-          <Settings size={18} color={colors.foreground} />
-          <Text className="text-foreground text-sm font-medium">Settings</Text>
+          <Settings size={16} color={colors.foreground} />
+          <Text className="text-foreground text-sm">Settings</Text>
         </Pressable>
         {/* Food reports — the member's flag outcomes, with the unread count
             on the item itself (the web's TopNav rule). */}
         <FoodReportsBadge
           variant="row"
+          plainLabel
           testID={`${testID}-food-reports-item`}
           token={token}
           refreshKey={refreshKey}
           onOpen={openReports}
         />
         {/* Send feedback — the settings sheet's own row and flow, not a copy. */}
-        <FeedbackSheet token={token} testID={`${testID}-feedback`} />
+        <Pressable
+          testID={`${testID}-feedback-item`}
+          accessibilityRole="button"
+          accessibilityLabel="Send feedback"
+          disabled={!token}
+          onPress={() => afterMenuClose(() => setFeedbackOpen(true))}
+          style={[menuRow, { opacity: token ? 1 : 0.5 }]}
+        >
+          <MessageSquareText size={16} color={colors.foreground} />
+          <Text className="text-foreground text-sm">
+            Send feedback
+          </Text>
+        </Pressable>
         {/* Help — this screen's hub tour, or the upfront prompt when the
             screen has no hub key. */}
         <Pressable
@@ -321,13 +426,10 @@ export function PageHeader({
           accessibilityLabel="Help"
           accessibilityHint="Replay the app tour for this screen"
           onPress={handleHelp}
-          style={[
-            minTouchTarget,
-            { flexDirection: "row", alignItems: "center", gap: 12 },
-          ]}
+          style={menuRow}
         >
-          <HelpCircle size={18} color={colors.foreground} />
-          <Text className="text-foreground text-sm font-medium">Help</Text>
+          <HelpCircle size={16} color={colors.foreground} />
+          <Text className="text-foreground text-sm">Help</Text>
         </Pressable>
         {/* Log out — the settings sign-out path (logout + /login).
             Hidden without a session (provider-less renders). */}
@@ -338,23 +440,24 @@ export function PageHeader({
             accessibilityLabel="Log out"
             onPress={handleLogout}
             disabled={signingOut}
-            style={[
-              minTouchTarget,
-              {
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 12,
-                opacity: signingOut ? 0.5 : 1,
-              },
-            ]}
+            style={[menuRow, { opacity: signingOut ? 0.5 : 1 }]}
           >
-            <LogOut size={18} color={colors.destructive} />
-            <Text className="text-destructive text-sm font-medium">
+            <LogOut size={16} color={colors.destructive} />
+            <Text className="text-destructive text-sm">
               {signingOut ? "Signing out…" : "Log out"}
             </Text>
           </Pressable>
         ) : null}
-      </BottomSheet>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <FeedbackSheet
+        visible={feedbackOpen}
+        onClose={() => setFeedbackOpen(false)}
+        token={token}
+        testID={`${testID}-feedback`}
+      />
 
       <FoodReportsSheet
         visible={reportsOpen}
