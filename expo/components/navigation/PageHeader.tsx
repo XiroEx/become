@@ -56,6 +56,12 @@ const menuRow = [
 export interface PageHeaderProps {
   /** Page title, left, 28pt bold. */
   title: string;
+  /**
+   * Rendered before the title — e.g. the Mind home's brain icon (web
+   * parity: `webapp/components/mind/MindJourney.tsx` renders
+   * `<Brain /> Mindset`).
+   */
+  titleIcon?: ReactNode;
   /** Smaller muted text directly under the title. */
   subtitle?: string;
   /**
@@ -103,6 +109,7 @@ function useOptionalAuth(): ReturnType<typeof useAuth> | null {
 
 export function PageHeader({
   title,
+  titleIcon,
   subtitle,
   helpKey,
   titleAccessory,
@@ -239,6 +246,7 @@ export function PageHeader({
           <View
             style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
           >
+            {titleIcon}
             <Text
               testID={`${testID}-title`}
               accessibilityRole="header"

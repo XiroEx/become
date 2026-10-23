@@ -58,6 +58,7 @@ jest.mock("@/lib/media/upload", () => {
 });
 
 import { PageHeader } from "@/components/navigation/PageHeader";
+import { Text } from "@/components/Text";
 import {
   subscribeNativeTourHubRequests,
   subscribeNativeTourReplayRequests,
@@ -113,6 +114,18 @@ describe("PageHeader", () => {
     expect(getByTestId("page-header-logout-item")).toBeTruthy();
     // No native admin route exists, so the menu carries no Admin Panel.
     expect(queryByText("Admin Panel")).toBeNull();
+  });
+
+  it("renders an optional leading title icon (NP-222: the Mind header's brain)", () => {
+    const { getByTestId } = render(
+      <PageHeader
+        title="Mindset"
+        helpKey="mind"
+        titleIcon={<Text testID="title-icon-stub">icon</Text>}
+      />,
+    );
+    expect(getByTestId("page-header-title").props.children).toBe("Mindset");
+    expect(getByTestId("title-icon-stub")).toBeTruthy();
   });
 
   it("Help calls requestNativeTourHub with the helpKey", async () => {
