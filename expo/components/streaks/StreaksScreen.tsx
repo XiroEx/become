@@ -20,6 +20,7 @@ import {
   Circle,
 } from "lucide-react-native";
 import { Card } from "@/components/Card";
+import { onDarkForeground } from "@/lib/theme/tokens";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { FireNumber } from "@/components/streaks/FireNumber";
 import { StreakMilestoneModal } from "@/components/StreakMilestoneModal";
@@ -642,9 +643,9 @@ export function StreaksScreen({
                             }}
                           >
                             {freezing ? (
-                              <ActivityIndicator size="small" color={colors["primary-foreground"]} />
+                              <ActivityIndicator size="small" color={onDarkForeground} />
                             ) : (
-                              <Snowflake size={14} color={colors["primary-foreground"]} />
+                              <Snowflake size={14} color={onDarkForeground} />
                             )}
                             <Text className="text-xs font-bold text-white">
                               Use it

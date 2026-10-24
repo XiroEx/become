@@ -4,7 +4,7 @@ import { Text } from "@/components/Text";
 import { Input } from "@/components/Input";
 import { ArrowUpDown, ChevronDown, Layers, Trash2, Unlink } from "lucide-react-native";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
-import { rgbOf, webGradientTokens } from "@/lib/theme/tokens";
+import { onDarkForeground, rgbOf, webGradientTokens } from "@/lib/theme/tokens";
 import { WebGradient } from "@/components/WebGradient";
 import { hitSlopToMinTarget } from "@/lib/a11y/touchTarget";
 import {
@@ -669,7 +669,7 @@ export function TrackWorkoutView({
             testID={`${testID}-group-${groupId}-badge`}
             className={`h-7 w-7 rounded-lg items-center justify-center ${style.badge}`}
           >
-            <Layers size={14} color={colors["primary-foreground"]} />
+            <Layers size={14} color={onDarkForeground} />
           </View>
           <Text
             testID={`${testID}-group-${groupId}`}

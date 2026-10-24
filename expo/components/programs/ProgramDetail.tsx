@@ -22,6 +22,7 @@ import { TAB_BAR_CONTENT_INSET } from "@/lib/navigation/tabBarInset";
 import { workoutDayLabel } from "@/lib/programs/dayLabel";
 import {
   getTokens,
+  onDarkForeground,
   rgbOf,
   tintToken,
   webGradientTokens,
@@ -423,7 +424,7 @@ export function ProgramDetail({
                   borderRadius: 9999,
                 }}
               >
-                <Text style={{ color: colors["primary-foreground"], fontSize: 11, fontWeight: "700" }}>
+                <Text style={{ color: onDarkForeground, fontSize: 11, fontWeight: "700" }}>
                   {groupLabel}
                 </Text>
               </View>
@@ -1211,12 +1212,30 @@ export function ProgramDetail({
                 width: 40,
                 height: 40,
                 borderRadius: 14,
-                backgroundColor: colors.primary,
+                overflow: "hidden",
+                backgroundColor: rgbOf(
+                  isDark ? webGradientTokens.zinc700 : webGradientTokens.zinc900,
+                ),
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <List size={20} color={colors["primary-foreground"]} strokeWidth={2} />
+              <WebGradient
+                fill
+                direction="br"
+                colors={
+                  isDark
+                    ? [
+                        rgbOf(webGradientTokens.zinc700),
+                        rgbOf(webGradientTokens.zinc800),
+                      ]
+                    : [
+                        rgbOf(webGradientTokens.zinc900),
+                        rgbOf(webGradientTokens.zinc700),
+                      ]
+                }
+              />
+              <List size={20} color={onDarkForeground} strokeWidth={2} />
             </View>
             <View style={{ flex: 1 }}>
               <Text

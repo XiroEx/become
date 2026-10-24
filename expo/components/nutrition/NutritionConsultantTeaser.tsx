@@ -3,6 +3,7 @@ import { Pressable, View } from "react-native";
 import { ChevronRight, Sparkles } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { WebGradient } from "@/components/WebGradient";
+import { onDarkForeground } from "@/lib/theme/tokens";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { CoachChat } from "@/components/ai/CoachChat";
 
@@ -70,7 +71,7 @@ export function NutritionConsultantTeaser({
                 marginRight: 12,
               }}
             >
-              <Sparkles size={20} color={colors["primary-foreground"]} />
+              <Sparkles size={20} color={onDarkForeground} />
             </WebGradient>
             <View style={{ flex: 1 }}>
               <Text className="text-foreground text-sm font-semibold">

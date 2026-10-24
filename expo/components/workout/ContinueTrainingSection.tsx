@@ -15,6 +15,7 @@ import { useAuth } from "@/lib/auth/useAuth";
 import { workoutIndexFromDayLabel } from "@/lib/schedule/scheduleSlots";
 import { hitSlopToMinTarget } from "@/lib/a11y/touchTarget";
 import { formatStartLabel } from "@/lib/workout/formatStartLabel";
+import { onDarkForeground } from "@/lib/theme/tokens";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { subscribeProgramUpdates } from "@/lib/programs/programEvents";
 import { useScreenFocus } from "@/lib/navigation/useScreenFocus";
@@ -156,7 +157,7 @@ export function ContinueTrainingSection({
               onPress={handleWorkoutNow}
               className="flex-row items-center gap-1.5 px-3.5 py-2 rounded-full bg-emerald-600"
             >
-              <Zap size={14} color={colors["primary-foreground"]} fill={colors["primary-foreground"]} />
+              <Zap size={14} color={onDarkForeground} fill={onDarkForeground} />
               <Text className="text-white text-xs font-bold">Workout Now</Text>
             </Pressable>
           </View>
@@ -185,7 +186,7 @@ export function ContinueTrainingSection({
           onPress={handleWorkoutNow}
           className="flex-row items-center gap-1 px-3 py-1.5 rounded-full bg-emerald-600 shrink-0"
         >
-          <Zap size={14} color={colors["primary-foreground"]} fill={colors["primary-foreground"]} />
+          <Zap size={14} color={onDarkForeground} fill={onDarkForeground} />
           <Text className="text-white text-xs font-bold">Workout Now</Text>
         </Pressable>
       </View>
@@ -290,9 +291,9 @@ export function ContinueTrainingSection({
                     }`}
                   >
                     {isPaused ? (
-                      <Pause size={18} color={colors["primary-foreground"]} />
+                      <Pause size={18} color={onDarkForeground} />
                     ) : (
-                      <Play size={18} color={colors["primary-foreground"]} fill={colors["primary-foreground"]} />
+                      <Play size={18} color={onDarkForeground} fill={onDarkForeground} />
                     )}
                   </Pressable>
                 </View>

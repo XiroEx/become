@@ -15,6 +15,7 @@ import {
   Trash2,
 } from "lucide-react-native";
 import { Text } from "@/components/Text";
+import { onDarkForeground } from "@/lib/theme/tokens";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { useLocalDay, withTz } from "@/lib/time/localDay";
 import { useAuth } from "@/lib/auth/useAuth";
@@ -517,7 +518,7 @@ export function TimelineWeekView({
           onPress={() => router.push("/(tabs)/nutrition/meal-plan")}
           className="bg-blue-600 flex-row items-center justify-center gap-1.5 rounded-xl py-3"
         >
-          <CalendarDays size={16} color={colors["primary-foreground"]} />
+          <CalendarDays size={16} color={onDarkForeground} />
           <Text className="text-white text-sm font-semibold">
             Schedule meals for this week
           </Text>
