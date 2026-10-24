@@ -427,7 +427,7 @@ function FocusRow() {
               }}
               className="h-9 flex-row items-center gap-1.5 rounded-xl bg-cyan-500 px-3"
             >
-              <Play size={14} color={colors["primary-foreground"]} />
+              <Play size={14} color={onDarkForeground} />
               <Text className="text-xs font-bold text-white">
                 {remaining < selectedSeconds ? "Resume" : "Start"}
               </Text>

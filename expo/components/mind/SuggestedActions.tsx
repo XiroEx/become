@@ -12,6 +12,7 @@ import { useRouter } from "expo-router";
 import { ArrowRight, Sparkles } from "lucide-react-native";
 import type { SuggestedAction } from "@become/core";
 import { Text } from "@/components/Text";
+import { mindAccentColor } from "@/lib/mind/accents";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import type { TokenName } from "@/lib/theme/tokens";
 
@@ -99,13 +100,18 @@ export function getSystemTokenColor(
 ): string {
   switch (system) {
     case "discipline":
-      return colors.primary;
-    case "anti-sabotage":
       return colors.destructive;
+    case "anti-sabotage":
+      return colors.orange;
     case "vision":
       return colors.success;
+    case "state-shift":
+    case "self-image":
+    case "mission":
+    case "social":
+      return mindAccentColor(system);
     default:
-      return colors.accent;
+      return colors["mind-violet"];
   }
 }
 
@@ -184,7 +190,7 @@ export default function SuggestedActions({
       return (
         <View testID={testID} className="mb-4">
           <View className="mb-2 flex-row items-center gap-1.5 px-0.5">
-            <Sparkles size={14} color={colors.accent} />
+            <Sparkles size={14} color={colors["mind-violet"]} />
             <Text className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
               Suggested next
             </Text>
@@ -217,7 +223,7 @@ export default function SuggestedActions({
       {/* Header */}
       <View className="mb-2 flex-row items-center justify-between px-0.5">
         <View className="flex-row items-center gap-1.5">
-          <Sparkles size={14} color={colors.accent} />
+          <Sparkles size={14} color={colors["mind-violet"]} />
           <Text className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
             Suggested next
           </Text>

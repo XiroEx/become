@@ -56,6 +56,12 @@ import MindSectionRoute from "./[section]";
 import { useAuth } from "@/lib/auth/useAuth";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { showUpgradeSheet } from "@/lib/entitlements/upgradeSheet";
+import {
+  onDarkForeground,
+  rgbOf,
+  webGradientRamps,
+  webGradientTokens,
+} from "@/lib/theme/tokens";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { useTabBarCondenseOnScroll } from "@/lib/navigation/tabBarCondense";
 import { TAB_BAR_CONTENT_INSET } from "@/lib/navigation/tabBarInset";
@@ -135,7 +141,7 @@ export const MOVE_CHIP: Record<string, string> = {
  */
 function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
   const router = useRouter();
-  const { colors } = useThemeTokens();
+  const { colors, mode } = useThemeTokens();
   const tabBarScroll = useTabBarCondenseOnScroll();
   const { token } = useAuth();
   const localDay = useLocalDay();
@@ -617,10 +623,19 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
             streak > 0 ? (
               <View
                 testID="mind-streak-badge"
-                className="flex-row items-center gap-1 rounded-full bg-accent/15 px-3 py-1"
+                className="flex-row items-center gap-1 rounded-full bg-orange-100 dark:bg-orange-500/15 px-3 py-1"
               >
-                <Flame size={16} color={colors.accent} />
-                <Text className="text-sm font-bold text-accent">{streak}</Text>
+                <Flame
+                  size={16}
+                  color={
+                    mode === "dark"
+                      ? rgbOf(webGradientTokens.orange300)
+                      : rgbOf(webGradientTokens.orange600)
+                  }
+                />
+                <Text className="text-sm font-bold text-orange-600 dark:text-orange-300">
+                  {streak}
+                </Text>
               </View>
             ) : undefined
           }
@@ -641,7 +656,11 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
                 </View>
                 <View className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
                   <LinearGradient
-                    colors={[colors["mind-violet"], colors["mind-green"]]}
+                    colors={
+                      webGradientRamps.violetToGreen.map((s) =>
+                        rgbOf(s),
+                      ) as unknown as readonly [string, string, ...string[]]
+                    }
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                     style={{
@@ -665,7 +684,11 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
               </View>
               <View className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
                 <LinearGradient
-                  colors={[colors["mind-violet"], colors["mind-green"]]}
+                  colors={
+                    webGradientRamps.violetToGreen.map((s) =>
+                      rgbOf(s),
+                    ) as unknown as readonly [string, string, ...string[]]
+                  }
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={{
@@ -719,7 +742,7 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
                       }`}
                     >
                       {done ? (
-                        <Check size={14} color={colors["primary-foreground"]} />
+                        <Check size={14} color={onDarkForeground} />
                       ) : (
                         <Text
                           className={`text-xs font-bold ${

@@ -36,6 +36,7 @@ import { WEBAPP_BASE_URL } from "@/lib/config";
 import { mindAccentColor } from "@/lib/mind/accents";
 import { reflectOnAnswers } from "@/lib/mind/reflect";
 import { dailyPick } from "@/lib/mind/rotation";
+import { onDarkForeground } from "@/lib/theme/tokens";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { tzOffsetMinutes } from "@/lib/time/localDay";
 
@@ -632,13 +633,13 @@ export default function MissionDashboard() {
               disabled={moving}
               className="mt-3 flex-row items-center justify-center gap-2 rounded-xl bg-blue-500 py-3 active:opacity-90 disabled:opacity-60"
             >
-              <ArrowRight size={16} color={colors["primary-foreground"]} strokeWidth={3} />
+              <ArrowRight size={16} color={onDarkForeground} strokeWidth={3} />
               <Text className="text-sm font-bold text-white">
                 I moved forward today
               </Text>
               {momentum.streak > 0 ? (
                 <View className="flex-row items-center gap-0.5">
-                  <Flame size={14} color={colors["primary-foreground"]} />
+                  <Flame size={14} color={onDarkForeground} />
                   <Text className="text-sm font-bold text-white">
                     {momentum.streak}
                   </Text>
