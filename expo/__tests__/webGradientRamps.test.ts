@@ -71,7 +71,8 @@ describe("webGradientRamps", () => {
     expect(stored[4]).toBe(to);
   });
 
-  it("the violet → green mid stop is the web's #699bb5, not sRGB's duller #5791aa", () => {
-    expect(webGradientRamps.violetToGreen[2]).toBe("105 155 181");
+  it("the violet → green mid stop is the web's v4 oklab midpoint (#6a9aba), not sRGB's duller midpoint", () => {
+    // Updated for v4 violet-500 ("141 86 255") → green-500 ("34 197 94") oklab midpoint.
+    expect(webGradientRamps.violetToGreen[2]).toBe("106 154 186");
   });
 });

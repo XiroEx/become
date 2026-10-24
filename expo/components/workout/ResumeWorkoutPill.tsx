@@ -31,8 +31,13 @@ import {
   type KeyValueStore,
 } from "@/lib/live/liveWorkoutCache";
 import { ConfirmModal } from "@/components/workout/ConfirmModal";
+import {
+  becomingStageTokens,
+  onDarkForeground,
+  rgbOf,
+  webGradientTokens,
+} from "@/lib/theme/tokens";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
-import { becomingStageTokens, rgbOf } from "@/lib/theme/tokens";
 import { subscribeProgramUpdates } from "@/lib/programs/programEvents";
 import { useScreenFocus } from "@/lib/navigation/useScreenFocus";
 import { quickSessionOverviewHref } from "@/lib/quickSession/store";
@@ -62,7 +67,7 @@ export function ResumeWorkoutPill({
   testID = "resume-workout-pill",
   onDiscard,
 }: ResumeWorkoutPillProps) {
-  const { colors } = useThemeTokens();
+  const { colors, isDark } = useThemeTokens();
   const router = useRouter();
   const { token } = useAuth();
   const mountedRef = useRef(true);
@@ -300,6 +305,19 @@ export function ResumeWorkoutPill({
     }
   };
 
+  const gradientStops = isDark
+    ? ([
+        rgbOf(webGradientTokens.emerald600),
+        rgbOf(webGradientTokens.green600),
+        rgbOf(webGradientTokens.teal600),
+      ] as const)
+    : ([
+        rgbOf(webGradientTokens.emerald500),
+        colors["mind-green"],
+        colors.teal,
+      ] as const);
+  const whiteInk = rgbOf(onDarkForeground);
+
   return (
     <Animated.View
       className={`relative ${className}`}
@@ -323,8 +341,21 @@ export function ResumeWorkoutPill({
           const w = e.nativeEvent.layout.width;
           if (w > 0) pillWidth.set(w);
         }}
-        className="overflow-hidden rounded-2xl p-4 bg-emerald-600 active:opacity-90 shadow-md"
+        className="overflow-hidden rounded-2xl p-4 active:opacity-90"
+        style={{
+          boxShadow: `0 10px 15px -3px ${rgbOf(webGradientTokens.emerald500, 0.3)}`,
+          shadowColor: rgbOf(webGradientTokens.emerald500),
+          shadowOpacity: 0.35,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: 4 },
+        }}
       >
+        <WebGradient
+          testID="resume-workout-pill-gradient"
+          colors={gradientStops}
+          direction="br"
+          fill
+        />
         {loopActive && !reduced ? (
           <Animated.View
             testID="resume-workout-shine"
@@ -341,12 +372,19 @@ export function ResumeWorkoutPill({
           {!isPlanned ? (
             <PingDot
               testID="resume-live-pulse-dot"
-              color={colors["brand-foreground"]}
+              color={whiteInk}
               size={12}
               active
             />
           ) : (
-            <View className="h-3 w-3 rounded-full bg-white items-center justify-center" />
+            <View
+              style={{
+                width: 12,
+                height: 12,
+                borderRadius: 6,
+                backgroundColor: whiteInk,
+              }}
+            />
           )}
 
           <View className="flex-1 min-w-0">
@@ -360,7 +398,7 @@ export function ResumeWorkoutPill({
           </View>
 
           <View className="h-10 w-10 rounded-full bg-white/20 items-center justify-center">
-            <Play size={18} color={colors["primary-foreground"]} fill={colors["primary-foreground"]} />
+            <Play size={18} color={whiteInk} fill={whiteInk} />
           </View>
         </View>
       </Pressable>

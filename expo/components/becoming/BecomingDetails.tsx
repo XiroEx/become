@@ -43,7 +43,8 @@ import {
   previewList,
 } from '@/lib/becoming/weekSummary'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useThemeTokens } from '@/lib/theme/useThemeTokens'
+import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg'
+import { ForcedThemeMode, useThemeTokens } from '@/lib/theme/useThemeTokens'
 import { becomingStageTokens, onDarkForeground, rgbOf, type TokenName } from '@/lib/theme/tokens'
 import { WebGradient } from '@/components/WebGradient'
 import { minTouchTarget } from '@/lib/a11y/touchTarget'
@@ -171,27 +172,42 @@ function Glass({
   hue?: string
   testID?: string
 }) {
-  const { colors, tint } = useThemeTokens()
   return (
     <View
       style={[
         styles.glass,
         {
-          backgroundColor: tint('muted', 0.25),
-          borderColor: hue ?? colors.border,
+          backgroundColor: rgbOf(becomingStageTokens.ink, 0.06),
+          borderColor: rgbOf(becomingStageTokens.ink, 0.1),
+          overflow: 'hidden',
         },
         style,
       ]}
       testID={testID}
     >
+      {hue ? (
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: -40,
+            right: -40,
+            width: 128,
+            height: 128,
+            borderRadius: 64,
+            backgroundColor: hue,
+            opacity: 0.18,
+            boxShadow: [{ offsetX: 0, offsetY: 0, blurRadius: 40, spreadDistance: 0, color: hue }],
+          }}
+        />
+      ) : null}
       {children}
     </View>
   )
 }
 
 function Eyebrow({ children }: { children: React.ReactNode }) {
-  const { colors } = useThemeTokens()
-  return <Text style={[styles.eyebrow, { color: colors['muted-foreground'] }]}>{children}</Text>
+  return <Text style={[styles.eyebrow, { color: rgbOf(becomingStageTokens.ink, 0.5) }]}>{children}</Text>
 }
 
 function Cell({
@@ -205,15 +221,23 @@ function Cell({
   sub?: string
   hue?: string
 }) {
-  const { colors, tint } = useThemeTokens()
   return (
-    <View style={[styles.cell, { backgroundColor: tint('muted', 0.2) }]}>
-      <Text style={[styles.cellLabel, { color: colors['muted-foreground'] }]}>{label}</Text>
-      <Text style={[styles.cellValue, { color: hue ?? colors.foreground }]} numberOfLines={1}>
+    <View
+      style={[
+        styles.cell,
+        {
+          backgroundColor: rgbOf(becomingStageTokens.ink, 0.06),
+          borderWidth: 1,
+          borderColor: rgbOf(becomingStageTokens.ink, 0.05),
+        },
+      ]}
+    >
+      <Text style={[styles.cellLabel, { color: rgbOf(becomingStageTokens.ink, 0.45) }]}>{label}</Text>
+      <Text style={[styles.cellValue, { color: hue ?? onDarkForeground }]} numberOfLines={1}>
         {value}
       </Text>
       {sub ? (
-        <Text style={[styles.cellSub, { color: colors['muted-foreground'] }]} numberOfLines={1}>
+        <Text style={[styles.cellSub, { color: rgbOf(becomingStageTokens.ink, 0.55) }]} numberOfLines={1}>
           {sub}
         </Text>
       ) : null}
@@ -234,20 +258,31 @@ function NextCard({
   hue: string
   onPress?: (url: string) => void
 }) {
-  const { colors, tint } = useThemeTokens()
   return (
     <Pressable
       onPress={() => onPress?.(url)}
-      style={[styles.nextCard, { backgroundColor: tint('muted', 0.2), borderColor: colors.border }]}
+      style={[
+        styles.nextCard,
+        {
+          borderColor: rgbOf(becomingStageTokens.ink, 0.1),
+          overflow: 'hidden',
+        },
+      ]}
       accessibilityRole="button"
       accessibilityLabel={`${title} · ${sub}`}
     >
+      <WebGradient
+        direction="br"
+        fill
+        colors={[hue, 'transparent']}
+        style={{ opacity: 0.14 }}
+      />
       <Sparkles size={16} color={hue} style={{ marginTop: 2 }} />
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={[styles.nextCardTitle, { color: colors.foreground }]}>{title}</Text>
-        <Text style={[styles.nextCardSub, { color: colors['muted-foreground'] }]}>{sub}</Text>
+        <Text style={[styles.nextCardTitle, { color: onDarkForeground }]}>{title}</Text>
+        <Text style={[styles.nextCardSub, { color: rgbOf(becomingStageTokens.ink, 0.6) }]}>{sub}</Text>
       </View>
-      <ArrowRight size={16} color={colors['muted-foreground']} style={{ marginTop: 2 }} />
+      <ArrowRight size={16} color={rgbOf(becomingStageTokens.ink, 0.4)} style={{ marginTop: 2 }} />
     </Pressable>
   )
 }
@@ -263,18 +298,24 @@ function MoreButton({
   onClick: () => void
   testId: string
 }) {
-  const { colors, tint } = useThemeTokens()
   return (
     <Pressable
       onPress={onClick}
       testID={testId}
-      style={[styles.moreBtn, { backgroundColor: tint('muted', 0.4) }]}
+      style={[
+        styles.moreBtn,
+        {
+          backgroundColor: rgbOf(becomingStageTokens.ink, 0.06),
+          borderWidth: 1,
+          borderColor: rgbOf(becomingStageTokens.ink, 0.1),
+        },
+      ]}
       accessibilityRole="button"
     >
-      <Text style={[styles.moreBtnText, { color: colors.foreground }]}>{open ? 'Show less' : label}</Text>
+      <Text style={[styles.moreBtnText, { color: rgbOf(becomingStageTokens.ink, 0.7) }]}>{open ? 'Show less' : label}</Text>
       <ChevronDown
         size={14}
-        color={colors['muted-foreground']}
+        color={rgbOf(becomingStageTokens.ink, 0.7)}
         style={open ? { transform: [{ rotate: '180deg' }] } : undefined}
       />
     </Pressable>
@@ -299,7 +340,15 @@ export interface BecomingDetailsProps {
   onNavigate?: (url: string) => void
 }
 
-export function BecomingDetails({
+export function BecomingDetails(props: BecomingDetailsProps) {
+  return (
+    <ForcedThemeMode mode="dark">
+      <BecomingDetailsInner {...props} />
+    </ForcedThemeMode>
+  )
+}
+
+function BecomingDetailsInner({
   open,
   onClose,
   weeks = [],
@@ -553,6 +602,8 @@ export function BecomingDetails({
   }, [wins, weeks])
   const winList = previewList(allWinsList, allWins)
 
+  const activeTabHue = TABS.find((x) => x.id === tab)?.hue ?? 'hsl(258, 90%, 76%)'
+
   const handleLinkPress = (url: string) => {
     onClose()
     onNavigate?.(url)
@@ -563,28 +614,50 @@ export function BecomingDetails({
       <Animated.View
         style={[
           styles.root,
-          { backgroundColor: colors.background, paddingTop: Math.max(insets.top, 12) },
+          { backgroundColor: rgbOf(becomingStageTokens.background), paddingTop: Math.max(insets.top, 12) },
           modalEnterStyle,
         ]}
       >
+        {/* Sky, tinted by the active screen (`radial-gradient(120% 55% at 50% -10%, ${hue}2e, transparent 62%)`) */}
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          <Svg width="100%" height="100%">
+            <Defs>
+              <RadialGradient id="detailsSkyTop" cx="50%" cy="-10%" rx="120%" ry="55%">
+                <Stop offset="0%" stopColor={activeTabHue} stopOpacity={0.18} />
+                <Stop offset="62%" stopColor={activeTabHue} stopOpacity={0} />
+              </RadialGradient>
+            </Defs>
+            <Rect x="0" y="0" width="100%" height="100%" fill="url(#detailsSkyTop)" />
+          </Svg>
+        </View>
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={[styles.headerKicker, { color: colors['muted-foreground'] }]}>The Becoming</Text>
-            <Text style={[styles.headerTitle, { color: colors.foreground }]}>Details</Text>
+            <Text style={[styles.headerKicker, { color: rgbOf(becomingStageTokens.ink, 0.55) }]}>The Becoming</Text>
+            <Text style={[styles.headerTitle, { color: onDarkForeground }]}>Details</Text>
           </View>
           <Pressable
-            style={[minTouchTarget, styles.closeBtn, { backgroundColor: tint('muted', 0.5) }]}
+            style={[minTouchTarget, styles.closeBtn, { backgroundColor: rgbOf(becomingStageTokens.ink, 0.1) }]}
             onPress={onClose}
             accessibilityLabel="Close details"
             accessibilityRole="button"
           >
-            <X size={20} color={colors.foreground} />
+            <X size={20} color={onDarkForeground} />
           </Pressable>
         </View>
 
         {/* Tabs Bar */}
-        <View style={[styles.tabsRow, { backgroundColor: tint('muted', 0.4) }]} role="tablist">
+        <View
+          style={[
+            styles.tabsRow,
+            {
+              backgroundColor: rgbOf(becomingStageTokens.ink, 0.06),
+              borderWidth: 1,
+              borderColor: rgbOf(becomingStageTokens.ink, 0.1),
+            },
+          ]}
+          role="tablist"
+        >
           {TABS.map((tb) => {
             const on = tb.id === tab
             const Icon = tb.Icon
@@ -598,14 +671,20 @@ export function BecomingDetails({
                 style={[
                   minTouchTarget,
                   styles.tabBtn,
-                  on ? { backgroundColor: colors.card } : undefined,
+                  on
+                    ? {
+                        backgroundColor: rgbOf(becomingStageTokens.ink, 0.12),
+                        borderWidth: 1,
+                        borderColor: rgbOf(becomingStageTokens.ink, 0.15),
+                      }
+                    : undefined,
                 ]}
               >
-                <Icon size={16} color={on ? tb.hue : colors['muted-foreground']} />
+                <Icon size={16} color={on ? tb.hue : rgbOf(becomingStageTokens.ink, 0.55)} />
                 <Text
                   style={[
                     styles.tabLabel,
-                    { color: on ? colors.foreground : colors['muted-foreground'] },
+                    { color: on ? onDarkForeground : rgbOf(becomingStageTokens.ink, 0.55) },
                   ]}
                 >
                   {tb.label}
@@ -775,14 +854,24 @@ export function BecomingDetails({
           {tab === 'training' && (
             <View style={styles.tabContent}>
               {/* Sub switch */}
-              <View style={[styles.subSwitch, { backgroundColor: tint('muted', 0.4) }]} testID="training-subswitch">
+              <View
+                style={[
+                  styles.subSwitch,
+                  {
+                    backgroundColor: rgbOf(becomingStageTokens.ink, 0.06),
+                    borderWidth: 1,
+                    borderColor: rgbOf(becomingStageTokens.ink, 0.1),
+                  },
+                ]}
+                testID="training-subswitch"
+              >
                 <Pressable
                   onPress={() => setTrainView('week')}
                   testID="training-subswitch-week"
                   style={[
                     minTouchTarget,
                     styles.subSwitchBtn,
-                    trainView === 'week' && { backgroundColor: colors.card },
+                    trainView === 'week' && { backgroundColor: weekColor('training', 75, 50, 0.26) },
                   ]}
                   accessibilityRole="tab"
                   accessibilityLabel="This week"
@@ -790,7 +879,7 @@ export function BecomingDetails({
                   <Text
                     style={[
                       styles.subSwitchText,
-                      { color: trainView === 'week' ? colors.foreground : colors['muted-foreground'] },
+                      { color: trainView === 'week' ? onDarkForeground : rgbOf(becomingStageTokens.ink, 0.5) },
                     ]}
                   >
                     This week
@@ -802,7 +891,7 @@ export function BecomingDetails({
                   style={[
                     minTouchTarget,
                     styles.subSwitchBtn,
-                    trainView === 'strength' && { backgroundColor: colors.card },
+                    trainView === 'strength' && { backgroundColor: weekColor('training', 75, 50, 0.26) },
                   ]}
                   accessibilityRole="tab"
                   accessibilityLabel="Strength"
@@ -810,7 +899,7 @@ export function BecomingDetails({
                   <Text
                     style={[
                       styles.subSwitchText,
-                      { color: trainView === 'strength' ? colors.foreground : colors['muted-foreground'] },
+                      { color: trainView === 'strength' ? onDarkForeground : rgbOf(becomingStageTokens.ink, 0.5) },
                     ]}
                   >
                     Strength
@@ -1206,7 +1295,24 @@ export function BecomingDetails({
                   to-violet-500` with white ink in BOTH modes, like the door
                   and the stage it opens (the ink is the stage's white at the
                   web's own alphas, never a literal). */}
-              <View testID="mind-score-banner" style={[styles.scoreBanner, { overflow: 'hidden' }]}>
+              <View
+                testID="mind-score-banner"
+                style={[
+                  styles.scoreBanner,
+                  {
+                    overflow: 'hidden',
+                    boxShadow: [
+                      {
+                        offsetX: 0,
+                        offsetY: 24,
+                        blurRadius: 60,
+                        spreadDistance: -24,
+                        color: rgbOf(becomingStageTokens.skyViolet, 0.7),
+                      },
+                    ],
+                  },
+                ]}
+              >
                 <WebGradient
                   testID="mind-score-banner-gradient"
                   fill

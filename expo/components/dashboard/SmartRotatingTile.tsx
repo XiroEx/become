@@ -320,13 +320,13 @@ export function SmartRotatingTile({
       </Animated.View>
       {/* The "live" affordance: a small dot, non-interactive so it can never
           swallow a press on the card underneath. The web's is indigo
-          (`bg-indigo-500`), never the brand red — closest token is `info`. */}
+          (`bg-indigo-500`), never the brand red. */}
       <PulseView
         active={count > 1}
         pointerEvents="none"
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
-        style={[styles.liveDot, { backgroundColor: colors.info }]}
+        style={[styles.liveDot, { backgroundColor: colors.indigo }]}
       />
     </View>
   );

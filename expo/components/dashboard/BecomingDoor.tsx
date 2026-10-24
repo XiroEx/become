@@ -16,6 +16,7 @@ import {
   becomingStageTokens,
   onDarkForeground,
   rgbOf,
+  webGradientTokens,
 } from "@/lib/theme/tokens";
 import { useRouter } from "expo-router";
 import {
@@ -76,7 +77,7 @@ export function BecomingDoor({
   onPress,
   testID = "becoming-door",
 }: BecomingDoorProps) {
-  const { colors, tint } = useThemeTokens();
+  const { colors, tint, isDark } = useThemeTokens();
   const router = useRouter();
   const reduced = useReducedMotion();
   const [isUnread, setIsUnread] = useState(false);
@@ -309,10 +310,24 @@ export function BecomingDoor({
             ? {
                 backgroundColor: "transparent",
                 borderColor: "transparent",
+                boxShadow: `0 4px 12px 0 ${tint("mind-violet", 0.25)}, 0 0 0 6px ${tint("mind-violet", 0.22)}`,
+                shadowColor: colors["mind-violet"],
+                shadowOpacity: 0.3,
+                shadowRadius: 10,
+                shadowOffset: { width: 0, height: 2 },
               }
             : {
                 backgroundColor: colors.card,
                 borderColor: colors.border,
+                ...(top
+                  ? {
+                      boxShadow: `0 1px 3px 0 ${tint("foreground", 0.1)}, 0 0 0 5px ${tint("mind-violet", 0.16)}`,
+                      shadowColor: colors["mind-violet"],
+                      shadowOpacity: 0.22,
+                      shadowRadius: 8,
+                      shadowOffset: { width: 0, height: 0 },
+                    }
+                  : {}),
               },
           {
             opacity: cardPress.pressed ? 0.85 : 1,
@@ -338,13 +353,21 @@ export function BecomingDoor({
                 {
                   backgroundColor: isUnread
                     ? unreadWash15
-                    : tint("mind-violet", 0.15),
+                    : isDark
+                      ? rgbOf(webGradientTokens.violet900, 0.3)
+                      : rgbOf(webGradientTokens.violet100),
                 },
               ]}
             >
               <Compass
                 size={18}
-                color={isUnread ? unreadInk : colors["mind-violet"]}
+                color={
+                  isUnread
+                    ? unreadInk
+                    : isDark
+                      ? rgbOf(webGradientTokens.violet300)
+                      : colors["mind-violet"]
+                }
               />
             </View>
             <View style={styles.headerMeta}>
@@ -352,7 +375,11 @@ export function BecomingDoor({
                 style={[
                   styles.kicker,
                   {
-                    color: isUnread ? unreadInk70 : colors["mind-violet"],
+                    color: isUnread
+                      ? unreadInk70
+                      : isDark
+                        ? rgbOf(webGradientTokens.violet300)
+                        : colors["mind-violet"],
                   },
                 ]}
               >
@@ -370,7 +397,7 @@ export function BecomingDoor({
           </View>
           <ArrowRight
             size={18}
-            color={isUnread ? unreadInk80 : colors["muted-foreground"]}
+            color={isUnread ? unreadInk80 : rgbOf(webGradientTokens.zinc400)}
           />
         </View>
 
@@ -383,13 +410,15 @@ export function BecomingDoor({
               {
                 backgroundColor: isUnread
                   ? unreadWash10
-                  : tint("muted", 0.3),
+                  : isDark
+                    ? tint("muted", 0.6)
+                    : colors.background,
               },
             ]}
           >
             <Brain
               size={14}
-              color={isUnread ? unreadInk : colors.accent}
+              color={isUnread ? unreadInk : colors.mindset}
             />
             <View style={styles.chipContent}>
               <Text
@@ -398,7 +427,9 @@ export function BecomingDoor({
                   {
                     color: isUnread
                       ? unreadInk65
-                      : colors["muted-foreground"],
+                      : isDark
+                        ? rgbOf(webGradientTokens.zinc500)
+                        : rgbOf(webGradientTokens.zinc400),
                   },
                 ]}
               >
@@ -436,13 +467,21 @@ export function BecomingDoor({
               {
                 backgroundColor: isUnread
                   ? unreadWash10
-                  : tint("muted", 0.3),
+                  : isDark
+                    ? tint("muted", 0.6)
+                    : colors.background,
               },
             ]}
           >
             <UtensilsCrossed
               size={14}
-              color={isUnread ? unreadInk : colors.primary}
+              color={
+                isUnread
+                  ? unreadInk
+                  : isDark
+                    ? colors.destructive
+                    : colors.brand
+              }
             />
             <View style={styles.chipContent}>
               <Text
@@ -451,7 +490,9 @@ export function BecomingDoor({
                   {
                     color: isUnread
                       ? unreadInk65
-                      : colors["muted-foreground"],
+                      : isDark
+                        ? rgbOf(webGradientTokens.zinc500)
+                        : rgbOf(webGradientTokens.zinc400),
                   },
                 ]}
               >
@@ -463,7 +504,7 @@ export function BecomingDoor({
                   {
                     color: isUnread
                       ? n?.pace?.status === "behind"
-                        ? colors.amber
+                        ? rgbOf(webGradientTokens.amber200)
                         : unreadInk
                       : n?.pace?.status === "behind"
                         ? colors.accent
@@ -497,7 +538,9 @@ export function BecomingDoor({
               {
                 backgroundColor: isUnread
                   ? unreadWash10
-                  : tint("muted", 0.3),
+                  : isDark
+                    ? tint("muted", 0.6)
+                    : colors.background,
               },
             ]}
           >
@@ -512,7 +555,9 @@ export function BecomingDoor({
                   {
                     color: isUnread
                       ? unreadInk65
-                      : colors["muted-foreground"],
+                      : isDark
+                        ? rgbOf(webGradientTokens.zinc500)
+                        : rgbOf(webGradientTokens.zinc400),
                   },
                 ]}
               >
@@ -521,7 +566,15 @@ export function BecomingDoor({
               <Text
                 style={[
                   styles.chipValue,
-                  { color: isUnread ? unreadInk : colors.foreground },
+                  {
+                    color: isUnread
+                      ? t?.thisWeek?.weekLost
+                        ? rgbOf(webGradientTokens.amber200)
+                        : unreadInk
+                      : t?.thisWeek?.weekLost
+                        ? colors.accent
+                        : colors.foreground,
+                  },
                 ]}
               >
                 {trainingChip.value}
@@ -548,7 +601,11 @@ export function BecomingDoor({
           <View testID="becoming-door-next" style={styles.nextRow}>
             <Sparkles
               size={14}
-              color={isUnread ? colors.amber : colors["mind-violet"]}
+              color={
+                isUnread
+                  ? rgbOf(webGradientTokens.amber200)
+                  : colors["mind-violet"]
+              }
             />
             {/* One truncated line, like the web's `truncate` paragraph — two
                 SEPARATELY-styled Text nodes nested inside one outer Text so
@@ -562,7 +619,13 @@ export function BecomingDoor({
               <Text
                 style={[
                   styles.nextTitle,
-                  { color: isUnread ? unreadInk85 : colors.foreground },
+                  {
+                    color: isUnread
+                      ? unreadInk85
+                      : isDark
+                        ? rgbOf(webGradientTokens.zinc300)
+                        : rgbOf(webGradientTokens.zinc600),
+                  },
                 ]}
               >
                 {top.title}
@@ -573,7 +636,9 @@ export function BecomingDoor({
                   {
                     color: isUnread
                       ? unreadInk65
-                      : colors["muted-foreground"],
+                      : isDark
+                        ? rgbOf(webGradientTokens.zinc500)
+                        : rgbOf(webGradientTokens.zinc400),
                   },
                 ]}
               >
