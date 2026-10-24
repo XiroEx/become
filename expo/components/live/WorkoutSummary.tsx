@@ -5,6 +5,8 @@ import { Award, Dumbbell, Flame, TrendingUp } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
+import { ScreenEnter } from "@/components/motion/ScreenEnter";
+import { PAGE_STAGGER_MS } from "@/lib/motion/motion";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import type { TokenName } from "@/lib/theme/tokens";
 import {
@@ -763,6 +765,7 @@ export function WorkoutSummary({
             FIRST, the title under it: the web's order
             (`motion.div` ring → `h1` → subtitle). Native used to draw the
             title text above the ring instead. */}
+        <ScreenEnter delayMs={0} distance={12}>
         <View style={{ alignItems: "center", paddingTop: 12 }}>
           {programCompleted ? (
             <>
@@ -834,10 +837,12 @@ export function WorkoutSummary({
             &ldquo;{quote}&rdquo;
           </Text>
         </View>
+        </ScreenEnter>
 
         {/* Stats row — Duration, then the metrics this session actually
             produced (summaryMetricTiles). Four tiles wrap two-up, which is
             what the web's `grid-cols-2` does at the same count. */}
+        <ScreenEnter delayMs={PAGE_STAGGER_MS} distance={10}>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
           {statTiles.map((tile) => (
             <View
@@ -864,9 +869,11 @@ export function WorkoutSummary({
             </View>
           ))}
         </View>
+        </ScreenEnter>
 
         {/* Streak card */}
         {streak !== null ? (
+          <ScreenEnter delayMs={PAGE_STAGGER_MS * 2} distance={10}>
           <Card testID={`${testID}-streak`}>
             <View
               style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
@@ -931,10 +938,12 @@ export function WorkoutSummary({
               </View>
             ) : null}
           </Card>
+          </ScreenEnter>
         ) : null}
 
         {/* PR highlights */}
         {newPRs.length > 0 ? (
+          <ScreenEnter delayMs={PAGE_STAGGER_MS * 3} distance={10}>
           <Card testID={`${testID}-prs`}>
             <Text className="text-foreground text-xs font-bold uppercase mb-3">
               🏆 New Personal Records
@@ -964,9 +973,11 @@ export function WorkoutSummary({
               </View>
             ))}
           </Card>
+          </ScreenEnter>
         ) : null}
 
         {/* Exercise breakdown */}
+        <ScreenEnter delayMs={PAGE_STAGGER_MS * 4} distance={10}>
         <View>
           <Text className="text-muted-foreground text-xs font-bold uppercase mb-2">
             Exercise Breakdown
@@ -1039,15 +1050,19 @@ export function WorkoutSummary({
             );
           })}
         </View>
+        </ScreenEnter>
 
         {/* Closing message */}
+        <ScreenEnter delayMs={PAGE_STAGGER_MS * 5} distance={10}>
         <Card testID={`${testID}-closing`} style={{ alignItems: "center" }}>
           <Text className="text-muted-foreground text-sm text-center">
             {closing}
           </Text>
         </Card>
+        </ScreenEnter>
 
         {/* CTA */}
+        <ScreenEnter delayMs={PAGE_STAGGER_MS * 6} distance={10}>
         <View style={{ gap: 8, paddingTop: 4 }}>
           <Button
             testID={`${testID}-done`}
@@ -1094,6 +1109,7 @@ export function WorkoutSummary({
             </Button>
           )}
         </View>
+        </ScreenEnter>
         <View style={{ height: 8 }} />
       </ScrollView>
     </SafeAreaView>

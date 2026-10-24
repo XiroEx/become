@@ -39,6 +39,11 @@ import { WeeklyHighlight } from "@/components/settings/WeeklyHighlight";
 import {
   BANNER_ENTER_DISTANCE,
   BANNER_MS,
+  BECOMING_MODAL_ENTER_Y,
+  BECOMING_MODAL_MS,
+  BECOMING_TAB_PILL_SPRING,
+  BECOMING_TAB_SLIDE_DISTANCE,
+  BECOMING_TAB_SLIDE_MS,
   CELEBRATION_POP_MS,
   CELEBRATION_POP_PEAK,
   DOOR_NUDGE_MIN_OPACITY,
@@ -48,11 +53,14 @@ import {
   DOOR_PULSE_MS,
   DOOR_PULSE_PEAK_ALPHA,
   DOOR_PULSE_SPREAD,
+  EASE_OUT_EXPO,
   HIGHLIGHT_PULSE_COUNT,
   HIGHLIGHT_PULSE_MS,
   MENU_ENTER_DISTANCE,
   MENU_ENTER_MS,
   MENU_ENTER_SCALE,
+  MODAL_INITIAL_SCALE,
+  MODAL_MS,
   PING_MAX_SCALE,
   PING_MS,
   PROGRESS_FILL_MS,
@@ -66,6 +74,7 @@ import {
   SCREEN_ENTER_DISTANCE,
   SCREEN_ENTER_MS,
   SHEET_ENTER_DISTANCE,
+  SHEET_MS,
   SMART_TILE_FADE_MS,
   SMART_TILE_SPRING,
   STREAK_SLIDE_DISTANCE,
@@ -159,6 +168,17 @@ describe("the vocabulary matches the web's numbers", () => {
     expect(PING_MAX_SCALE).toBe(2);
     expect(PULSE_MS).toBe(2000);
     expect(PULSE_MIN_OPACITY).toBe(0.5);
+  });
+  it("BecomingDetails modal/tab motion and modal/sheet timing constants match web", () => {
+    expect(BECOMING_MODAL_ENTER_Y).toBe(24);
+    expect(BECOMING_MODAL_MS).toBe(280);
+    expect(BECOMING_TAB_PILL_SPRING).toEqual({ stiffness: 400, damping: 34 });
+    expect(BECOMING_TAB_SLIDE_DISTANCE).toBe(40);
+    expect(BECOMING_TAB_SLIDE_MS).toBe(260);
+    expect(EASE_OUT_EXPO).toEqual([0.22, 1, 0.36, 1]);
+    expect(SHEET_MS).toBe(280);
+    expect(MODAL_INITIAL_SCALE).toBe(0.96);
+    expect(MODAL_MS).toBe(220);
   });
   it("Reduce Motion keeps the end state and drops the travel", () => {
     expect(motionMs(400, false)).toBe(400);

@@ -23,8 +23,10 @@ import { PROGRESS_FILL_MS, motionMs } from "@/lib/motion/motion";
 export interface ProgressFillProps {
   /** 0–100. Clamped, like every caller already does. */
   pct: number;
-  /** The fill colour (the track is the caller's). */
-  color: string;
+  /** The fill colour (optional when supplied via `className`). */
+  color?: string;
+  /** Fill duration in ms (defaults to `PROGRESS_FILL_MS` = 500). */
+  durationMs?: number;
   /**
    * Passed through for callers that size the fill with classes (GuidedFlow's
    * `h-full rounded-full`). The fill's own style already says the same, so
@@ -38,6 +40,7 @@ export interface ProgressFillProps {
 export function ProgressFill({
   pct,
   color,
+  durationMs = PROGRESS_FILL_MS,
   className,
   style,
   testID,
@@ -63,7 +66,7 @@ export function ProgressFill({
         p.set(0);
         p.set(
           withTiming(1, {
-            duration: motionMs(PROGRESS_FILL_MS, false),
+            duration: motionMs(durationMs, false),
             easing: Easing.out(Easing.quad),
           }),
         );
@@ -77,11 +80,11 @@ export function ProgressFill({
     p.set(0);
     p.set(
       withTiming(1, {
-        duration: motionMs(PROGRESS_FILL_MS, reduced),
+        duration: motionMs(durationMs, reduced),
         easing: Easing.out(Easing.quad),
       }),
     );
-  }, [clamped, reduced, from, to, p]);
+  }, [clamped, durationMs, reduced, from, to, p]);
 
   const fill = useAnimatedStyle(() => ({
     width: `${from.value + (clamped - from.value) * p.value}%`,
@@ -93,7 +96,7 @@ export function ProgressFill({
       className={className}
       style={[
         {
-          backgroundColor: color,
+          ...(color !== undefined ? { backgroundColor: color } : null),
           // The exact end state: what Reduce Motion, a still frame and the
           // first paint all draw.
           width: `${clamped}%`,

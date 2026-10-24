@@ -3,6 +3,7 @@ import Svg, { Circle, Defs, G, LinearGradient, Stop } from "react-native-svg";
 import { Settings2 } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { Card } from "@/components/Card";
+import { ProgressFill } from "@/components/motion/ProgressFill";
 import { rgbOf, webGradientTokens } from "@/lib/theme/tokens";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
@@ -419,10 +420,10 @@ export function CalorieRing({
                       style={{ width: `${proteinPlannedPct}%` }}
                     />
                   )}
-                  <View
+                  <ProgressFill
                     testID="macro-bar-protein"
+                    pct={proteinPct}
                     className={`h-full rounded-full ${macroBarFillClass(proteinStatus, "bg-blue-600")}`}
-                    style={{ width: `${proteinPct}%` }}
                   />
                 </View>
               </>
@@ -463,10 +464,10 @@ export function CalorieRing({
                       style={{ width: `${carbsPlannedPct}%` }}
                     />
                   )}
-                  <View
+                  <ProgressFill
                     testID="macro-bar-carbs"
+                    pct={carbsPct}
                     className={`h-full rounded-full ${macroBarFillClass(carbsStatus, "bg-green-600")}`}
-                    style={{ width: `${carbsPct}%` }}
                   />
                 </View>
               </>
@@ -508,10 +509,10 @@ export function CalorieRing({
                       style={{ width: `${fatsPlannedPct}%` }}
                     />
                   )}
-                  <View
+                  <ProgressFill
                     testID="macro-bar-fats"
+                    pct={fatsPct}
                     className={`h-full rounded-full ${macroBarFillClass(fatsStatus, "bg-yellow-400")}`}
-                    style={{ width: `${fatsPct}%` }}
                   />
                 </View>
               </>

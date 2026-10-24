@@ -16,6 +16,8 @@ import { WorkoutNowSheet } from "@/components/workout/WorkoutNowSheet";
 import { GenerateSheet } from "@/components/programs/GenerateSheet";
 import { ProgramsCatalog } from "@/components/programs/ProgramsCatalog";
 import { PageHeader } from "@/components/navigation/PageHeader";
+import { ScreenEnter } from "@/components/motion/ScreenEnter";
+import { PAGE_STAGGER_MS } from "@/lib/motion/motion";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { useTabBarCondenseOnScroll } from "@/lib/navigation/tabBarCondense";
 import { TAB_BAR_CONTENT_INSET } from "@/lib/navigation/tabBarInset";
@@ -175,21 +177,27 @@ export default function ProgrammingIndexRoute() {
         <ResumeWorkoutPill className="mb-6" />
 
         {/* 2. Upcoming Week Strip (`mb-6`, the web's upcoming `mb-6`). */}
-        <View testID="workout-upcoming-wrap" className="mb-6">
-          <UpcomingWeekStrip />
-        </View>
+        <ScreenEnter delayMs={PAGE_STAGGER_MS} distance={10}>
+          <View testID="workout-upcoming-wrap" className="mb-6">
+            <UpcomingWeekStrip />
+          </View>
+        </ScreenEnter>
 
         {/* 3. Continue Training Cards (`mb-6`, the web's continue `mb-6`). */}
-        <View testID="workout-continue-wrap" className="mb-6">
-          <ContinueTrainingSection onWorkoutNow={handleWorkoutNow} />
-        </View>
+        <ScreenEnter delayMs={PAGE_STAGGER_MS * 2} distance={10}>
+          <View testID="workout-continue-wrap" className="mb-6">
+            <ContinueTrainingSection onWorkoutNow={handleWorkoutNow} />
+          </View>
+        </ScreenEnter>
 
         {/* 4. Saved for Later, Recommended for You and Browse Programs —
             the web's Workout page continues below Continue Training with
             these sections; native used to stop after Continue Training.
             `ProgramsCatalog` is the exact component the dedicated Browse
             screen renders (NP-072), so both show identical content (NP-277). */}
-        <ProgramsCatalog catalogTitle="Browse Programs" />
+        <ScreenEnter delayMs={PAGE_STAGGER_MS * 3} distance={10}>
+          <ProgramsCatalog catalogTitle="Browse Programs" />
+        </ScreenEnter>
       </ScrollView>
 
       {/* Workout Now sheet (NP-076): focus → deterministic preview → NP-227 overview */}

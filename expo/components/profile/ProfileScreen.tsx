@@ -38,6 +38,9 @@ import { Text } from "@/components/Text";
 import { Avatar } from "@/components/Avatar";
 import { IconPicker } from "@/components/profile/IconPicker";
 import { PlanRow } from "@/components/profile/PlanRow";
+import { ProgressFill } from "@/components/motion/ProgressFill";
+import { ScreenEnter } from "@/components/motion/ScreenEnter";
+import { SECTION_STAGGER_MS } from "@/lib/motion/motion";
 import { GOAL_LABELS } from "@/lib/profile/icons";
 import { useAuth } from "@/lib/auth/useAuth";
 import { WEBAPP_BASE_URL } from "@/lib/config";
@@ -256,153 +259,159 @@ export function ProfileScreen({
         ) : null}
 
         {/* Identity Hero */}
-        <View
-          testID="profile-identity"
-          className="items-center rounded-2xl border border-border bg-card p-6"
-        >
-          <Avatar
-            icon={profile?.profileIcon}
-            imageUrl={profile?.avatarUrl}
-            size={96}
-            testID="profile-avatar-hero"
-          />
-          <Text
-            testID="profile-name"
-            className="text-foreground mt-4 text-xl font-bold"
+        <ScreenEnter delayMs={0}>
+          <View
+            testID="profile-identity"
+            className="items-center rounded-2xl border border-border bg-card p-6"
           >
-            {displayName}
-          </Text>
-          {displayEmail ? (
+            <Avatar
+              icon={profile?.profileIcon}
+              imageUrl={profile?.avatarUrl}
+              size={96}
+              testID="profile-avatar-hero"
+            />
             <Text
-              testID="profile-email"
-              className="text-muted-foreground text-sm"
+              testID="profile-name"
+              className="text-foreground mt-4 text-xl font-bold"
             >
-              {displayEmail}
+              {displayName}
             </Text>
-          ) : null}
+            {displayEmail ? (
+              <Text
+                testID="profile-email"
+                className="text-muted-foreground text-sm"
+              >
+                {displayEmail}
+              </Text>
+            ) : null}
 
-          <View className="mt-3 flex-row flex-wrap items-center justify-center gap-2">
-            {goal ? (
-              <View
-                testID="profile-goal-chip"
-                className="rounded-full bg-muted px-3 py-1"
-              >
-                <Text className="text-foreground text-xs font-medium">
-                  {GOAL_LABELS[goal] || goal}
-                </Text>
-              </View>
-            ) : null}
-            {memberSince ? (
-              <View
-                testID="profile-since-chip"
-                className="rounded-full bg-muted px-3 py-1"
-              >
-                <Text className="text-muted-foreground text-xs font-medium">
-                  Since {memberSince}
-                </Text>
-              </View>
-            ) : null}
+            <View className="mt-3 flex-row flex-wrap items-center justify-center gap-2">
+              {goal ? (
+                <View
+                  testID="profile-goal-chip"
+                  className="rounded-full bg-muted px-3 py-1"
+                >
+                  <Text className="text-foreground text-xs font-medium">
+                    {GOAL_LABELS[goal] || goal}
+                  </Text>
+                </View>
+              ) : null}
+              {memberSince ? (
+                <View
+                  testID="profile-since-chip"
+                  className="rounded-full bg-muted px-3 py-1"
+                >
+                  <Text className="text-muted-foreground text-xs font-medium">
+                    Since {memberSince}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
           </View>
-        </View>
+        </ScreenEnter>
 
         {/* Mindset Progress */}
         {mind ? (
-          <View
-            testID="profile-mind"
-            className="rounded-2xl border border-border bg-card p-5"
-          >
-            <View className="flex-row items-center justify-between">
-              <View className="flex-row items-center gap-2">
-                {/* Web: `text-violet-500` (`app/dashboard/profile/page.tsx`) —
-                    the Mind chapter sparkle is the Mind home's own accent, not
-                    `primary` (NP-306, was red/orange here). */}
-                <Sparkles size={16} color={colors["mind-violet"]} />
+          <ScreenEnter delayMs={SECTION_STAGGER_MS}>
+            <View
+              testID="profile-mind"
+              className="rounded-2xl border border-border bg-card p-5"
+            >
+              <View className="flex-row items-center justify-between">
+                <View className="flex-row items-center gap-2">
+                  {/* Web: `text-violet-500` (`app/dashboard/profile/page.tsx`) —
+                      the Mind chapter sparkle is the Mind home's own accent, not
+                      `primary` (NP-306, was red/orange here). */}
+                  <Sparkles size={16} color={colors["mind-violet"]} />
+                  <Text
+                    testID="profile-mind-chapter"
+                    className="text-foreground text-sm font-semibold"
+                  >
+                    Chapter {mind.chapter}
+                    {chapterName ? ` · ${chapterName}` : ""}
+                  </Text>
+                </View>
                 <Text
-                  testID="profile-mind-chapter"
-                  className="text-foreground text-sm font-semibold"
+                  testID="profile-mind-xp"
+                  className="text-sm font-bold text-purple-600 dark:text-purple-400"
                 >
-                  Chapter {mind.chapter}
-                  {chapterName ? ` · ${chapterName}` : ""}
+                  {`${mind.xp} XP`}
                 </Text>
               </View>
-              <Text
-                testID="profile-mind-xp"
-                className="text-sm font-bold text-purple-600 dark:text-purple-400"
-              >
-                {`${mind.xp} XP`}
-              </Text>
-            </View>
 
-            {pct !== null ? (
-              <View
-                testID="profile-mind-bar"
-                className="mt-3 h-2 overflow-hidden rounded-full bg-muted"
-              >
+              {pct !== null ? (
                 <View
-                  className="h-full rounded-full bg-purple-500"
-                  style={{
-                    width: `${Math.max(0, Math.min(100, Math.round(pct * 100)))}%`,
-                  }}
-                />
-              </View>
-            ) : null}
+                  testID="profile-mind-bar"
+                  className="mt-3 h-2 overflow-hidden rounded-full bg-muted"
+                >
+                  <ProgressFill
+                    pct={Math.max(0, Math.min(100, Math.round(pct * 100)))}
+                    className="h-full rounded-full bg-purple-500"
+                  />
+                </View>
+              ) : null}
 
-            {mind.currentChapter?.theme ? (
-              <Text
-                testID="profile-mind-theme"
-                className="text-muted-foreground mt-2 text-xs"
-              >
-                {mind.currentChapter.theme}
-              </Text>
-            ) : null}
-          </View>
+              {mind.currentChapter?.theme ? (
+                <Text
+                  testID="profile-mind-theme"
+                  className="text-muted-foreground mt-2 text-xs"
+                >
+                  {mind.currentChapter.theme}
+                </Text>
+              ) : null}
+            </View>
+          </ScreenEnter>
         ) : null}
 
         {/* Icon Customizer */}
-        <IconPicker
-          currentIcon={profile?.profileIcon}
-          avatarUrl={profile?.avatarUrl}
-          onIconChange={(newIcon) => {
-            setProfile((prev) =>
-              prev ? { ...prev, profileIcon: newIcon } : prev,
-            );
-          }}
-          onAvatarChange={(newUrl) => {
-            setProfile((prev) =>
-              prev
-                ? { ...prev, profileIcon: "custom", avatarUrl: newUrl }
-                : prev,
-            );
-          }}
-        />
+        <ScreenEnter delayMs={SECTION_STAGGER_MS * 2}>
+          <IconPicker
+            currentIcon={profile?.profileIcon}
+            avatarUrl={profile?.avatarUrl}
+            onIconChange={(newIcon) => {
+              setProfile((prev) =>
+                prev ? { ...prev, profileIcon: newIcon } : prev,
+              );
+            }}
+            onAvatarChange={(newUrl) => {
+              setProfile((prev) =>
+                prev
+                  ? { ...prev, profileIcon: "custom", avatarUrl: newUrl }
+                  : prev,
+              );
+            }}
+          />
+        </ScreenEnter>
 
         {/* Plan Row — renders nothing until enforcement is on */}
         <PlanRow />
 
         {/* Settings link */}
-        <Pressable
-          testID="profile-settings-link"
-          accessibilityRole="button"
-          accessibilityLabel="Account and preferences"
-          onPress={handleSettings}
-          style={[
-            minTouchTarget,
-            {
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-            },
-          ]}
-          className="rounded-2xl border border-border bg-card px-5 py-4"
-        >
-          <View className="flex-row items-center gap-3">
-            <Settings size={20} color={colors["muted-foreground"]} />
-            <Text className="text-foreground text-sm font-medium">
-              Account &amp; preferences
-            </Text>
-          </View>
-          <ChevronRight size={16} color={colors["muted-foreground"]} />
-        </Pressable>
+        <ScreenEnter delayMs={SECTION_STAGGER_MS * 3}>
+          <Pressable
+            testID="profile-settings-link"
+            accessibilityRole="button"
+            accessibilityLabel="Account and preferences"
+            onPress={handleSettings}
+            style={[
+              minTouchTarget,
+              {
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+              },
+            ]}
+            className="rounded-2xl border border-border bg-card px-5 py-4"
+          >
+            <View className="flex-row items-center gap-3">
+              <Settings size={20} color={colors["muted-foreground"]} />
+              <Text className="text-foreground text-sm font-medium">
+                Account &amp; preferences
+              </Text>
+            </View>
+            <ChevronRight size={16} color={colors["muted-foreground"]} />
+          </Pressable>
+        </ScreenEnter>
       </ScrollView>
     </SafeAreaView>
   );

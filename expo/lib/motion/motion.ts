@@ -31,6 +31,12 @@ export const SCREEN_ENTER_MS = 400;
 export const SHEET_ENTER_DISTANCE = 40;
 /** Sheets: `transition={{ type: "spring", damping: 28, stiffness: 300 }}`. */
 export const SHEET_SPRING = { damping: 28, stiffness: 300 } as const;
+/** Timed sheet fallback duration (`duration: 0.28`). */
+export const SHEET_MS = 280;
+
+/** Modal pop (`ProtocolUnlock`, `GoalAchievedModal`): `scale: 0.96 -> 1`, `duration: 0.22`. */
+export const MODAL_INITIAL_SCALE = 0.96;
+export const MODAL_MS = 220;
 
 /** Avatar dropdown: `initial={{ opacity: 0, scale: 0.95, y: -4 }}` (ProfileMenu). */
 export const MENU_ENTER_DISTANCE = -4;
@@ -48,6 +54,8 @@ export const TILE_CROSSFADE_MS = 220;
 export const TILE_CROSSFADE_EASING: readonly [number, number, number, number] = [
   0.22, 1, 0.36, 1,
 ];
+/** Web's standard cubic-bezier `[0.22, 1, 0.36, 1]` ease-out curve. */
+export const EASE_OUT_EXPO = TILE_CROSSFADE_EASING;
 
 /** Progress fills: `transition-all duration-500` (StreakTile's bar). */
 export const PROGRESS_FILL_MS = 500;

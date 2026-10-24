@@ -2,6 +2,7 @@ import { View, Pressable } from "react-native";
 import { Droplets } from "lucide-react-native";
 import { Card } from "@/components/Card";
 import { Text } from "@/components/Text";
+import { ProgressFill } from "@/components/motion/ProgressFill";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 export interface WaterTrackerProps {
@@ -94,11 +95,11 @@ export function WaterTracker({
           marginBottom: 12,
         }}
       >
-        <View
+        <ProgressFill
+          pct={percentage}
           className="bg-blue-400"
           style={{
             height: "100%",
-            width: `${percentage}%`,
             borderRadius: 5,
           }}
         />

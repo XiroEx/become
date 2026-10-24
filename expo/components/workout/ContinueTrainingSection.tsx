@@ -4,6 +4,8 @@ import { useRouter } from "expo-router";
 import { Pause, Play, Zap } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { Card } from "@/components/Card";
+import { ProgressFill } from "@/components/motion/ProgressFill";
+import { PulseView } from "@/components/motion/PulseView";
 import {
   apiFetch,
   ActiveProgramsApiResponseSchema,
@@ -127,10 +129,10 @@ export function ContinueTrainingSection({
     // attached to the real header row and program-card container (the "..."
     // heading, the misplaced pill and the grey block under the card).
     return (
-      <View key="loading" testID={`${testID}-loading`} className="mb-4">
+      <PulseView key="loading" testID={`${testID}-loading`} className="mb-4">
         <View className="h-6 w-36 rounded bg-muted animate-pulse mb-3" />
         <View className="h-28 rounded-2xl bg-muted animate-pulse" />
-      </View>
+      </PulseView>
     );
   }
 
@@ -300,8 +302,8 @@ export function ContinueTrainingSection({
 
               {/* Progress Bar */}
               <View className="h-1.5 w-full rounded-full bg-muted overflow-hidden mt-1">
-                <View
-                  style={{ width: `${progress}%` }}
+                <ProgressFill
+                  pct={progress}
                   className={`h-full rounded-full ${
                     isPaused ? "bg-amber-500" : "bg-emerald-500"
                   }`}

@@ -6,6 +6,7 @@ import {
 } from "react-native";
 import { Trophy } from "lucide-react-native";
 import { Text } from "@/components/Text";
+import { ScreenEnter } from "@/components/motion/ScreenEnter";
 import {
   celebrationHaptic,
   type HapticFn,
@@ -14,6 +15,19 @@ import {
   modalAnimation,
   useReducedMotion,
 } from "@/lib/a11y/reducedMotion";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withSequence,
+  withTiming,
+} from "@/lib/motion/reanimated";
+import {
+  CELEBRATION_POP_MS,
+  CELEBRATION_POP_PEAK,
+  motionMs,
+} from "@/lib/motion/motion";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import type { GoalReached } from "@become/api-client";
 
@@ -42,12 +56,39 @@ export function GoalAchievedModal({
   const isOpen = visible !== undefined ? visible : reached !== null;
   const reduceMotion = useReducedMotion();
   const { colors, tint, scrim } = useThemeTokens();
+  const pop = useSharedValue(1);
 
   useEffect(() => {
     if (isOpen && reached) {
       haptic();
+      if (reduceMotion) {
+        pop.set(1);
+      } else {
+        const half = motionMs(CELEBRATION_POP_MS / 2, false);
+        pop.set(0);
+        pop.set(
+          withDelay(
+            150,
+            withSequence(
+              withTiming(CELEBRATION_POP_PEAK, {
+                duration: half,
+                easing: Easing.out(Easing.quad),
+              }),
+              withTiming(1, {
+                duration: half,
+                easing: Easing.inOut(Easing.quad),
+              }),
+            ),
+          ),
+        );
+      }
     }
-  }, [isOpen, reached, haptic]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- pop is a stable shared value
+  }, [isOpen, reached, haptic, reduceMotion]);
+
+  const trophyStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pop.value }],
+  }));
 
   if (!isOpen || !reached) {
     return null;
@@ -112,57 +153,68 @@ export function GoalAchievedModal({
 
           <View className="w-full px-6 py-7 items-center">
             {/* Trophy Icon */}
-            <View
+            <Animated.View
               testID={`${testID}-trophy-badge`}
-              style={{
-                width: 72,
-                height: 72,
-                borderRadius: 36,
-                backgroundColor: tint("success", 0.15),
-                borderWidth: 3,
-                borderColor: tint("success", 0.3),
-                alignItems: "center",
-                justifyContent: "center",
-                marginBottom: 16,
-              }}
+              style={[
+                {
+                  width: 72,
+                  height: 72,
+                  borderRadius: 36,
+                  backgroundColor: tint("success", 0.15),
+                  borderWidth: 3,
+                  borderColor: tint("success", 0.3),
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginBottom: 16,
+                },
+                reduceMotion ? undefined : trophyStyle,
+              ]}
             >
               <Trophy size={36} color={colors.success} />
-            </View>
+            </Animated.View>
 
-            <Text
-              testID={`${testID}-headline`}
-              accessibilityRole="header"
-              style={{ color: colors.success }}
-              className="text-2xl font-bold mb-1 text-center"
-            >
-              Goal Reached!
-            </Text>
+            <ScreenEnter delayMs={250} distance={10}>
+              <Text
+                testID={`${testID}-headline`}
+                accessibilityRole="header"
+                style={{ color: colors.success }}
+                className="text-2xl font-bold mb-1 text-center"
+              >
+                Goal Reached!
+              </Text>
+            </ScreenEnter>
 
-            <Text
-              testID={`${testID}-current-weight`}
-              className="text-5xl font-black text-foreground text-center mb-1"
-            >
-              {formatWeightWithUnit(reached.currentWeight, reached.unit)}
-            </Text>
+            <ScreenEnter delayMs={320} distance={8}>
+              <Text
+                testID={`${testID}-current-weight`}
+                className="text-5xl font-black text-foreground text-center mb-1"
+              >
+                {formatWeightWithUnit(reached.currentWeight, reached.unit)}
+              </Text>
+            </ScreenEnter>
 
-            <Text
-              testID={`${testID}-timeline`}
-              className="text-xs text-muted-foreground text-center mb-4"
-            >
-              {formatWeightWithUnit(reached.startWeight, reached.unit)} &rarr;{" "}
-              {formatWeightWithUnit(reached.targetWeight, reached.unit)} &middot;{" "}
-              {timeline}
-            </Text>
+            <ScreenEnter delayMs={370} distance={8}>
+              <Text
+                testID={`${testID}-timeline`}
+                className="text-xs text-muted-foreground text-center mb-4"
+              >
+                {formatWeightWithUnit(reached.startWeight, reached.unit)} &rarr;{" "}
+                {formatWeightWithUnit(reached.targetWeight, reached.unit)} &middot;{" "}
+                {timeline}
+              </Text>
+            </ScreenEnter>
 
-            <Text
-              testID={`${testID}-message`}
-              className="text-sm text-foreground/80 text-center leading-relaxed mb-6 px-2"
-            >
-              That&apos;s every meal logged, every workout shown up for. You put
-              in the work &mdash; this is what it looks like when it pays off.
-            </Text>
+            <ScreenEnter delayMs={420} distance={8}>
+              <Text
+                testID={`${testID}-message`}
+                className="text-sm text-foreground/80 text-center leading-relaxed mb-6 px-2"
+              >
+                That&apos;s every meal logged, every workout shown up for. You put
+                in the work &mdash; this is what it looks like when it pays off.
+              </Text>
+            </ScreenEnter>
 
-            <View className="w-full gap-2">
+            <ScreenEnter delayMs={480} distance={8} className="w-full gap-2">
               <Pressable
                 testID={`${testID}-set-next-goal`}
                 accessibilityRole="button"
@@ -199,7 +251,7 @@ export function GoalAchievedModal({
                   Keep going
                 </Text>
               </Pressable>
-            </View>
+            </ScreenEnter>
           </View>
         </Pressable>
       </Pressable>

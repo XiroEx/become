@@ -25,6 +25,7 @@ import {
 } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { Card } from "@/components/Card";
+import { ScreenEnter } from "@/components/motion/ScreenEnter";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import type { Occurrence } from "@/lib/nutrition/dayOrder";
 import type { MealLog } from "@become/api-client";
@@ -680,8 +681,9 @@ export function TagSection({
 
       {/* Section Content */}
       {!isCollapsed && (
-        <View>
-          {groups.map((group) => {
+        <ScreenEnter durationMs={180} distance={6}>
+          <View>
+            {groups.map((group) => {
             const groupCal = group.items.reduce((s, it) => {
               const q = typeof it.servings === "number" && it.servings > 0 ? it.servings : 1;
               return s + (it.nutrition?.calories ?? 0) * q;
@@ -940,7 +942,8 @@ export function TagSection({
               </Text>
             </View>
           )}
-        </View>
+          </View>
+        </ScreenEnter>
       )}
 
       {/* Kebab Modal */}
