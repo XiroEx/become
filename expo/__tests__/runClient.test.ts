@@ -613,6 +613,34 @@ describe("Native AI Run Client (NP-038)", () => {
       expect(outcome.error).toBe("timeout");
     });
 
+    it("returns a result that finished while the app was backgrounded past the deadline", async () => {
+      let pollCallCount = 0;
+      const mockFetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const method = init?.method ?? "GET";
+        if (method === "POST") {
+          return jsonResponse(200, { ok: true, runId: "run_backgrounded" });
+        }
+        pollCallCount++;
+        if (pollCallCount === 1) {
+          // App backgrounded: the next poll only fires after the 180s deadline
+          mockNow += 202000;
+          return jsonResponse(200, { status: "pending" });
+        }
+        return jsonResponse(200, {
+          status: "completed",
+          ok: true,
+          result: { items: [{ name: "Hot Dog Bun" }] },
+        });
+      });
+
+      configureAiRunClient({ fetchImpl: mockFetch as unknown as typeof fetch });
+
+      const outcome = await runAiTask("/api/ai/nutrition/plate", {});
+      expect(outcome.ok).toBe(true);
+      expect(outcome.result).toEqual({ items: [{ name: "Hot Dog Bun" }] });
+      expect(pollCallCount).toBe(2);
+    });
+
     it("marks run as not_found immediately when poll returns 404", async () => {
       const mockFetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const method = init?.method ?? "GET";
