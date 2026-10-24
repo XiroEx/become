@@ -433,6 +433,8 @@ export const webGradientTokens = {
   amber100: "254 243 198",
   /** amber-300 (v4) — the web's `dark:text-amber-300` */
   amber300: "255 210 55",
+  /** amber-400 (v4) — the web's `fill-amber-400` / `text-amber-400` */
+  amber400: "255 186 0",
   /** amber-700 (v4) — the web's `text-amber-700` */
   amber700: "181 82 0",
   /** amber-900 (v4) — the web's `dark:bg-amber-900/30` */
@@ -441,6 +443,8 @@ export const webGradientTokens = {
   orange100: "255 237 213",
   /** orange-300 (v4) — the web's `dark:text-orange-300` */
   orange300: "255 185 112",
+  /** orange-500 (v4) — the web's `bg-orange-500` */
+  orange500: "255 106 0",
   /** orange-700 (v4) — the web's `text-orange-700` */
   orange700: "196 62 0",
   /** orange-900 (v4) — the web's `dark:bg-orange-900/30` */
@@ -449,30 +453,66 @@ export const webGradientTokens = {
   red100: "255 226 226",
   /** red-300 (v4) — the web's `dark:text-red-300` */
   red300: "255 163 164",
+  /** red-400 (v4) — the web's `fill-red-400` / `text-red-400` */
+  red400: "255 101 104",
   /** red-700 (v4) — the web's `text-red-700` */
   red700: "191 0 15",
   /** red-900 (v4) — the web's `dark:bg-red-900/30` */
   red900: "130 24 26",
   /** green-100 (v4) — the web's `bg-green-100` */
   green100: "220 252 231",
+  /** green-300 (v4) — the web's `dark:text-green-300` */
+  green300: "119 241 165",
+  /** green-500 (v4) — the web's `bg-green-500` */
+  green500: "34 197 94",
+  /** green-700 (v4) — the web's `text-green-700` */
+  green700: "0 130 56",
   /** green-900 (v4) — the web's `dark:bg-green-900/30` */
   green900: "13 84 43",
   /** blue-100 (v4) — the web's `bg-blue-100` */
   blue100: "219 234 254",
+  /** blue-400 (v4) — the web's `dark:text-blue-400` */
+  blue400: "86 162 255",
+  /** blue-500 (v4) — the web's `bg-blue-500` */
+  blue500: "48 128 255",
+  /** blue-600 (v4) — the web's `text-blue-600` */
+  blue600: "21 93 252",
+  /** blue-700 (v4) — the web's `text-blue-700` */
+  blue700: "20 71 230",
   /** blue-900 (v4) — the web's `dark:bg-blue-900/30` */
   blue900: "28 57 142",
   /** purple-100 (v4) — the web's `bg-purple-100` */
   purple100: "243 232 255",
+  /** purple-300 (v4) — the web's `dark:text-purple-300` */
+  purple300: "216 178 255",
+  /** purple-400 (v4) — the web's `dark:text-purple-400` */
+  purple400: "191 126 255",
   /** purple-500 (v4) — the web's `bg-purple-500` */
   purple500: "171 78 255",
+  /** purple-600 (v4) — the web's `text-purple-600` */
+  purple600: "152 16 250",
+  /** purple-700 (v4) — the web's `text-purple-700` */
+  purple700: "130 0 219",
   /** purple-900 (v4) — the web's `dark:bg-purple-900/30` */
   purple900: "89 22 139",
   /** violet-100 (v4) — the web's `bg-violet-100` */
   violet100: "237 233 254",
   /** violet-300 (v4) — the web's `dark:text-violet-300` */
   violet300: "196 180 255",
+  /** violet-400 (v4) — the web's `text-violet-400` */
+  violet400: "166 132 255",
+  /** violet-500 (v4) — the web's `bg-violet-500` */
+  violet500: "141 86 255",
+  /** violet-600 (v4) — the web's `from-violet-600` */
+  violet600: "127 34 254",
+  /** violet-700 (v4) — the web's `text-violet-700` */
+  violet700: "112 8 231",
   /** violet-900 (v4) — the web's `dark:bg-violet-900/30` */
   violet900: "77 23 154",
+  /** zinc-100 (v4) — the web's `bg-zinc-100` */
+  zinc100: "244 244 245",
+  /** zinc-200 (v4) — the web's `bg-zinc-200` / `border-zinc-200` */
+  zinc200: "228 228 231",
   /** zinc-300 (v4) — the web's `bg-zinc-300` / `dark:text-zinc-300` */
   zinc300: "212 212 216",
   /** zinc-400 (v4) — the web's `text-zinc-400` / `bg-zinc-400` */
@@ -483,6 +523,10 @@ export const webGradientTokens = {
   zinc600: "82 82 92",
   /** zinc-700 (v4) — the web's `dark:bg-zinc-700` / `fill-zinc-700` */
   zinc700: "63 63 70",
+  /** zinc-800 (v4) — the web's `bg-zinc-800` */
+  zinc800: "39 39 42",
+  /** zinc-900 (v4) — the web's `bg-zinc-900` */
+  zinc900: "24 24 27",
   /** black — the web's `from-black/…` photo scrims */
   black: "0 0 0",
 } as const;
