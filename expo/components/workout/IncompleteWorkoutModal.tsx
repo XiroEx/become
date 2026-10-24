@@ -9,6 +9,7 @@ import {
 } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { useReducedMotion, modalAnimation } from "@/lib/a11y/reducedMotion";
+import { onDarkForeground } from "@/lib/theme/tokens";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import type { StaleIncompleteWorkout } from "@become/api-client";
 
@@ -116,7 +117,7 @@ export function IncompleteWorkoutModal({
               className="flex-row items-center gap-3 rounded-xl px-4 py-3 bg-blue-600 active:bg-blue-700"
               style={{ opacity: loadingAction ? 0.6 : 1 }}
             >
-              <Play size={18} color={colors["primary-foreground"]} />
+              <Play size={18} color={onDarkForeground} />
               <View className="flex-1">
                 <Text className="text-white font-semibold text-sm">
                   {loadingAction === "continue"

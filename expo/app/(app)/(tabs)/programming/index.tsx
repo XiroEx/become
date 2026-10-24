@@ -18,6 +18,7 @@ import { ProgramsCatalog } from "@/components/programs/ProgramsCatalog";
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { ScreenEnter } from "@/components/motion/ScreenEnter";
 import { PAGE_STAGGER_MS } from "@/lib/motion/motion";
+import { onDarkForeground } from "@/lib/theme/tokens";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { useTabBarCondenseOnScroll } from "@/lib/navigation/tabBarCondense";
 import { TAB_BAR_CONTENT_INSET } from "@/lib/navigation/tabBarInset";
@@ -163,7 +164,7 @@ export default function ProgrammingIndexRoute() {
             onPress={() => setShowGenerate(true)}
             className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full bg-purple-600"
           >
-            <Wand2 size={14} color={colors["primary-foreground"]} />
+            <Wand2 size={14} color={onDarkForeground} />
             <Text className="text-white text-xs font-semibold">
               Generate
             </Text>

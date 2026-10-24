@@ -110,6 +110,7 @@ import { WaterTracker } from "@/components/nutrition/WaterTracker";
 import { QuickAddSheet, type QuickAddData } from "@/components/nutrition/QuickAddSheet";
 import { invalidateMindSession } from "@/lib/mind/sessionCache";
 import { PageHeader } from "@/components/navigation/PageHeader";
+import { onDarkForeground } from "@/lib/theme/tokens";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { useTabBarCondenseOnScroll } from "@/lib/navigation/tabBarCondense";
 import { TAB_BAR_CONTENT_INSET } from "@/lib/navigation/tabBarInset";
@@ -1814,7 +1815,7 @@ export default function NutritionIndexRoute() {
         paddingVertical: 12,
       }}
     >
-      <CalendarDays size={16} color={colors["primary-foreground"]} />
+      <CalendarDays size={16} color={onDarkForeground} />
       <Text className="text-white text-sm font-semibold">Schedule meals</Text>
     </Pressable>
   );

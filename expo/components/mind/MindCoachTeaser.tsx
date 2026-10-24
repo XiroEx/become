@@ -3,6 +3,7 @@ import { Pressable, View } from "react-native";
 import { ChevronRight, Sparkles } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { WebGradient } from "@/components/WebGradient";
+import { onDarkForeground } from "@/lib/theme/tokens";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { CoachChat } from "@/components/ai/CoachChat";
 
@@ -53,7 +54,7 @@ export function MindCoachTeaser({ testID = "mind-coach-teaser" }: { testID?: str
                 marginRight: 12,
               }}
             >
-              <Sparkles size={18} color={colors["primary-foreground"]} />
+              <Sparkles size={18} color={onDarkForeground} />
             </WebGradient>
             <View style={{ flex: 1 }}>
               <Text className="text-foreground text-sm font-semibold">Talk to your coach</Text>

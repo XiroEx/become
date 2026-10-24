@@ -34,6 +34,7 @@ import { celebrationHaptic } from "@/lib/feedback/haptics";
 import { mindAccentColor } from "@/lib/mind/accents";
 import { reflectOnAnswers } from "@/lib/mind/reflect";
 import { dailyPick } from "@/lib/mind/rotation";
+import { onDarkForeground } from "@/lib/theme/tokens";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { tzOffsetMinutes } from "@/lib/time/localDay";
 
@@ -337,7 +338,7 @@ export default function AntiSabotageDashboard() {
       <ProtocolUnlockModal
         unlocked={justUnlocked}
         onDismiss={dismissUnlock}
-        accentColor={colors.accent}
+        accentColor={colors.orange}
       />
 
       <SystemHero
@@ -348,7 +349,7 @@ export default function AntiSabotageDashboard() {
         statLabel="patterns caught"
         colorClass="text-orange-500"
         bgClass="border-orange-500/20 bg-orange-500/10"
-        iconColor={colors.accent}
+        iconColor={colors.orange}
         testID="mind-system-hero"
       />
 
@@ -363,6 +364,7 @@ export default function AntiSabotageDashboard() {
         }
         colorClass="text-orange-500"
         bgClass="border-orange-500/20 bg-orange-500/10"
+        iconColor={colors.orange}
         title="Aimed at catching the pattern before it kills progress."
         subtitle="Shaped by what usually stops you."
         testID="mind-adaptive-session"
@@ -386,7 +388,7 @@ export default function AntiSabotageDashboard() {
         >
           <Hand
             size={20}
-            color={cooldown > 0 ? colors.accent : colors["primary-foreground"]}
+            color={cooldown > 0 ? colors["muted-foreground"] : onDarkForeground}
           />
           <Text
             className={`text-base font-bold ${
@@ -418,7 +420,7 @@ export default function AntiSabotageDashboard() {
               title={p.title}
               blurb={p.blurb}
               colorClass="text-orange-500"
-              iconColor={colors.accent}
+              iconColor={colors.orange}
               locked={i >= 1 + (reps ?? 0)}
               lockedHint={`Locked — do ${i - (reps ?? 0)} more rep${i - (reps ?? 0) === 1 ? "" : "s"} in Anti-Sabotage to unlock`}
               onClick={() =>
@@ -445,7 +447,7 @@ export default function AntiSabotageDashboard() {
                 title={f.trigger}
                 blurb="4 questions. Your answers get saved."
                 colorClass="text-orange-500"
-                iconColor={colors.accent}
+                iconColor={colors.orange}
                 testID={`mind-fear-card-${slug}`}
                 onClick={() =>
                   setFlow({

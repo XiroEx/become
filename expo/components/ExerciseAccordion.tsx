@@ -4,6 +4,11 @@ import { ChevronDown, ChevronUp, Dumbbell, Play } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { FramedVideo } from "@/components/FramedVideo";
 import { ScreenEnter } from "@/components/motion/ScreenEnter";
+import {
+  onDarkForeground,
+  rgbOf,
+  webGradientTokens,
+} from "@/lib/theme/tokens";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import type { VideoFramingOverride } from "@/lib/videoFraming";
 import type { VideoTrimOverride } from "@/lib/videoTrim";
@@ -166,12 +171,12 @@ export function ExerciseAccordion({
             width: 36,
             height: 36,
             borderRadius: 18,
-            backgroundColor: colors.success,
+            backgroundColor: rgbOf(webGradientTokens.green600),
             alignItems: "center",
             justifyContent: "center",
           }}
         >
-          <Text style={{ fontSize: 14, fontWeight: "700", color: colors["primary-foreground"] }}>
+          <Text style={{ fontSize: 14, fontWeight: "700", color: onDarkForeground }}>
             {index + 1}
           </Text>
         </View>
