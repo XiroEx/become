@@ -17,6 +17,8 @@ import {
 import { describeGoal } from "@become/core";
 import { useUnits } from "@/lib/hooks/useUnits";
 import { ProgressFill } from "@/components/motion/ProgressFill";
+import { PulseView } from "@/components/motion/PulseView";
+import { usePressed } from "@/lib/a11y/usePressed";
 import { MoodLogSheet } from "./MoodLogSheet";
 import type { MoodLevel } from "@/components/CheckInModal";
 import { MOOD_LABELS } from "@/components/CheckInModal";
@@ -83,6 +85,7 @@ export function StatTile({
 }: StatTileProps) {
   const { colors, tint } = useThemeTokens();
   const { weightUnit: userWeightUnit } = useUnits();
+  const tilePress = usePressed();
   const unit = statData?.weightUnit ?? userWeightUnit ?? "lbs";
   const wide = tile.size === "2x1";
   const [internalMoodOpen, setInternalMoodOpen] = useState(false);
@@ -101,7 +104,7 @@ export function StatTile({
           },
         ]}
       >
-        <View style={styles.squareContent}>
+        <PulseView style={styles.squareContent}>
           <View style={styles.topRow}>
             <View
               style={[
@@ -137,7 +140,7 @@ export function StatTile({
               backgroundColor: colors.muted,
             }}
           />
-        </View>
+        </PulseView>
       </View>
     );
   }
@@ -377,11 +380,14 @@ export function StatTile({
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
         onPress={pressHandler}
+        onPressIn={tilePress.onPressIn}
+        onPressOut={tilePress.onPressOut}
         style={[
           styles.card,
           {
             backgroundColor: colors.card,
             borderColor: colors.border,
+            opacity: tilePress.pressed ? 0.85 : 1,
           },
         ]}
       >

@@ -39,10 +39,17 @@ import {
 } from "@/lib/becoming/storage";
 import { useReducedMotion } from "@/lib/a11y/reducedMotion";
 import {
+  DOOR_NUDGE_MIN_OPACITY,
   DOOR_NUDGE_MS,
+  DOOR_NUDGE_PEAK_ALPHA,
+  DOOR_NUDGE_SPREAD,
   DOOR_PULSE_MS,
+  DOOR_PULSE_PEAK_ALPHA,
+  DOOR_PULSE_SPREAD,
   motionMs,
 } from "@/lib/motion/motion";
+import { useLoopActive } from "@/lib/motion/useLoopActive";
+import { usePressScale } from "@/lib/motion/usePressScale";
 
 export interface BecomingDoorProps {
   goals?: GoalProgressResponse | null;
@@ -115,35 +122,71 @@ export function BecomingDoor({
   }, []);
 
   // The web's two breaths (`globals.css`): the LOUD pulse while a new week
-  // sits unread (2.4s halo), the calm NUDGE while the card carries a "work on
-  // next" line (3.2s, half the amplitude) — one at a time, never stacked.
-  // Reanimated opacity on the card: React Native has no box-shadow animation
-  // to pulse, so the glow becomes a breath of the card itself. Reduce Motion
-  // holds the card still at full, like the web's `animation: none`.
-  const breath = useSharedValue(1);
-  const breathing = isUnread || topSuggestion(goals) != null;
+  // sits unread (`becoming-door-pulse 2.4s ease-in-out infinite`, outer halo
+  // spread 0 -> 8px at alpha 0.55 -> 0), the calm NUDGE while the card carries
+  // a "work on next" line (`becoming-door-nudge 3.2s ease-in-out infinite`,
+  // outer halo spread 0 -> 5px at alpha 0 -> 0.16, card opacity 0.96 -> 1) —
+  // one at a time, never stacked. Reduce Motion and blur/background pause
+  // the loop cleanly.
+  const hasSuggestion = topSuggestion(goals) != null;
+  const breathing = isUnread || hasSuggestion;
+  const loopActive = useLoopActive(breathing);
+  const phase = useSharedValue(0);
+  const pressScale = usePressScale();
 
   useEffect(() => {
-    if (!breathing || reduced) {
-      cancelAnimation(breath);
-      breath.set(1);
+    if (!loopActive || reduced) {
+      cancelAnimation(phase);
+      phase.set(0);
       return;
     }
-    const half = motionMs((isUnread ? DOOR_PULSE_MS : DOOR_NUDGE_MS) / 2, false);
-    breath.set(
+    const half = motionMs(
+      (isUnread ? DOOR_PULSE_MS : DOOR_NUDGE_MS) / 2,
+      false,
+    );
+    phase.set(0);
+    phase.set(
       withRepeat(
         withSequence(
-          withTiming(0.92, { duration: half, easing: Easing.inOut(Easing.ease) }),
-          withTiming(1, { duration: half, easing: Easing.inOut(Easing.ease) }),
+          withTiming(1, { duration: half, easing: Easing.inOut(Easing.sin) }),
+          withTiming(0, { duration: half, easing: Easing.inOut(Easing.sin) }),
         ),
         -1,
         false,
       ),
     );
-    return () => cancelAnimation(breath);
-  }, [breathing, isUnread, reduced, breath]);
+    return () => {
+      cancelAnimation(phase);
+      phase.set(0);
+    };
+  }, [loopActive, isUnread, reduced, phase]);
 
-  const breathStyle = useAnimatedStyle(() => ({ opacity: breath.value }));
+  const breathStyle = useAnimatedStyle(() => {
+    const p = phase.value;
+    return {
+      opacity: isUnread
+        ? 1
+        : DOOR_NUDGE_MIN_OPACITY + (1 - DOOR_NUDGE_MIN_OPACITY) * p,
+      shadowOpacity: isUnread ? 0.45 + 0.2 * p : 0.28 + 0.12 * p,
+    };
+  });
+
+  const haloStyle = useAnimatedStyle(() => {
+    const p = phase.value;
+    const spread = (isUnread ? DOOR_PULSE_SPREAD : DOOR_NUDGE_SPREAD) * p;
+    const alpha = isUnread
+      ? DOOR_PULSE_PEAK_ALPHA * (1 - p)
+      : DOOR_NUDGE_PEAK_ALPHA * p;
+    return {
+      top: -spread,
+      bottom: -spread,
+      left: -spread,
+      right: -spread,
+      borderRadius: 16 + spread,
+      borderWidth: spread,
+      opacity: alpha,
+    };
+  });
 
   const handlePress = () => {
     markBecomingSeen();
@@ -213,8 +256,31 @@ export function BecomingDoor({
 
   return (
     <Animated.View
-      style={breathing && !reduced ? breathStyle : undefined}
+      style={[
+        styles.outerWrap,
+        breathing
+          ? {
+              shadowColor: colors["mind-violet"],
+              shadowOffset: { width: 0, height: isUnread ? 12 : 9 },
+              shadowRadius: isUnread ? 18 : 13,
+            }
+          : undefined,
+        loopActive && !reduced ? breathStyle : undefined,
+        pressScale.style,
+      ]}
     >
+      {loopActive && !reduced ? (
+        <Animated.View
+          testID={`${testID}-halo`}
+          pointerEvents="none"
+          importantForAccessibility="no"
+          style={[
+            styles.halo,
+            { borderColor: colors["mind-violet"] },
+            haloStyle,
+          ]}
+        />
+      ) : null}
       <Pressable
         testID={testID}
         accessibilityRole="button"
@@ -224,8 +290,14 @@ export function BecomingDoor({
             : "The Becoming. Then → now → next, across all three."
         }
         onPress={handlePress}
-        onPressIn={cardPress.onPressIn}
-        onPressOut={cardPress.onPressOut}
+        onPressIn={() => {
+          cardPress.onPressIn();
+          pressScale.onPressIn();
+        }}
+        onPressOut={() => {
+          cardPress.onPressOut();
+          pressScale.onPressOut();
+        }}
         style={[
           minTouchTarget,
           styles.card,
@@ -516,12 +588,19 @@ export function BecomingDoor({
 }
 
 const styles = StyleSheet.create({
+  outerWrap: {
+    position: "relative",
+  },
+  halo: {
+    position: "absolute",
+  },
   card: {
     minHeight: 44,
     minWidth: 44,
     borderRadius: 16,
     padding: 14,
     borderWidth: 1,
+    overflow: "hidden",
     // No `gap`: the web stacks header / chips / next line with plain margins
     // (`p-3.5`, chips `mt-2.5`, next line `mt-2`), and a uniform gap fits
     // neither pair (10, then 8).

@@ -5,6 +5,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Sliders } from "lucide-react-native";
 import { Button } from "@/components/Button";
 import { BottomSheet } from "@/components/BottomSheet";
+import { PulseView } from "@/components/motion/PulseView";
+import { ScreenEnter } from "@/components/motion/ScreenEnter";
 import { TileGrid } from "@/components/dashboard/TileGrid";
 import { BecomingDoor } from "@/components/dashboard/BecomingDoor";
 import { MindsetCard } from "@/components/dashboard/MindsetCard";
@@ -441,7 +443,7 @@ export function DashboardScreen({
         style={{ flex: 1, backgroundColor: colors.background }}
         testID="dashboard-screen"
       >
-        <View
+        <PulseView
           testID="dashboard-skeleton"
           // Web phone padding: `px-3 py-4` (12 sides, 16 top) — the skeleton
           // paints the same box the loaded page scrolls in.
@@ -463,7 +465,7 @@ export function DashboardScreen({
               }}
             />
           ))}
-        </View>
+        </PulseView>
       </SafeAreaView>
     );
   }
@@ -482,9 +484,10 @@ export function DashboardScreen({
       style={{ flex: 1, backgroundColor: colors.background }}
       testID="dashboard-screen"
     >
-      <ScrollView
-        {...tabBarScroll}
-        testID="dashboard-scroll"
+      <ScreenEnter style={{ flex: 1 }} testID="dashboard-enter">
+        <ScrollView
+          {...tabBarScroll}
+          testID="dashboard-scroll"
         contentContainerStyle={{
           // Web phone padding: `px-3 py-4` in app/dashboard/layout.tsx (12
           // sides, 16 top) with `space-y-4` (16) between sections. The bottom
@@ -750,7 +753,8 @@ export function DashboardScreen({
         >
           <LegalLinks showCopyright />
         </View>
-      </ScrollView>
+        </ScrollView>
+      </ScreenEnter>
 
       <ProgramNudgeModal
         testID="dashboard-program-nudge-modal"

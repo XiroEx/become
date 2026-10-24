@@ -100,6 +100,18 @@ export const withTiming = (
   MOTION_AVAILABLE ? real.withTiming : (to: unknown) => to
 ) as typeof Reanimated.withTiming;
 
+export const withSpring = (
+  MOTION_AVAILABLE && typeof real.withSpring === "function"
+    ? real.withSpring
+    : (to: unknown) => to
+) as typeof Reanimated.withSpring;
+
+export const withDelay = (
+  MOTION_AVAILABLE && typeof real.withDelay === "function"
+    ? real.withDelay
+    : (_ms: number, next: unknown) => next
+) as typeof Reanimated.withDelay;
+
 export const withSequence = (
   MOTION_AVAILABLE && typeof real.withSequence === "function"
     ? real.withSequence
@@ -117,6 +129,35 @@ export const cancelAnimation = (
     ? real.cancelAnimation
     : () => {}
 ) as typeof Reanimated.cancelAnimation;
+
+const staticInterpolate = (
+  v: number,
+  input: readonly number[],
+  output: readonly number[],
+) => {
+  if (!input.length || !output.length) return v;
+  if (v <= input[0]) return output[0];
+  if (v >= input[input.length - 1]) return output[output.length - 1];
+  return output[0];
+};
+
+export const interpolate = (
+  MOTION_AVAILABLE && typeof real.interpolate === "function"
+    ? real.interpolate
+    : staticInterpolate
+) as typeof Reanimated.interpolate;
+
+export const Extrapolation = (
+  MOTION_AVAILABLE && real.Extrapolation
+    ? real.Extrapolation
+    : { CLAMP: "clamp", EXTEND: "extend", IDENTITY: "identity" }
+) as typeof Reanimated.Extrapolation;
+
+export const runOnJS = (
+  MOTION_AVAILABLE && typeof real.runOnJS === "function"
+    ? real.runOnJS
+    : <F extends (...args: never[]) => unknown>(fn: F) => fn
+) as typeof Reanimated.runOnJS;
 
 export const Easing = (
   MOTION_AVAILABLE && real.Easing ? real.Easing : staticEasing

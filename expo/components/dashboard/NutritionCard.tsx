@@ -4,6 +4,7 @@ import Svg, { Circle, G } from "react-native-svg";
 import { Droplets, UtensilsCrossed, Zap } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { Card } from "@/components/Card";
+import { ProgressFill } from "@/components/motion/ProgressFill";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import type { NutritionTrend } from "@/lib/dashboard/nutritionTrend";
 
@@ -28,18 +29,21 @@ export interface NutritionCardProps {
 function MiniBar({
   current,
   goal,
+  color,
   barClassName,
 }: {
   current: number;
   goal: number;
+  color: string;
   barClassName: string;
 }) {
   const pct = goal > 0 ? Math.min(Math.max(0, current / goal) * 100, 100) : 0;
   return (
     <View className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
-      <View
+      <ProgressFill
+        pct={pct}
+        color={color}
         className={`h-full rounded-full ${barClassName}`}
-        style={{ width: `${pct}%` }}
       />
     </View>
   );
@@ -165,6 +169,7 @@ export function NutritionCard({
             <MiniBar
               current={protein.current}
               goal={protein.goal}
+              color={colors["mind-blue"]}
               barClassName="bg-blue-500"
             />
           </View>
@@ -185,6 +190,7 @@ export function NutritionCard({
             <MiniBar
               current={carbs.current}
               goal={carbs.goal}
+              color={colors.success}
               barClassName="bg-emerald-500"
             />
           </View>
@@ -205,6 +211,7 @@ export function NutritionCard({
             <MiniBar
               current={fats.current}
               goal={fats.goal}
+              color={colors.amber}
               barClassName="bg-amber-400"
             />
           </View>
@@ -216,6 +223,7 @@ export function NutritionCard({
               <MiniBar
                 current={water.current}
                 goal={water.goal}
+                color={colors["mind-cyan"]}
                 barClassName="bg-sky-400"
               />
             </View>

@@ -18,6 +18,7 @@ import Animated, {
   Easing,
   useAnimatedStyle,
   useSharedValue,
+  withDelay,
   withTiming,
 } from "@/lib/motion/reanimated";
 import type { StyleProp, ViewStyle } from "react-native";
@@ -51,10 +52,11 @@ export function ScreenEnter({
       return;
     }
     t.set(0);
-    const id = setTimeout(() => {
-      t.set(withTiming(1, { duration: motionMs(SCREEN_ENTER_MS, false), easing: Easing.out(Easing.quad) }));
-    }, delayMs);
-    return () => clearTimeout(id);
+    const rise = withTiming(1, {
+      duration: motionMs(SCREEN_ENTER_MS, false),
+      easing: Easing.out(Easing.quad),
+    });
+    t.set(delayMs > 0 ? withDelay(delayMs, rise) : rise);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- t is a stable shared value; re-run on the inputs that matter
   }, [reduced, delayMs]);
 

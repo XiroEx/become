@@ -9,7 +9,7 @@
  * the fill draws at its width with no travel.
  */
 
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -52,8 +52,24 @@ export function ProgressFill({
   const from = useSharedValue(clamped);
   const to = useSharedValue(clamped);
   const p = useSharedValue(1);
+  const mounted = useRef(false);
 
   useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true;
+      if (!reduced && clamped > 0) {
+        from.set(0);
+        to.set(clamped);
+        p.set(0);
+        p.set(
+          withTiming(1, {
+            duration: motionMs(PROGRESS_FILL_MS, false),
+            easing: Easing.out(Easing.quad),
+          }),
+        );
+      }
+      return;
+    }
     if (to.get() === clamped) return;
     const now = from.get() + (to.get() - from.get()) * p.get();
     from.set(now);

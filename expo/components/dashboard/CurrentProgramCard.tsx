@@ -3,6 +3,7 @@ import { View, Pressable, StyleSheet } from "react-native";
 import { ChevronRight } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { Card } from "@/components/Card";
+import { ProgressFill } from "@/components/motion/ProgressFill";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { currentProgramPercent } from "@/lib/dashboard/trainingCards";
 
@@ -114,9 +115,10 @@ export function CurrentProgramCard({
           </Text>
         </View>
         <View className="h-2 w-full rounded-full bg-muted overflow-hidden">
-          <View
+          <ProgressFill
+            pct={pct}
+            color={colors.success}
             className="h-full rounded-full bg-emerald-500"
-            style={{ width: `${pct}%` }}
           />
         </View>
       </View>

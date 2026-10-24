@@ -9,6 +9,8 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Text } from "@/components/Text";
+import { useReducedMotion } from "@/lib/a11y/reducedMotion";
+import { useLoopActive } from "@/lib/motion/useLoopActive";
 import { resolveToken, tintToken } from "@/lib/theme/tokens";
 import {
   EMBER_BAND,
@@ -74,6 +76,8 @@ export function FireNumber({
   style,
   className = "",
 }: FireNumberProps) {
+  const reduced = useReducedMotion();
+  const loopActive = useLoopActive(true);
   const emberAnim = useMemo(() => new Animated.Value(0.75), []);
   const tongueAnims = useMemo(
     () => FLAMES.map(() => new Animated.Value(0)),
@@ -81,6 +85,11 @@ export function FireNumber({
   );
 
   useEffect(() => {
+    if (!loopActive || reduced) {
+      emberAnim.stopAnimation();
+      emberAnim.setValue(0.85);
+      return;
+    }
     const anim = Animated.loop(
       Animated.sequence([
         Animated.timing(emberAnim, {
@@ -97,9 +106,16 @@ export function FireNumber({
     );
     anim.start();
     return () => anim.stop();
-  }, [emberAnim]);
+  }, [emberAnim, loopActive, reduced]);
 
   useEffect(() => {
+    if (!loopActive || reduced) {
+      tongueAnims.forEach((v) => {
+        v.stopAnimation();
+        v.setValue(0.2);
+      });
+      return;
+    }
     // One loop per tongue, each on its own clock, so the five burn out of step
     // the way the web's staggered CSS keyframes do.
     const loops = tongueAnims.map((value, i) =>
@@ -121,7 +137,7 @@ export function FireNumber({
     );
     loops.forEach((loop) => loop.start());
     return () => loops.forEach((loop) => loop.stop());
-  }, [tongueAnims]);
+  }, [tongueAnims, loopActive, reduced]);
 
   return (
     <View testID="fire-number-container" style={styles.container}>

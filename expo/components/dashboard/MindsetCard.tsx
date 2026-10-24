@@ -2,6 +2,8 @@ import React from "react";
 import { View, Pressable, StyleSheet } from "react-native";
 import { Text } from "@/components/Text";
 import { Card } from "@/components/Card";
+import { ProgressFill } from "@/components/motion/ProgressFill";
+import { PulseView } from "@/components/motion/PulseView";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { useRouter } from "expo-router";
 import { ArrowRight, Brain, Check, Sparkles } from "lucide-react-native";
@@ -125,14 +127,10 @@ export function MindsetCard({
                     { backgroundColor: tint("muted", 0.5) },
                   ]}
                 >
-                  <View
-                    style={[
-                      styles.progressBar,
-                      {
-                        backgroundColor: colors["mind-violet"],
-                        width: `${progressPct}%`,
-                      },
-                    ]}
+                  <ProgressFill
+                    pct={progressPct}
+                    color={colors["mind-violet"]}
+                    style={styles.progressBar}
                   />
                 </View>
                 <Text
@@ -223,7 +221,7 @@ export function MindsetCard({
         </>
       ) : (
         /* Loading placeholder */
-        <View
+        <PulseView
           testID="mindset-card-placeholder"
           accessible={false}
           importantForAccessibility="no"
@@ -241,7 +239,7 @@ export function MindsetCard({
               { backgroundColor: tint("muted", 0.5) },
             ]}
           />
-        </View>
+        </PulseView>
       )}
 
       {/* CTA Button */}
