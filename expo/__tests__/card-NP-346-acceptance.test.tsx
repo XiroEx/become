@@ -134,12 +134,12 @@ function renderStage(props: Partial<JourneyStageProps> = {}, ref?: React.Ref<Jou
 
 /**
  * The opening starts when the stage is ON SCREEN (NP-347): the screen's push
- * has ended (`shown`, the default here) and the canvas has laid out. RNTL lays
- * nothing out, so a test that plays the opening says so itself.
+ * has ended (`shown`, the default here) and the canvas wrapper has laid out.
+ * RNTL lays nothing out, so a test that plays the opening says so itself.
  */
 function showStage(u: RenderResult) {
   act(() => {
-    u.getByTestId("skia-Canvas").props.onLayout({ nativeEvent: { layout: { x: 0, y: 0, width: WINDOW.width, height: WINDOW.height } } });
+    u.getByTestId("journey-canvas-wrap").props.onLayout({ nativeEvent: { layout: { x: 0, y: 0, width: WINDOW.width, height: WINDOW.height } } });
   });
 }
 
