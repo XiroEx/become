@@ -116,7 +116,7 @@ function renderStage(props: Partial<JourneyStageProps> = {}) {
 /** The opening starts when the stage is ON SCREEN (NP-347): RNTL lays nothing out, so the test says so. */
 function showStage(u: RenderResult) {
   act(() => {
-    u.getByTestId("skia-Canvas").props.onLayout({ nativeEvent: { layout: { x: 0, y: 0, width: WINDOW.width, height: WINDOW.height } } });
+    u.getByTestId("journey-canvas-wrap").props.onLayout({ nativeEvent: { layout: { x: 0, y: 0, width: WINDOW.width, height: WINDOW.height } } });
   });
 }
 

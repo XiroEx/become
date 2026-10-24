@@ -168,11 +168,11 @@ function tapAt(x: number, y: number) {
 
 // The opening starts when the stage is ON SCREEN (NP-347): the screen's push
 // has ended (`shown`, the stage's default when rendered bare) and its canvas
-// has laid out. RNTL lays nothing out, so a test says so the way the native
+// wrapper has laid out. RNTL lays nothing out, so a test says so the way the native
 // view would; the screen tests also emit the navigator's `transitionEnd`.
 function showStage(u: ReturnType<typeof render>) {
   act(() => {
-    u.getByTestId("skia-Canvas").props.onLayout({ nativeEvent: { layout: { x: 0, y: 0, width: WINDOW.width, height: WINDOW.height } } });
+    u.getByTestId("journey-canvas-wrap").props.onLayout({ nativeEvent: { layout: { x: 0, y: 0, width: WINDOW.width, height: WINDOW.height } } });
   });
 }
 function endTransition() {

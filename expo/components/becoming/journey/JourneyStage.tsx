@@ -285,7 +285,12 @@ interface StageCanvasProps {
   tilt: SharedValue<number>;
   drawProgress: SharedValue<number>;
   font: SkFont | null;
-  /** The canvas has laid out — Skia has its size, its first frame follows natively; the opening waits for this (NP-347). */
+  /**
+   * The canvas's wrapper has laid out — the wrapper is the canvas's size, so
+   * Skia has it and its first frame follows natively; the opening waits for
+   * this (NP-347). Skia's `Canvas` takes NO `onLayout` itself: it is
+   * unsupported on the new architecture.
+   */
   onLayout: (e: LayoutChangeEvent) => void;
 }
 
@@ -369,116 +374,129 @@ function StageCanvas({
     // Every colour on this canvas is `skiaRgbOf` (or `pillarColor`'s `hsl()`),
     // never `rgbOf`: Skia parses the string itself, reads the comma form only,
     // and paints what it cannot read black (NP-344).
-    <Canvas style={{ position: "absolute", left: 0, top: 0, width: vw, height: vh }} pointerEvents="none" onLayout={onLayout}>
-      {/* Ambient sky: the web's two radial washes */}
-      <Rect x={0} y={0} width={vw} height={vh}>
-        <RadialGradient c={vec(vw / 2, 0)} r={vh * 0.8} colors={[skiaRgbOf(SKY_VIOLET, 0.32), skiaRgbOf(SKY_VIOLET, 0)]} />
-      </Rect>
-      <Rect x={0} y={0} width={vw} height={vh}>
-        <RadialGradient c={vec(vw * 0.8, vh)} r={vh * 0.6} colors={[skiaRgbOf(SKY_EMERALD, 0.16), skiaRgbOf(SKY_EMERALD, 0)]} />
-      </Rect>
-      <Group transform={bgTransform}>
-        {stars.map((s, i) => (
-          <Circle key={i} cx={s.x * 0.25} cy={s.y * 0.25} r={s.r} color={skiaRgbOf(INK)} opacity={s.o * 0.5} />
-        ))}
-      </Group>
-      <Group transform={tiltTransform} origin={vec(vw / 2, vh / 2)}>
-        <Group transform={worldTransform}>
-          {/* Graph chrome: gridlines, the area under the line, the month ticks */}
-          <Group opacity={chromeOpacity}>
-            {grid.map((y) => (
-              <Line
-                key={y}
-                p1={vec(first ? first.x - size.w : 0, y)}
-                p2={vec(horizonPos ? horizonPos.x + size.w : 0, y)}
-                strokeWidth={hairW}
-                color={skiaRgbOf(INK, 0.07)}
-              />
-            ))}
-            {areaPath && (
-              <Path path={areaPath} style="fill">
-                <LinearGradient start={vec(0, areaTop)} end={vec(0, baseY)} colors={[skiaRgbOf(VIOLET, 0.22), skiaRgbOf(VIOLET, 0)]} />
-              </Path>
-            )}
-            {ticks.map((t) => (
-              <Group key={t.index} transform={labelScale} origin={vec(t.x, baseY)}>
-                <SkText
-                  x={labelX(t.x, t.label)}
-                  y={baseY + 34}
-                  text={t.label}
-                  font={font}
-                  color={skiaRgbOf(INK, 0.45)}
+    // Skia's Canvas takes NO `onLayout`: it is unsupported on the new
+    // architecture (`<Canvas onLayout /> is not supported` - Metro,
+    // 2026-10-23). The wrapper View lays out in the same commit at the
+    // same size, so ITS `onLayout` is the canvas's size signal; the
+    // Canvas itself is sized from the style, so it still draws at the
+    // right size.
+    <View
+      style={{ position: "absolute", left: 0, top: 0, width: vw, height: vh }}
+      pointerEvents="none"
+      onLayout={onLayout}
+      testID="journey-canvas-wrap"
+    >
+      <Canvas style={{ width: vw, height: vh }} pointerEvents="none">
+        {/* Ambient sky: the web's two radial washes */}
+        <Rect x={0} y={0} width={vw} height={vh}>
+          <RadialGradient c={vec(vw / 2, 0)} r={vh * 0.8} colors={[skiaRgbOf(SKY_VIOLET, 0.32), skiaRgbOf(SKY_VIOLET, 0)]} />
+        </Rect>
+        <Rect x={0} y={0} width={vw} height={vh}>
+          <RadialGradient c={vec(vw * 0.8, vh)} r={vh * 0.6} colors={[skiaRgbOf(SKY_EMERALD, 0.16), skiaRgbOf(SKY_EMERALD, 0)]} />
+        </Rect>
+        <Group transform={bgTransform}>
+          {stars.map((s, i) => (
+            <Circle key={i} cx={s.x * 0.25} cy={s.y * 0.25} r={s.r} color={skiaRgbOf(INK)} opacity={s.o * 0.5} />
+          ))}
+        </Group>
+        <Group transform={tiltTransform} origin={vec(vw / 2, vh / 2)}>
+          <Group transform={worldTransform}>
+            {/* Graph chrome: gridlines, the area under the line, the month ticks */}
+            <Group opacity={chromeOpacity}>
+              {grid.map((y) => (
+                <Line
+                  key={y}
+                  p1={vec(first ? first.x - size.w : 0, y)}
+                  p2={vec(horizonPos ? horizonPos.x + size.w : 0, y)}
+                  strokeWidth={hairW}
+                  color={skiaRgbOf(INK, 0.07)}
                 />
-              </Group>
-            ))}
-            {first && !first.horizon && (
-              <Group transform={labelScale} origin={vec(first.x, baseY)}>
-                <SkText
-                  x={labelX(first.x, "started")}
-                  y={baseY + 34 - 1.6 * TICK_FONT_SIZE}
-                  text="started"
-                  font={font}
-                  color={skiaRgbOf(INK, 0.6)}
-                />
-              </Group>
-            )}
-          </Group>
-          {/* The line, coloured by each week's subject */}
-          {segments.map((seg, i) =>
-            seg.dashed ? (
-              <Path
-                key={i}
-                path={`M ${seg.x1} ${seg.y1} L ${seg.x2} ${seg.y2}`}
-                style="stroke"
-                strokeWidth={lineW}
-                strokeCap="round"
-                color={seg.color}
-                opacity={0.85}
-              >
-                <DashPathEffect intervals={[6, 6]} />
-              </Path>
-            ) : (
-              <SolidSegment
-                key={i}
-                seg={seg}
-                index={segments.slice(0, i).filter((s) => !s.dashed).length}
-                count={solidCount}
-                strokeWidth={lineW}
-                drawProgress={drawProgress}
-              />
-            ),
-          )}
-          {/* Markers — constant screen size, coloured by the week's subject */}
-          <Group opacity={markersOpacity}>
-            {positions.map((p) => {
-              if (p.horizon) {
-                // The web's Horizon marker: a violet-400 ring, dashed `3 3`.
-                return (
-                  <Circle key="horizon" cx={p.x} cy={p.y} r={markerR} style="stroke" strokeWidth={ringW} color={skiaRgbOf(VIOLET)}>
-                    <DashPathEffect intervals={[3, 3]} />
-                  </Circle>
-                );
-              }
-              const w = weeks[p.index];
-              if (!w) return null;
-              const color = pillarColor(w.subject, w.score, 62);
-              return (
-                <Group key={p.index}>
-                  {w.isCurrent && (
-                    <Circle cx={p.x} cy={p.y} r={markerRing} style="stroke" strokeWidth={ringW} color={color} opacity={0.6} />
-                  )}
-                  {peaks.has(p.index) && (
-                    <Circle cx={p.x} cy={p.y} r={markerRing} style="stroke" strokeWidth={ringW} color={skiaRgbOf(GOLD)} opacity={0.9} />
-                  )}
-                  <Circle cx={p.x} cy={p.y} r={markerR} color={color} />
-                  <Circle cx={p.x} cy={p.y} r={markerR} style="stroke" strokeWidth={ringW} color={skiaRgbOf(STAGE_BG)} />
+              ))}
+              {areaPath && (
+                <Path path={areaPath} style="fill">
+                  <LinearGradient start={vec(0, areaTop)} end={vec(0, baseY)} colors={[skiaRgbOf(VIOLET, 0.22), skiaRgbOf(VIOLET, 0)]} />
+                </Path>
+              )}
+              {ticks.map((t) => (
+                <Group key={t.index} transform={labelScale} origin={vec(t.x, baseY)}>
+                  <SkText
+                    x={labelX(t.x, t.label)}
+                    y={baseY + 34}
+                    text={t.label}
+                    font={font}
+                    color={skiaRgbOf(INK, 0.45)}
+                  />
                 </Group>
-              );
-            })}
+              ))}
+              {first && !first.horizon && (
+                <Group transform={labelScale} origin={vec(first.x, baseY)}>
+                  <SkText
+                    x={labelX(first.x, "started")}
+                    y={baseY + 34 - 1.6 * TICK_FONT_SIZE}
+                    text="started"
+                    font={font}
+                    color={skiaRgbOf(INK, 0.6)}
+                  />
+                </Group>
+              )}
+            </Group>
+            {/* The line, coloured by each week's subject */}
+            {segments.map((seg, i) =>
+              seg.dashed ? (
+                <Path
+                  key={i}
+                  path={`M ${seg.x1} ${seg.y1} L ${seg.x2} ${seg.y2}`}
+                  style="stroke"
+                  strokeWidth={lineW}
+                  strokeCap="round"
+                  color={seg.color}
+                  opacity={0.85}
+                >
+                  <DashPathEffect intervals={[6, 6]} />
+                </Path>
+              ) : (
+                <SolidSegment
+                  key={i}
+                  seg={seg}
+                  index={segments.slice(0, i).filter((s) => !s.dashed).length}
+                  count={solidCount}
+                  strokeWidth={lineW}
+                  drawProgress={drawProgress}
+                />
+              ),
+            )}
+            {/* Markers — constant screen size, coloured by the week's subject */}
+            <Group opacity={markersOpacity}>
+              {positions.map((p) => {
+                if (p.horizon) {
+                  // The web's Horizon marker: a violet-400 ring, dashed `3 3`.
+                  return (
+                    <Circle key="horizon" cx={p.x} cy={p.y} r={markerR} style="stroke" strokeWidth={ringW} color={skiaRgbOf(VIOLET)}>
+                      <DashPathEffect intervals={[3, 3]} />
+                    </Circle>
+                  );
+                }
+                const w = weeks[p.index];
+                if (!w) return null;
+                const color = pillarColor(w.subject, w.score, 62);
+                return (
+                  <Group key={p.index}>
+                    {w.isCurrent && (
+                      <Circle cx={p.x} cy={p.y} r={markerRing} style="stroke" strokeWidth={ringW} color={color} opacity={0.6} />
+                    )}
+                    {peaks.has(p.index) && (
+                      <Circle cx={p.x} cy={p.y} r={markerRing} style="stroke" strokeWidth={ringW} color={skiaRgbOf(GOLD)} opacity={0.9} />
+                    )}
+                    <Circle cx={p.x} cy={p.y} r={markerR} color={color} />
+                    <Circle cx={p.x} cy={p.y} r={markerR} style="stroke" strokeWidth={ringW} color={skiaRgbOf(STAGE_BG)} />
+                  </Group>
+                );
+              })}
+            </Group>
           </Group>
         </Group>
-      </Group>
-    </Canvas>
+      </Canvas>
+    </View>
   );
 }
 
@@ -1047,11 +1065,12 @@ export const JourneyStage = forwardRef<JourneyStageHandle, JourneyStageProps>(fu
   const fogStyle = useAnimatedStyle(() => ({ opacity: fog.value }));
   const hudStyle = useAnimatedStyle(() => ({ opacity: hudOpacity(camS.value) }));
 
-  // LAID OUT (NP-347): the stage's native tree has its frames. The canvas
-  // reports it — Skia has its size, and its first frame follows on the
-  // native side — and so does the gesture surface, laid out in the same
-  // commit, so a dropped prop can never leave the opening waiting. Latched:
-  // `setLaidOut(true)` is idempotent, and a later layout is a resize.
+  // LAID OUT (NP-347): the stage's native tree has its frames. The canvas's
+  // wrapper reports it — the wrapper IS the canvas's size, so Skia has it and
+  // its first frame follows on the native side — and so does the gesture
+  // surface, laid out in the same commit, so a dropped prop can never leave
+  // the opening waiting. Latched: `setLaidOut(true)` is idempotent, and a
+  // later layout is a resize.
   const onCanvasLayout = useCallback((e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;
     if (!width || !height) return;

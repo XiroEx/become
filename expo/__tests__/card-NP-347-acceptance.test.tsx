@@ -153,10 +153,10 @@ const phase = (u: RenderResult): string => {
 };
 
 const LAYOUT = { nativeEvent: { layout: { x: 0, y: 0, width: WINDOW.width, height: WINDOW.height } } };
-/** The Skia canvas has laid out — the stage's own signal. RNTL lays nothing out, so the prop is called as the native view would. */
+/** The canvas's wrapper has laid out — the stage's own signal. RNTL lays nothing out, so the prop is called as the native view would. */
 function layoutCanvas(u: RenderResult) {
   act(() => {
-    u.getByTestId("skia-Canvas").props.onLayout(LAYOUT);
+    u.getByTestId("journey-canvas-wrap").props.onLayout(LAYOUT);
   });
 }
 /** The gesture surface, laid out in the same commit as the canvas, reports the same beat. */
@@ -563,5 +563,25 @@ describe("the screen asks its navigator at its own mount and hands the answer to
     // The phase on screen is derived, not stored: no effect sets it.
     expect(stage).toMatch(/const introPhase: IntroPhase = introBeat !== "done" && !onScreen \? "waiting" : introBeat;/);
     expect(stage).not.toMatch(/setIntroPhase/);
+  });
+
+  it("the canvas takes NO `onLayout` (unsupported on the new architecture): its wrapper lays out at the same size and reports it", () => {
+    jest.useFakeTimers();
+    const u = renderStage({ introKind: "full" });
+    expect(phase(u)).toBe("waiting");
+    // The Skia Canvas itself carries no layout handler — that prop is what
+    // Metro rejects on the new architecture.
+    expect(u.getByTestId("skia-Canvas").props.onLayout).toBeUndefined();
+    // …and the wrapper does: same size as the canvas, so the canvas still
+    // draws at the right size, and its layout starts the opening.
+    const wrap = u.getByTestId("journey-canvas-wrap");
+    expect(wrap.props.onLayout).toEqual(expect.any(Function));
+    expect(flat(wrap)).toEqual(expect.objectContaining({ width: WINDOW.width, height: WINDOW.height }));
+    expect(flat(u.getByTestId("skia-Canvas"))).toEqual(
+      expect.objectContaining({ width: WINDOW.width, height: WINDOW.height }),
+    );
+    layoutCanvas(u);
+    expect(phase(u)).toBe("hold");
+    expect(u.getByTestId("journey-title")).toBeTruthy();
   });
 });
