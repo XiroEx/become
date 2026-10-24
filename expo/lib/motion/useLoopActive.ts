@@ -18,11 +18,15 @@ import { AppState, type AppStateStatus } from "react-native";
 import { useReducedMotion } from "@/lib/a11y/reducedMotion";
 import { useScreenFocus } from "@/lib/navigation/useScreenFocus";
 
+function isForegroundState(state: AppStateStatus | null | undefined): boolean {
+  return state !== "background" && state !== "inactive";
+}
+
 export function useLoopActive(enabled = true): boolean {
   const reduced = useReducedMotion();
   const [screenFocused, setScreenFocused] = useState(true);
-  const [appActive, setAppActive] = useState<boolean>(
-    () => (AppState.currentState ?? "active") === "active",
+  const [appActive, setAppActive] = useState<boolean>(() =>
+    isForegroundState(AppState?.currentState),
   );
 
   useScreenFocus(
@@ -37,7 +41,7 @@ export function useLoopActive(enabled = true): boolean {
   useEffect(() => {
     if (typeof AppState?.addEventListener !== "function") return;
     const sub = AppState.addEventListener("change", (next: AppStateStatus) => {
-      const nextActive = next === "active";
+      const nextActive = isForegroundState(next);
       setAppActive((prev) => (prev === nextActive ? prev : nextActive));
     });
     return () => sub?.remove?.();

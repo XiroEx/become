@@ -48,6 +48,21 @@ import { becomingStageTokens, onDarkForeground, rgbOf, type TokenName } from '@/
 import { WebGradient } from '@/components/WebGradient'
 import { minTouchTarget } from '@/lib/a11y/touchTarget'
 import { useAuth } from '@/lib/auth/useAuth'
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from '@/lib/motion/reanimated'
+import { useReducedMotion } from '@/lib/a11y/reducedMotion'
+import {
+  BECOMING_MODAL_ENTER_Y,
+  BECOMING_MODAL_MS,
+  BECOMING_TAB_SLIDE_DISTANCE,
+  BECOMING_TAB_SLIDE_MS,
+  EASE_OUT_EXPO,
+  motionMs,
+} from '@/lib/motion/motion'
 import { WEBAPP_BASE_URL } from '@/lib/config'
 
 export type DetailsTab = 'story' | 'training' | 'fuel' | 'mind'
@@ -317,6 +332,70 @@ export function BecomingDetails({
   const [sheet, setSheet] = useState<SheetState | null>(null)
   const [allWeeks, setAllWeeks] = useState(false)
   const [allWins, setAllWins] = useState(false)
+  const reduced = useReducedMotion()
+
+  const modalY = useSharedValue(reduced ? 0 : BECOMING_MODAL_ENTER_Y)
+  const modalOpacity = useSharedValue(reduced ? 1 : 0)
+  const tabSlideX = useSharedValue(0)
+  const tabOpacity = useSharedValue(1)
+
+  useEffect(() => {
+    if (!open) return
+    if (reduced) {
+      modalY.set(0)
+      modalOpacity.set(1)
+      return
+    }
+    const cfg = {
+      duration: motionMs(BECOMING_MODAL_MS, reduced),
+      easing: Easing.bezier(
+        EASE_OUT_EXPO[0],
+        EASE_OUT_EXPO[1],
+        EASE_OUT_EXPO[2],
+        EASE_OUT_EXPO[3],
+      ),
+    }
+    modalY.set(BECOMING_MODAL_ENTER_Y)
+    modalOpacity.set(0)
+    modalY.set(withTiming(0, cfg))
+    modalOpacity.set(withTiming(1, cfg))
+  }, [open, reduced, modalY, modalOpacity])
+
+  const selectTab = (next: DetailsTab) => {
+    if (next === tab) return
+    const prevIdx = TABS.findIndex((tb) => tb.id === tab)
+    const nextIdx = TABS.findIndex((tb) => tb.id === next)
+    const dir = nextIdx >= prevIdx ? 1 : -1
+    setTab(next)
+    if (reduced) {
+      tabSlideX.set(0)
+      tabOpacity.set(1)
+      return
+    }
+    const cfg = {
+      duration: motionMs(BECOMING_TAB_SLIDE_MS, reduced),
+      easing: Easing.bezier(
+        EASE_OUT_EXPO[0],
+        EASE_OUT_EXPO[1],
+        EASE_OUT_EXPO[2],
+        EASE_OUT_EXPO[3],
+      ),
+    }
+    tabSlideX.set(dir * BECOMING_TAB_SLIDE_DISTANCE)
+    tabOpacity.set(0)
+    tabSlideX.set(withTiming(0, cfg))
+    tabOpacity.set(withTiming(1, cfg))
+  }
+
+  const modalEnterStyle = useAnimatedStyle(() => ({
+    opacity: modalOpacity.value,
+    transform: [{ translateY: modalY.value }],
+  }))
+
+  const tabSlideStyle = useAnimatedStyle(() => ({
+    opacity: tabOpacity.value,
+    transform: [{ translateX: tabSlideX.value }],
+  }))
 
   const [prog, setProg] = useState<ProgressData | null>(null)
   const [wins, setWins] = useState<Win[]>([])
@@ -481,7 +560,13 @@ export function BecomingDetails({
 
   return (
     <Modal visible={open} animationType="slide" transparent={false} onRequestClose={onClose}>
-      <View style={[styles.root, { backgroundColor: colors.background, paddingTop: Math.max(insets.top, 12) }]}>
+      <Animated.View
+        style={[
+          styles.root,
+          { backgroundColor: colors.background, paddingTop: Math.max(insets.top, 12) },
+          modalEnterStyle,
+        ]}
+      >
         {/* Header */}
         <View style={styles.header}>
           <View>
@@ -506,7 +591,7 @@ export function BecomingDetails({
             return (
               <Pressable
                 key={tb.id}
-                onPress={() => setTab(tb.id)}
+                onPress={() => selectTab(tb.id)}
                 testID={`details-tab-${tb.id}`}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: on }}
@@ -539,6 +624,7 @@ export function BecomingDetails({
           ]}
           testID={`details-screen-${tab}`}
         >
+          <Animated.View style={tabSlideStyle}>
           {/* ── STORY SCREEN ── */}
           {tab === 'story' && (
             <View style={styles.tabContent}>
@@ -1293,6 +1379,7 @@ export function BecomingDetails({
               )}
             </View>
           )}
+          </Animated.View>
         </ScrollView>
 
         <StrengthTargetSheet
@@ -1312,7 +1399,7 @@ export function BecomingDetails({
               : null
           }
         />
-      </View>
+      </Animated.View>
     </Modal>
   )
 }

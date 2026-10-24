@@ -71,6 +71,8 @@ import {
 import { precomposeMindSession } from "@/lib/mind/precompose";
 import { runAiTask } from "@/lib/ai/runClient";
 import { MindCoachTeaser } from "@/components/mind/MindCoachTeaser";
+import { ScreenEnter } from "@/components/motion/ScreenEnter";
+import { SECTION_STAGGER_MS } from "@/lib/motion/motion";
 
 export interface MindRouteProps {
   testID?: string;
@@ -632,8 +634,35 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
             parity: `webapp/components/mind/MindJourney.tsx`). */}
         {levelProgress ? (
           available ? (
-            <View testID="mind-level-bar">
-              <View className="flex-row items-center gap-3">
+            <ScreenEnter delayMs={SECTION_STAGGER_MS}>
+              <View testID="mind-level-bar">
+                <View className="flex-row items-center gap-3">
+                  <View className="rounded-md bg-violet-100 dark:bg-violet-500/15 px-2 py-0.5">
+                    <Text className="text-xs font-extrabold text-violet-600 dark:text-violet-300">
+                      Lv {level}
+                    </Text>
+                  </View>
+                  <View className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                    <LinearGradient
+                      colors={[colors["mind-violet"], colors["mind-green"]]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={{
+                        height: "100%",
+                        borderRadius: 999,
+                        width: `${Math.min(100, Math.max(0, levelProgress.pct))}%`,
+                      }}
+                    />
+                  </View>
+                  <Text className="text-xs font-medium text-muted-foreground">
+                    {levelProgress.xpToNext} XP
+                  </Text>
+                </View>
+              </View>
+            </ScreenEnter>
+          ) : (
+            <ScreenEnter delayMs={SECTION_STAGGER_MS}>
+              <View testID="mind-level-bar" className="flex-row items-center gap-2.5">
                 <View className="rounded-md bg-violet-100 dark:bg-violet-500/15 px-2 py-0.5">
                   <Text className="text-xs font-extrabold text-violet-600 dark:text-violet-300">
                     Lv {level}
@@ -651,44 +680,22 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
                     }}
                   />
                 </View>
-                <Text className="text-xs font-medium text-muted-foreground">
-                  {levelProgress.xpToNext} XP
+                <Text
+                  testID="mind-chapter-path"
+                  className="shrink-0 text-xs font-semibold text-muted-foreground"
+                >
+                  Ch.{chapter} · {chapterName}
                 </Text>
               </View>
-            </View>
-          ) : (
-            <View testID="mind-level-bar" className="flex-row items-center gap-2.5">
-              <View className="rounded-md bg-violet-100 dark:bg-violet-500/15 px-2 py-0.5">
-                <Text className="text-xs font-extrabold text-violet-600 dark:text-violet-300">
-                  Lv {level}
-                </Text>
-              </View>
-              <View className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
-                <LinearGradient
-                  colors={[colors["mind-violet"], colors["mind-green"]]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={{
-                    height: "100%",
-                    borderRadius: 999,
-                    width: `${Math.min(100, Math.max(0, levelProgress.pct))}%`,
-                  }}
-                />
-              </View>
-              <Text
-                testID="mind-chapter-path"
-                className="shrink-0 text-xs font-semibold text-muted-foreground"
-              >
-                Ch.{chapter} · {chapterName}
-              </Text>
-            </View>
+            </ScreenEnter>
           )
         ) : null}
 
         {/* Chapter progression (visual path) — only while a main session is
             available; the cooldown label above replaces it. */}
         {available ? (
-          <View testID="mind-chapter-path">
+          <ScreenEnter delayMs={SECTION_STAGGER_MS * 2}>
+            <View testID="mind-chapter-path">
             <View className="flex-row items-center">
               {CHAPTERS.map((c, i) => {
                 const done = c.id < chapter;
@@ -742,9 +749,11 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
                 ? ` — ${sessionsIntoChapter.done}/${sessionsIntoChapter.needed} sessions to Ch.${chapter + 1}`
                 : " — final chapter"}
             </Text>
-          </View>
+            </View>
+          </ScreenEnter>
         ) : null}
 
+        <ScreenEnter delayMs={SECTION_STAGGER_MS * 3}>
         {sessionLock ? (
           /* Lock Card: Free member with sessions >= sessionsLimit */
           <Pressable
@@ -851,12 +860,14 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
             />
           </View>
         )}
+        </ScreenEnter>
 
         {/* The Becoming — where you started, where you are, what's next, for
             all three pillars. Present in both the available and cooldown
             states (web parity: `webapp/components/mind/MindJourney.tsx:574-589`).
             Opens the same screen `BecomingDoor` on the dashboard routes to —
             the journey stage (NP-204), with the details sheet over it. */}
+        <ScreenEnter delayMs={SECTION_STAGGER_MS * 4}>
         <Pressable
           testID="mind-becoming-link"
           accessibilityRole="button"
@@ -874,9 +885,11 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
           </View>
           <ChevronRight size={20} color={colors["muted-foreground"]} />
         </Pressable>
+        </ScreenEnter>
 
         {/* AI coach — unlocks after 3 main sessions (parity with
             `webapp/components/mind/MindJourney.tsx:591-604`). */}
+        <ScreenEnter delayMs={SECTION_STAGGER_MS * 5}>
         {(progress?.mainSessionCount ?? 0) >= 3 ? (
           <MindCoachTeaser testID="mind-coach-teaser" />
         ) : (
@@ -894,6 +907,7 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
             <Lock size={16} color={colors["muted-foreground"]} />
           </View>
         )}
+        </ScreenEnter>
       </ScrollView>
 
       {/* The session itself (NP-098): a full-screen modal over the home, so the

@@ -15,6 +15,7 @@ import AntiSabotageDashboard from "@/components/mind/AntiSabotageDashboard";
 import SocialDashboard from "@/components/mind/SocialDashboard";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { useScrollFocusedFieldIntoView } from "@/lib/keyboard/useScrollFocusedFieldIntoView";
+import { ScreenEnter } from "@/components/motion/ScreenEnter";
 
 export const SECTION_LABELS: Record<string, string> = {
   "state-shift": "State Shift",
@@ -89,24 +90,26 @@ export default function MindSectionRoute() {
               className="flex-1 p-4"
               contentContainerStyle={{ paddingBottom: 40 }}
             >
-              {section === "state-shift" && <StateShiftDashboard />}
-              {section === "self-image" && <SelfImageDashboard />}
-              {section === "mission" && <MissionDashboard />}
-              {section === "discipline" && <DisciplineDashboard />}
-              {section === "anti-sabotage" && <AntiSabotageDashboard />}
-              {section === "social" && <SocialDashboard />}
-              {section === "vision" && (
-                <TierGate feature="vision">
-                  <VisionDashboard setActiveField={setActiveField} />
-                </TierGate>
-              )}
-              {!["state-shift", "self-image", "mission", "discipline", "anti-sabotage", "social", "vision"].includes(section) && (
-                <View className="items-center justify-center p-8">
-                  <Text className="text-center text-sm text-muted-foreground">
-                    {label} is coming soon.
-                  </Text>
-                </View>
-              )}
+              <ScreenEnter key={section}>
+                {section === "state-shift" && <StateShiftDashboard />}
+                {section === "self-image" && <SelfImageDashboard />}
+                {section === "mission" && <MissionDashboard />}
+                {section === "discipline" && <DisciplineDashboard />}
+                {section === "anti-sabotage" && <AntiSabotageDashboard />}
+                {section === "social" && <SocialDashboard />}
+                {section === "vision" && (
+                  <TierGate feature="vision">
+                    <VisionDashboard setActiveField={setActiveField} />
+                  </TierGate>
+                )}
+                {!["state-shift", "self-image", "mission", "discipline", "anti-sabotage", "social", "vision"].includes(section) && (
+                  <View className="items-center justify-center p-8">
+                    <Text className="text-center text-sm text-muted-foreground">
+                      {label} is coming soon.
+                    </Text>
+                  </View>
+                )}
+              </ScreenEnter>
             </ScrollView>
           </KeyboardAvoidingView>
         </ToolIntroGate>

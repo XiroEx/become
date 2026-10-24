@@ -12,6 +12,8 @@ import { useRouter } from "expo-router";
 import { ArrowRight, Sparkles } from "lucide-react-native";
 import type { SuggestedAction } from "@become/core";
 import { Text } from "@/components/Text";
+import { PulseView } from "@/components/motion/PulseView";
+import { useLoopActive } from "@/lib/motion/useLoopActive";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import type { TokenName } from "@/lib/theme/tokens";
 
@@ -117,6 +119,7 @@ export default function SuggestedActions({
   const router = useRouter();
   const { colors } = useThemeTokens();
   const { width: windowWidth } = useWindowDimensions();
+  const loopActive = useLoopActive();
 
   const [activeIndex, setActiveIndex] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -137,9 +140,9 @@ export default function SuggestedActions({
     }, RESUME_MS);
   }, []);
 
-  // Auto-rotate every 3s
+  // Auto-rotate every 3s while focused, foregrounded, and full-motion.
   useEffect(() => {
-    if (paused || n <= 1) return;
+    if (paused || !loopActive || n <= 1) return;
     const interval = setInterval(() => {
       setActiveIndex((prev) => {
         const next = (prev + 1) % n;
@@ -151,7 +154,7 @@ export default function SuggestedActions({
       });
     }, ROTATE_MS);
     return () => clearInterval(interval);
-  }, [paused, n, containerWidth]);
+  }, [paused, loopActive, n, containerWidth]);
 
   useEffect(() => {
     return () => {
@@ -195,9 +198,9 @@ export default function SuggestedActions({
               · tuning…
             </Text>
           </View>
-          <View
+          <PulseView
             testID="mind-suggested-skeleton"
-            className="h-28 w-full rounded-2xl bg-muted/60 opacity-60"
+            className="h-28 w-full rounded-2xl bg-muted/60"
           />
         </View>
       );

@@ -77,6 +77,8 @@ import {
   invalidateMindSession,
   warmMindSession,
 } from "@/lib/mind/sessionCache";
+import { ScreenEnter } from "@/components/motion/ScreenEnter";
+import { SECTION_STAGGER_MS } from "@/lib/motion/motion";
 
 /**
  * THE MIND SESSION PLAYER, natively (NP-098 / NP-101).
@@ -866,16 +868,21 @@ export function SessionPlayer({
                     className="mt-5 w-full max-w-xs gap-1.5"
                   >
                     {recapItems.map((label, i) => (
-                      <View
+                      <ScreenEnter
                         key={`${label}-${i}`}
-                        testID={`${testID}-payoff-recap-${i}`}
-                        className="flex-row items-center gap-2.5 rounded-xl bg-white/[0.06] px-3 py-2"
+                        delayMs={i * SECTION_STAGGER_MS}
+                        distance={6}
                       >
-                        <Check size={14} color={PLAYER_GREEN} strokeWidth={3} />
-                        <Text className="text-xs font-medium text-white/75">
-                          {label}
-                        </Text>
-                      </View>
+                        <View
+                          testID={`${testID}-payoff-recap-${i}`}
+                          className="flex-row items-center gap-2.5 rounded-xl bg-white/[0.06] px-3 py-2"
+                        >
+                          <Check size={14} color={PLAYER_GREEN} strokeWidth={3} />
+                          <Text className="text-xs font-medium text-white/75">
+                            {label}
+                          </Text>
+                        </View>
+                      </ScreenEnter>
                     ))}
                   </View>
                 ) : null}
