@@ -86,7 +86,7 @@ export function MindsetCard({
             style={[
               styles.viewLinkText,
               WRAPPABLE_TEXT,
-              { color: colors.primary },
+              { color: colors.info },
             ]}
           >
             View

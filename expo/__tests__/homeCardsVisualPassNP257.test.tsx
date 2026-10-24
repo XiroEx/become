@@ -105,11 +105,11 @@ describe("NP-257: the mood tile colours the value per mood level, not one flat a
   });
 });
 
-describe("NP-257: SmartRotatingTile's live dot is indigo-ish (info), not the brand red", () => {
+describe("NP-257: SmartRotatingTile's live dot is indigo, not the brand red", () => {
   it("never paints the live dot with colors.primary", () => {
     const src = readSrc("SmartRotatingTile.tsx");
     expect(src).not.toContain('backgroundColor: colors.primary');
-    expect(src).toContain("colors.info");
+    expect(src).toContain("colors.indigo");
   });
 });
 

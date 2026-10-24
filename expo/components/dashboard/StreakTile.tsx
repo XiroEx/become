@@ -24,6 +24,7 @@ import {
 } from "@become/core";
 import { FireNumber } from "@/components/streaks/FireNumber";
 import { ProgressFill } from "@/components/motion/ProgressFill";
+import { rgbOf, webGradientTokens } from "@/lib/theme/tokens";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import type { DashboardStatData } from "@/lib/dashboard/types";
 
@@ -58,7 +59,7 @@ export function StreakTile({
   testID,
   style,
 }: StreakTileProps) {
-  const { colors, tint } = useThemeTokens();
+  const { colors, isDark } = useThemeTokens();
   const router = useRouter();
 
   const inkMap: Record<
@@ -66,29 +67,41 @@ export function StreakTile({
     { icon: string; badge: string; bar: string }
   > = {
     super: {
-      icon: colors.accent,
-      badge: tint("accent", 0.15),
-      bar: colors.accent,
+      icon: isDark
+        ? rgbOf(webGradientTokens.orange400)
+        : rgbOf(webGradientTokens.orange600),
+      badge: isDark
+        ? rgbOf(webGradientTokens.orange900, 0.3)
+        : rgbOf(webGradientTokens.orange100),
+      bar: colors.orange,
     },
     overall: {
       icon: colors.accent,
-      badge: tint("accent", 0.15),
-      bar: colors.accent,
+      badge: isDark
+        ? rgbOf(webGradientTokens.amber900, 0.3)
+        : rgbOf(webGradientTokens.amber100),
+      bar: rgbOf(webGradientTokens.amber500),
     },
     workout: {
       icon: colors.success,
-      badge: tint("success", 0.15),
-      bar: colors.success,
+      badge: isDark
+        ? rgbOf(webGradientTokens.green900, 0.3)
+        : rgbOf(webGradientTokens.green100),
+      bar: colors["mind-green"],
     },
     nutrition: {
-      icon: colors.primary,
-      badge: tint("primary", 0.15),
-      bar: colors.primary,
+      icon: isDark ? colors.destructive : colors.brand,
+      badge: isDark
+        ? rgbOf(webGradientTokens.red900, 0.3)
+        : rgbOf(webGradientTokens.red100),
+      bar: colors.brand,
     },
     mindset: {
-      icon: colors.accent,
-      badge: tint("accent", 0.15),
-      bar: colors.accent,
+      icon: colors.mindset,
+      badge: isDark
+        ? rgbOf(webGradientTokens.purple900, 0.3)
+        : rgbOf(webGradientTokens.purple100),
+      bar: rgbOf(webGradientTokens.purple500),
     },
   };
 
@@ -302,7 +315,15 @@ export function StreakTile({
       {wide ? (
         <View style={styles.wideRow}>
           <View style={styles.wideLeft}>
-            <View style={[styles.badge, { backgroundColor: ink.badge }]}>
+            <View
+              style={[
+                styles.badge,
+                {
+                  backgroundColor: ink.badge,
+                  opacity: p.doneToday || p.emphasis ? 1 : 0.6,
+                },
+              ]}
+            >
               <IconComponent size={20} color={ink.icon} />
             </View>
             <View style={styles.wideMeta}>
@@ -360,9 +381,13 @@ export function StreakTile({
                       backgroundColor:
                         idx === i
                           ? pg.id === "super"
-                            ? colors.accent
-                            : colors["muted-foreground"]
-                          : colors.border,
+                            ? colors.orange
+                            : isDark
+                              ? rgbOf(webGradientTokens.zinc500)
+                              : rgbOf(webGradientTokens.zinc400)
+                          : isDark
+                            ? rgbOf(webGradientTokens.zinc700)
+                            : colors.border,
                     }}
                   />
                 ))}
@@ -378,7 +403,15 @@ export function StreakTile({
         // not the old vertically-stacked badge-above-label shape.
         <View style={styles.squareContent}>
           <View style={styles.topRow}>
-            <View style={[styles.circleBadge, { backgroundColor: ink.badge }]}>
+            <View
+              style={[
+                styles.circleBadge,
+                {
+                  backgroundColor: ink.badge,
+                  opacity: p.doneToday || p.emphasis ? 1 : 0.6,
+                },
+              ]}
+            >
               <IconComponent size={18} color={ink.icon} />
             </View>
             <View style={styles.topMeta}>
@@ -439,9 +472,13 @@ export function StreakTile({
                         backgroundColor:
                           idx === i
                             ? pg.id === "super"
-                              ? colors.accent
-                              : colors["muted-foreground"]
-                            : colors.border,
+                              ? colors.orange
+                              : isDark
+                                ? rgbOf(webGradientTokens.zinc500)
+                                : rgbOf(webGradientTokens.zinc400)
+                            : isDark
+                              ? rgbOf(webGradientTokens.zinc700)
+                              : colors.border,
                       }}
                     />
                   ))}

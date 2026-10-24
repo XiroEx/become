@@ -1,8 +1,9 @@
 import { Pressable, View } from "react-native";
-import Svg, { Circle, G } from "react-native-svg";
+import Svg, { Circle, Defs, G, LinearGradient, Stop } from "react-native-svg";
 import { Settings2 } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { Card } from "@/components/Card";
+import { rgbOf, webGradientTokens } from "@/lib/theme/tokens";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 export interface MacroValues {
@@ -176,7 +177,11 @@ export function CalorieRing({
   const strokeDashoffset = circumference - percentage * circumference;
   const plannedDashoffset = circumference - plannedPercentage * circumference;
 
-  const progressColor = isOver ? colors.destructive : colors.success;
+  const progressStroke = isOver
+    ? colors.destructive
+    : percentage >= 0.9
+      ? colors.orange
+      : "url(#ringCalorieGrad)";
 
   const proteinPct =
     protein.goal > 0
@@ -258,6 +263,21 @@ export function CalorieRing({
           }}
         >
           <Svg width={size} height={size}>
+            <Defs>
+              <LinearGradient
+                id="ringCalorieGrad"
+                x1="0%"
+                y1="0%"
+                x2="100%"
+                y2="0%"
+              >
+                <Stop
+                  offset="0%"
+                  stopColor={rgbOf(webGradientTokens.emerald500)}
+                />
+                <Stop offset="100%" stopColor={colors["mind-green"]} />
+              </LinearGradient>
+            </Defs>
             <G rotation="-90" origin={`${size / 2}, ${size / 2}`}>
               <Circle
                 cx={size / 2}
@@ -286,7 +306,7 @@ export function CalorieRing({
                   cx={size / 2}
                   cy={size / 2}
                   r={radius}
-                  stroke={progressColor}
+                  stroke={progressStroke}
                   strokeWidth={strokeWidth}
                   fill="none"
                   strokeDasharray={circumference}

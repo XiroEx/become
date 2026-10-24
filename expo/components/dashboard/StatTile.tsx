@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { View, Pressable, StyleSheet } from "react-native";
+import Svg, { Circle, Line, Path, Text as SvgText } from "react-native-svg";
 import { Text } from "@/components/Text";
+import { rgbOf, webGradientTokens } from "@/lib/theme/tokens";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import type { DashboardTile } from "@become/api-client";
 import {
@@ -21,17 +23,116 @@ import { MoodLogSheet } from "./MoodLogSheet";
 import type { MoodLevel } from "@/components/CheckInModal";
 import { MOOD_LABELS } from "@/components/CheckInModal";
 import type { DashboardStatData } from "@/lib/dashboard/types";
-import type { TokenName } from "@/lib/theme/tokens";
 
-/** Mirrors the web's `MoodCard` `moodConfig[level]` — one colour per mood,
- * not one flat accent for every level. */
-const MOOD_ACCENT_TOKEN: Record<MoodLevel, TokenName> = {
-  1: "mood-bad",
-  2: "mood-low",
-  3: "mood-okay",
-  4: "mood-good",
-  5: "mood-great",
-};
+/**
+ * Custom filled SVG mood faces matching `webapp/components/MoodCard.tsx`
+ * (`BadFace`, `NotGreatFace`, `OkayFace`, `PrettyGoodFace`, `GreatFace`,
+ * `QuestionFace`).
+ */
+function MoodTileFace({
+  mood,
+  size = 20,
+  isDark,
+  darkStroke,
+}: {
+  mood: MoodLevel | null | undefined;
+  size?: number;
+  isDark: boolean;
+  darkStroke: string;
+}) {
+  const strokeFg = isDark ? darkStroke : rgbOf(webGradientTokens.zinc700);
+  if (!mood) {
+    return (
+      <Svg viewBox="0 0 48 48" width={size} height={size}>
+        <Circle
+          cx="24"
+          cy="24"
+          r="22"
+          fill={
+            isDark
+              ? rgbOf(webGradientTokens.zinc600)
+              : rgbOf(webGradientTokens.zinc300)
+          }
+        />
+        <SvgText
+          x="24"
+          y="30"
+          textAnchor="middle"
+          fill={
+            isDark
+              ? rgbOf(webGradientTokens.zinc400)
+              : rgbOf(webGradientTokens.zinc600)
+          }
+          fontSize="20"
+          fontWeight="bold"
+        >
+          ?
+        </SvgText>
+      </Svg>
+    );
+  }
+  const faceFill =
+    mood === 1
+      ? rgbOf(webGradientTokens.red400)
+      : mood === 2
+        ? rgbOf(webGradientTokens.orange400)
+        : mood === 3
+          ? rgbOf(webGradientTokens.amber400)
+          : mood === 4
+            ? rgbOf(webGradientTokens.lime400)
+            : rgbOf(webGradientTokens.emerald400);
+
+  return (
+    <Svg viewBox="0 0 48 48" width={size} height={size}>
+      <Circle cx="24" cy="24" r="22" fill={faceFill} />
+      <Circle cx="16" cy="20" r="3" fill={strokeFg} />
+      <Circle cx="32" cy="20" r="3" fill={strokeFg} />
+      {mood === 1 ? (
+        <Path
+          d="M14 35 Q24 26 34 35"
+          fill="none"
+          stroke={strokeFg}
+          strokeWidth="2.5"
+          strokeLinecap="round"
+        />
+      ) : mood === 2 ? (
+        <Path
+          d="M16 34 Q24 30 32 34"
+          fill="none"
+          stroke={strokeFg}
+          strokeWidth="2.5"
+          strokeLinecap="round"
+        />
+      ) : mood === 3 ? (
+        <Line
+          x1="16"
+          y1="32"
+          x2="32"
+          y2="32"
+          stroke={strokeFg}
+          strokeWidth="2.5"
+          strokeLinecap="round"
+        />
+      ) : mood === 4 ? (
+        <Path
+          d="M16 31 Q24 36 32 31"
+          fill="none"
+          stroke={strokeFg}
+          strokeWidth="2.5"
+          strokeLinecap="round"
+        />
+      ) : (
+        <Path
+          d="M14 30 Q24 40 34 30"
+          fill="none"
+          stroke={strokeFg}
+          strokeWidth="2.5"
+          strokeLinecap="round"
+        />
+      )}
+    </Svg>
+  );
+}
 
 export interface StatTileProps {
   tile: DashboardTile;
@@ -81,7 +182,7 @@ export function StatTile({
   onTap,
   testID,
 }: StatTileProps) {
-  const { colors, tint } = useThemeTokens();
+  const { colors, tint, isDark } = useThemeTokens();
   const { weightUnit: userWeightUnit } = useUnits();
   const unit = statData?.weightUnit ?? userWeightUnit ?? "lbs";
   const wide = tile.size === "2x1";
@@ -161,8 +262,10 @@ export function StatTile({
     label = "Day Streak";
     IconComponent = Flame;
     iconColor = colors.accent;
-    badgeBg = tint("accent", 0.15);
-    barColor = colors.accent;
+    badgeBg = isDark
+      ? rgbOf(webGradientTokens.amber900, 0.3)
+      : rgbOf(webGradientTokens.amber100);
+    barColor = rgbOf(webGradientTokens.amber500);
     handlePress = handlePress ?? onOpenStreaks ?? onOpenCalendar;
 
     const days = statData?.streakDays ?? 0;
@@ -188,22 +291,65 @@ export function StatTile({
       onOpenMood ??
       (onMoodChange ? () => setInternalMoodOpen(true) : onOpenCheckIn);
 
-    const currentMood = statData?.todaysMood;
-    const moodToken = currentMood ? MOOD_ACCENT_TOKEN[currentMood as MoodLevel] : null;
-    // Filled face + coloured value, like the web's `moodConfig[level]`
-    // (`bgColor`/`textColor`) — e.g. "Not Great" is `bg-orange-100
-    // text-orange-700`, never one flat amber regardless of the level.
-    iconColor = moodToken ? colors[moodToken] : colors["muted-foreground"];
-    badgeBg = moodToken ? tint(moodToken, 0.25) : tint("muted", 0.3);
-    valueColor = moodToken ? colors[moodToken] : colors.foreground;
-    value = currentMood && MOOD_LABELS[currentMood as MoodLevel] ? MOOD_LABELS[currentMood as MoodLevel] : "Set";
+    const currentMood = statData?.todaysMood as MoodLevel | null | undefined;
+    // Filled face + coloured value, matching `webapp/components/MoodCard.tsx`
+    // (`moodConfig[level]` `bgColor`/`textColor`).
+    if (currentMood === 1) {
+      badgeBg = isDark
+        ? rgbOf(webGradientTokens.red900, 0.3)
+        : rgbOf(webGradientTokens.red100);
+      valueColor = isDark
+        ? rgbOf(webGradientTokens.red300)
+        : rgbOf(webGradientTokens.red700);
+    } else if (currentMood === 2) {
+      badgeBg = isDark
+        ? rgbOf(webGradientTokens.orange900, 0.3)
+        : rgbOf(webGradientTokens.orange100);
+      valueColor = isDark
+        ? colors["mood-low"]
+        : rgbOf(webGradientTokens.orange700);
+    } else if (currentMood === 3) {
+      badgeBg = isDark
+        ? rgbOf(webGradientTokens.amber900, 0.3)
+        : rgbOf(webGradientTokens.amber100);
+      valueColor = isDark
+        ? rgbOf(webGradientTokens.amber300)
+        : rgbOf(webGradientTokens.amber700);
+    } else if (currentMood === 4) {
+      badgeBg = isDark
+        ? rgbOf(webGradientTokens.lime900, 0.3)
+        : rgbOf(webGradientTokens.lime100);
+      valueColor = isDark
+        ? rgbOf(webGradientTokens.lime300)
+        : rgbOf(webGradientTokens.lime700);
+    } else if (currentMood === 5) {
+      badgeBg = isDark
+        ? rgbOf(webGradientTokens.emerald900, 0.3)
+        : rgbOf(webGradientTokens.emerald100);
+      valueColor = isDark
+        ? rgbOf(webGradientTokens.emerald300)
+        : rgbOf(webGradientTokens.emerald700);
+    } else {
+      badgeBg = isDark ? colors.muted : rgbOf(webGradientTokens.zinc100);
+      valueColor = colors.foreground;
+    }
+    value = currentMood && MOOD_LABELS[currentMood] ? MOOD_LABELS[currentMood] : "Set";
 
     const recent = statData?.recentMoods ?? [];
     const last7 = recent.slice(-7);
     if (last7.length > 0) {
       const avg = last7.reduce((a, b) => a + b, 0) / last7.length;
       pct = Math.min(100, Math.round((avg / 5) * 100));
-      barColor = avg >= 3.5 ? colors.success : avg >= 2.5 ? colors.accent : colors.destructive;
+      barColor =
+        avg >= 4.5
+          ? rgbOf(webGradientTokens.emerald500)
+          : avg >= 3.5
+            ? rgbOf(webGradientTokens.lime500)
+            : avg >= 2.5
+              ? rgbOf(webGradientTokens.amber500)
+              : avg >= 1.5
+                ? colors.orange
+                : rgbOf(webGradientTokens.red500);
       footer = `Last ${last7.length} ${last7.length === 1 ? "day" : "days"}`;
     } else {
       pct = 0;
@@ -214,8 +360,10 @@ export function StatTile({
     label = "This Week";
     IconComponent = TrendingUp;
     iconColor = colors.success;
-    badgeBg = tint("success", 0.15);
-    barColor = colors.success;
+    badgeBg = isDark
+      ? rgbOf(webGradientTokens.green900, 0.3)
+      : rgbOf(webGradientTokens.green100);
+    barColor = colors["mind-green"];
 
     const target = statData?.weeklyTarget ?? null;
     const done = statData?.thisWeekWorkouts ?? 0;
@@ -238,7 +386,9 @@ export function StatTile({
   } else if (tile.id === "goal") {
     IconComponent = Target;
     iconColor = colors.accent;
-    badgeBg = tint("accent", 0.15);
+    badgeBg = isDark
+      ? rgbOf(webGradientTokens.amber900, 0.3)
+      : rgbOf(webGradientTokens.amber100);
 
     const goalView = describeGoal({
       fitnessGoal: statData?.fitnessGoal,
@@ -254,11 +404,18 @@ export function StatTile({
 
     label = goalView.label;
     value = goalView.value;
+    if (goalView.kind === "unset") {
+      valueColor = isDark
+        ? rgbOf(webGradientTokens.zinc500)
+        : rgbOf(webGradientTokens.zinc400);
+    }
     const arrow =
       goalView.direction === "down" ? "↓ " : goalView.direction === "up" ? "↑ " : "";
     footer = `${arrow}${goalView.footer}`;
     pct = goalView.pct;
-    barColor = goalView.atTarget ? colors.success : colors.accent;
+    barColor = goalView.atTarget
+      ? colors["mind-green"]
+      : rgbOf(webGradientTokens.amber500);
     // Nutrition Goals (web's `/dashboard/nutrition/goals`), not the day
     // screen — NP-256.
     handlePress = handlePress ?? onOpenNutritionGoals ?? onOpenNutrition;
@@ -276,26 +433,40 @@ export function StatTile({
       pct = Math.min(100, Math.max(0, Math.round((consumed / goal) * 100)));
       const over = consumed > goal;
       const remaining = Math.max(0, goal - consumed);
-      barColor = over ? colors.destructive : pct >= 90 ? colors.accent : colors.success;
+      barColor = over
+        ? colors.brand
+        : pct >= 90
+          ? rgbOf(webGradientTokens.amber500)
+          : colors["mind-green"];
       footer = over ? `${consumed - goal} over` : `${remaining} cal left`;
       // Matches the web's `renderCalories`: green while under goal, red only
       // when over (or, below, when no goal is set at all) — never a flat red
       // icon tile for the common "on track" state.
       iconColor = over ? colors.destructive : colors.success;
-      badgeBg = over ? tint("destructive", 0.15) : tint("success", 0.15);
+      badgeBg = over
+        ? isDark
+          ? rgbOf(webGradientTokens.red900, 0.3)
+          : rgbOf(webGradientTokens.red100)
+        : isDark
+          ? rgbOf(webGradientTokens.green900, 0.3)
+          : rgbOf(webGradientTokens.green100);
     } else {
       pct = 0;
       barColor = colors.muted;
       footer = "Set a calorie goal";
       iconColor = colors.destructive;
-      badgeBg = tint("destructive", 0.15);
+      badgeBg = isDark
+        ? rgbOf(webGradientTokens.red900, 0.3)
+        : rgbOf(webGradientTokens.red100);
     }
   } else if (tile.id === "water") {
     label = "Water";
     IconComponent = Droplets;
-    iconColor = colors.primary;
-    badgeBg = tint("primary", 0.15);
-    barColor = colors.primary;
+    iconColor = colors.info;
+    badgeBg = isDark
+      ? rgbOf(webGradientTokens.blue900, 0.3)
+      : rgbOf(webGradientTokens.blue100);
+    barColor = colors["mind-blue"];
     handlePress = handlePress ?? onOpenNutrition;
 
     const current = Math.round(statData?.waterCurrent ?? 0);
@@ -315,34 +486,45 @@ export function StatTile({
     label = "Weight";
     IconComponent = Scale;
     iconColor = colors["muted-foreground"];
-    badgeBg = tint("muted", 0.3);
-    barColor = colors["muted-foreground"];
+    badgeBg = isDark ? colors.muted : rgbOf(webGradientTokens.zinc100);
     handlePress = handlePress ?? onOpenWeight ?? onOpenCheckIn;
 
     const latest = statData?.latestWeight;
     value = latest != null ? `${latest.toFixed(1)} ${unit}` : "—";
     pct = 50;
 
+    let isFlat = false;
     const entries = statData?.weightEntries ?? [];
     if (entries.length >= 2) {
       const cur = entries[entries.length - 1]?.value ?? 0;
       const prev = entries[entries.length - 2]?.value ?? 0;
       const delta = cur - prev;
       const abs = Math.abs(delta);
-      if (abs < 0.05) footer = "→ no change";
-      else if (delta > 0) footer = `↑ +${abs.toFixed(1)}`;
+      if (abs < 0.05) {
+        footer = "→ no change";
+        isFlat = true;
+      } else if (delta > 0) footer = `↑ +${abs.toFixed(1)}`;
       else footer = `↓ -${abs.toFixed(1)}`;
     } else if (entries.length === 1) {
       footer = "First weigh-in";
     } else {
       footer = "Log your first weigh-in";
     }
+    barColor = isFlat
+      ? isDark
+        ? rgbOf(webGradientTokens.zinc700)
+        : rgbOf(webGradientTokens.zinc300)
+      : isDark
+        ? rgbOf(webGradientTokens.zinc500)
+        : rgbOf(webGradientTokens.zinc400);
   } else if (tile.id === "workouts") {
     label = "Total Workouts";
     IconComponent = Dumbbell;
     iconColor = colors["muted-foreground"];
-    badgeBg = tint("muted", 0.3);
-    barColor = colors["muted-foreground"];
+    badgeBg = isDark ? colors.muted : rgbOf(webGradientTokens.zinc100);
+    barColor = isDark
+      ? rgbOf(webGradientTokens.zinc500)
+      : rgbOf(webGradientTokens.zinc400);
     // The training log — the sessions this number counts (web
     // `dashboardTiles.tsx#renderWorkouts` hrefs `/dashboard/history`).
     handlePress = handlePress ?? onOpenHistory ?? onOpenCalendar;
@@ -389,7 +571,16 @@ export function StatTile({
           <View style={styles.wideRow}>
             <View style={styles.wideLeft}>
               <View style={[styles.badge, { backgroundColor: badgeBg }]}>
-                <IconComponent size={20} color={iconColor} />
+                {tile.id === "mood" ? (
+                  <MoodTileFace
+                    mood={statData?.todaysMood as MoodLevel | null | undefined}
+                    size={22}
+                    isDark={isDark}
+                    darkStroke={colors.muted}
+                  />
+                ) : (
+                  <IconComponent size={20} color={iconColor} />
+                )}
               </View>
               <View style={styles.wideMeta}>
                 <Text
@@ -423,7 +614,15 @@ export function StatTile({
                 — just the bar, and it stretches (`flex-1`) to fill the space
                 beside the value column rather than a short fixed width. */}
             <View style={styles.wideRight}>
-              <View style={[styles.barTrack, { backgroundColor: colors.muted }]}>
+              <View
+                style={[
+                  styles.barTrack,
+                  {
+                    backgroundColor: colors.muted,
+                    height: tile.id === "mood" ? 4 : 6,
+                  },
+                ]}
+              >
                 <ProgressFill
                   pct={pct}
                   color={barColor}
@@ -441,7 +640,16 @@ export function StatTile({
           <View style={styles.squareContent}>
             <View style={styles.topRow}>
               <View style={[styles.circleBadge, { backgroundColor: badgeBg }]}>
-                <IconComponent size={18} color={iconColor} />
+                {tile.id === "mood" ? (
+                  <MoodTileFace
+                    mood={statData?.todaysMood as MoodLevel | null | undefined}
+                    size={20}
+                    isDark={isDark}
+                    darkStroke={colors.muted}
+                  />
+                ) : (
+                  <IconComponent size={18} color={iconColor} />
+                )}
               </View>
               <View style={styles.topMeta}>
                 <Text
@@ -463,7 +671,15 @@ export function StatTile({
               </View>
             </View>
             <View style={styles.bottomCol}>
-              <View style={[styles.barTrack, { backgroundColor: colors.muted }]}>
+              <View
+                style={[
+                  styles.barTrack,
+                  {
+                    backgroundColor: colors.muted,
+                    height: tile.id === "mood" ? 4 : 6,
+                  },
+                ]}
+              >
                 <ProgressFill
                   pct={pct}
                   color={barColor}

@@ -1,11 +1,56 @@
 import React from "react";
 import { View, Pressable, StyleSheet } from "react-native";
-import Svg, { Circle, G } from "react-native-svg";
+import Svg, { Circle, Defs, G, LinearGradient, Stop } from "react-native-svg";
 import { Droplets, UtensilsCrossed, Zap } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { Card } from "@/components/Card";
+import { rgbOf, webGradientTokens } from "@/lib/theme/tokens";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import type { NutritionTrend } from "@/lib/dashboard/nutritionTrend";
+
+type MacroBarKind = "floor" | "ceiling";
+type MacroBarStatus = "empty" | "under" | "hit" | "warn" | "over";
+
+function macroBarStatus(
+  current: number,
+  goal: number,
+  kind: MacroBarKind,
+): MacroBarStatus {
+  if (!Number.isFinite(goal) || goal <= 0) return "empty";
+  if (!Number.isFinite(current) || current <= 0) return "empty";
+  const ratio = current / goal;
+  if (kind === "floor") return ratio >= 0.95 ? "hit" : "under";
+  if (ratio > 1.05) return "over";
+  if (ratio > 1) return "warn";
+  if (ratio >= 0.95) return "hit";
+  return "under";
+}
+
+function macroBarFillClass(status: MacroBarStatus, identity: string): string {
+  switch (status) {
+    case "hit":
+      return "bg-emerald-500";
+    case "warn":
+      return "bg-orange-500";
+    case "over":
+      return "bg-red-500";
+    default:
+      return identity;
+  }
+}
+
+function macroValueClass(status: MacroBarStatus): string {
+  switch (status) {
+    case "hit":
+      return "text-emerald-600 dark:text-emerald-400 font-semibold";
+    case "warn":
+      return "text-orange-600 dark:text-orange-400 font-semibold";
+    case "over":
+      return "text-red-500 font-semibold";
+    default:
+      return "text-muted-foreground";
+  }
+}
 
 export interface MacroValues {
   current: number;
@@ -57,7 +102,7 @@ export function NutritionCard({
   onQuickAdd,
   testID = "dashboard-nutrition-card",
 }: NutritionCardProps) {
-  const { colors } = useThemeTokens();
+  const { colors, isDark } = useThemeTokens();
 
   const safeGoal = Math.round(
     Number.isFinite(calories.goal) && calories.goal > 0 ? calories.goal : 2000,
@@ -78,7 +123,14 @@ export function NutritionCard({
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - calPct * circumference;
 
-  const ringColor = isOver ? colors.destructive : colors.success;
+  const ringStroke = isOver
+    ? colors.destructive
+    : calPct >= 0.9
+      ? colors.orange
+      : "url(#miniCalorieGrad)";
+  const proteinStatus = macroBarStatus(protein.current, protein.goal, "floor");
+  const carbsStatus = macroBarStatus(carbs.current, carbs.goal, "ceiling");
+  const fatsStatus = macroBarStatus(fats.current, fats.goal, "ceiling");
 
   return (
     <Card testID={testID}>
@@ -107,6 +159,21 @@ export function NutritionCard({
         {/* Mini calorie ring */}
         <View style={styles.ringWrapper}>
           <Svg width={ringSize} height={ringSize}>
+            <Defs>
+              <LinearGradient
+                id="miniCalorieGrad"
+                x1="0%"
+                y1="0%"
+                x2="100%"
+                y2="0%"
+              >
+                <Stop
+                  offset="0%"
+                  stopColor={rgbOf(webGradientTokens.emerald500)}
+                />
+                <Stop offset="100%" stopColor={colors["mind-green"]} />
+              </LinearGradient>
+            </Defs>
             <G rotation="-90" origin={`${ringSize / 2}, ${ringSize / 2}`}>
               <Circle
                 cx={ringSize / 2}
@@ -120,7 +187,7 @@ export function NutritionCard({
                 cx={ringSize / 2}
                 cy={ringSize / 2}
                 r={radius}
-                stroke={ringColor}
+                stroke={ringStroke}
                 strokeWidth={strokeWidth}
                 fill="none"
                 strokeDasharray={circumference}
@@ -157,7 +224,7 @@ export function NutritionCard({
               </Text>
               <Text
                 testID="nutrition-card-protein-meta"
-                className="text-[11px] text-muted-foreground tabular-nums"
+                className={`text-[11px] tabular-nums ${macroValueClass(proteinStatus)}`}
               >
                 {Math.round(protein.current)}g / {Math.round(protein.goal)}g
               </Text>
@@ -165,7 +232,7 @@ export function NutritionCard({
             <MiniBar
               current={protein.current}
               goal={protein.goal}
-              barClassName="bg-blue-500"
+              barClassName={macroBarFillClass(proteinStatus, "bg-blue-600")}
             />
           </View>
 
@@ -177,7 +244,7 @@ export function NutritionCard({
               </Text>
               <Text
                 testID="nutrition-card-carbs-meta"
-                className="text-[11px] text-muted-foreground tabular-nums"
+                className={`text-[11px] tabular-nums ${macroValueClass(carbsStatus)}`}
               >
                 {Math.round(carbs.current)}g / {Math.round(carbs.goal)}g
               </Text>
@@ -185,7 +252,7 @@ export function NutritionCard({
             <MiniBar
               current={carbs.current}
               goal={carbs.goal}
-              barClassName="bg-emerald-500"
+              barClassName={macroBarFillClass(carbsStatus, "bg-green-600")}
             />
           </View>
 
@@ -197,7 +264,7 @@ export function NutritionCard({
               </Text>
               <Text
                 testID="nutrition-card-fats-meta"
-                className="text-[11px] text-muted-foreground tabular-nums"
+                className={`text-[11px] tabular-nums ${macroValueClass(fatsStatus)}`}
               >
                 {Math.round(fats.current)}g / {Math.round(fats.goal)}g
               </Text>
@@ -205,18 +272,18 @@ export function NutritionCard({
             <MiniBar
               current={fats.current}
               goal={fats.goal}
-              barClassName="bg-amber-400"
+              barClassName={macroBarFillClass(fatsStatus, "bg-yellow-400")}
             />
           </View>
 
           {/* Water indicator */}
           <View style={styles.waterRow}>
-            <Droplets size={12} color={colors["muted-foreground"]} />
+            <Droplets size={12} color={colors.info} />
             <View style={{ flex: 1 }}>
               <MiniBar
                 current={water.current}
                 goal={water.goal}
-                barClassName="bg-sky-400"
+                barClassName="bg-blue-400"
               />
             </View>
             <Text
@@ -266,7 +333,12 @@ export function NutritionCard({
           onPress={onQuickAdd}
           style={[
             styles.secondaryButton,
-            { backgroundColor: colors.card, borderColor: colors.border },
+            {
+              backgroundColor: isDark ? colors.muted : colors.card,
+              borderColor: isDark
+                ? rgbOf(webGradientTokens.zinc700)
+                : colors.border,
+            },
           ]}
         >
           <Zap size={14} color={colors.foreground} />

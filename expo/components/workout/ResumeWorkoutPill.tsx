@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { Play } from "lucide-react-native";
 import { z } from "zod";
 import { Text } from "@/components/Text";
+import { WebGradient } from "@/components/WebGradient";
 import {
   apiFetch,
   WorkoutInProgressResponseSchema,
@@ -18,6 +19,11 @@ import {
   type KeyValueStore,
 } from "@/lib/live/liveWorkoutCache";
 import { ConfirmModal } from "@/components/workout/ConfirmModal";
+import {
+  onDarkForeground,
+  rgbOf,
+  webGradientTokens,
+} from "@/lib/theme/tokens";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { subscribeProgramUpdates } from "@/lib/programs/programEvents";
 import { useScreenFocus } from "@/lib/navigation/useScreenFocus";
@@ -38,7 +44,7 @@ export function ResumeWorkoutPill({
   testID = "resume-workout-pill",
   onDiscard,
 }: ResumeWorkoutPillProps) {
-  const { colors } = useThemeTokens();
+  const { colors, isDark } = useThemeTokens();
   const router = useRouter();
   const { token } = useAuth();
   const mountedRef = useRef(true);
@@ -206,6 +212,19 @@ export function ResumeWorkoutPill({
     }
   };
 
+  const gradientStops = isDark
+    ? ([
+        rgbOf(webGradientTokens.emerald600),
+        rgbOf(webGradientTokens.green600),
+        rgbOf(webGradientTokens.teal600),
+      ] as const)
+    : ([
+        rgbOf(webGradientTokens.emerald500),
+        colors["mind-green"],
+        colors.teal,
+      ] as const);
+  const whiteInk = rgbOf(onDarkForeground);
+
   return (
     <View className={`relative ${className}`}>
       <Pressable
@@ -220,17 +239,44 @@ export function ResumeWorkoutPill({
         onPress={handlePress}
         onLongPress={handleLongPress}
         delayLongPress={500}
-        className="rounded-2xl p-4 bg-emerald-600 active:opacity-90 shadow-md"
+        className="overflow-hidden rounded-2xl p-4 active:opacity-90"
+        style={{
+          boxShadow: `0 10px 15px -3px ${rgbOf(webGradientTokens.emerald500, 0.3)}`,
+          shadowColor: rgbOf(webGradientTokens.emerald500),
+          shadowOpacity: 0.35,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: 4 },
+        }}
       >
+        <WebGradient
+          testID="resume-workout-pill-gradient"
+          colors={gradientStops}
+          direction="br"
+          fill
+        />
         <View className="flex-row items-center gap-3">
-          {/* Active dot */}
-          <View className="h-3 w-3 rounded-full bg-white items-center justify-center">
+          {/* Active dot — solid white (`bg-white`) with a soft white halo when live */}
+          <View className="relative h-3 w-3 items-center justify-center">
             {!isPlanned && (
               <View
                 testID="resume-live-pulse-dot"
-                className="h-2 w-2 rounded-full bg-emerald-300"
+                style={{
+                  position: "absolute",
+                  width: 18,
+                  height: 18,
+                  borderRadius: 9,
+                  backgroundColor: rgbOf(onDarkForeground, 0.35),
+                }}
               />
             )}
+            <View
+              style={{
+                width: 12,
+                height: 12,
+                borderRadius: 6,
+                backgroundColor: whiteInk,
+              }}
+            />
           </View>
 
           <View className="flex-1 min-w-0">
@@ -244,7 +290,7 @@ export function ResumeWorkoutPill({
           </View>
 
           <View className="h-10 w-10 rounded-full bg-white/20 items-center justify-center">
-            <Play size={18} color={colors["primary-foreground"]} fill={colors["primary-foreground"]} />
+            <Play size={18} color={whiteInk} fill={whiteInk} />
           </View>
         </View>
       </Pressable>

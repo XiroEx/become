@@ -387,18 +387,102 @@ export function skiaRgbOf(triplet: string, alpha = 1): string {
 export const webGradientTokens = {
   /** green-600 — the web's `from-green-600` on the quick session's Start CTA */
   green600: "22 163 74",
-  /** green-400 — the web's `from-green-400` on the program progress bar */
-  green400: "74 222 128",
-  /** emerald-400 — the web's `to-emerald-400` on the program progress bar */
-  emerald400: "52 211 153",
-  /** emerald-600 — the web's `to-emerald-600` on Start / Continue / Finish */
-  emerald600: "5 150 105",
-  /** amber-500 — the web's `to-amber-500` / `from-amber-500` stops */
-  amber500: "245 158 11",
-  /** red-500 — the web's `from-red-500` on the Challenge scene's badge */
-  red500: "239 68 68",
-  /** sky-500 — the web's `from-sky-500` on the Assemble scene's badge */
-  sky500: "14 165 233",
+  /** green-400 (v4) — the web's `from-green-400` on the program progress bar */
+  green400: "5 223 114",
+  /** emerald-400 (v4) — the web's `to-emerald-400` on the program progress bar */
+  emerald400: "0 210 148",
+  /** emerald-500 (v4) — the web's `from-emerald-500` on ResumeWorkoutPill and CalorieRing */
+  emerald500: "0 185 129",
+  /** emerald-600 (v4) — the web's `to-emerald-600` on Start / Continue / Finish */
+  emerald600: "0 150 105",
+  /** teal-600 (v4) — the web's `dark:to-teal-600` on ResumeWorkoutPill */
+  teal600: "0 148 136",
+  /** amber-500 (v4) — the web's `to-amber-500` / `from-amber-500` stops */
+  amber500: "246 158 0",
+  /** amber-200 (v4) — the web's `text-amber-200` on BecomingDoor loud-state warnings */
+  amber200: "254 230 133",
+  /** red-500 (v4) — the web's `from-red-500` on the Challenge scene's badge */
+  red500: "251 44 54",
+  /** sky-500 (v4) — the web's `from-sky-500` on the Assemble scene's badge */
+  sky500: "0 165 234",
+  /** orange-600 (v4) — the web's `text-orange-600` on Super Streak light badge */
+  orange600: "236 86 0",
+  /** orange-400 (v4) — the web's `dark:text-orange-400` / `fill-orange-400` */
+  orange400: "255 139 31",
+  /** lime-100 (v4) — the web's `bg-lime-100` on MoodCard PrettyGood */
+  lime100: "236 252 202",
+  /** lime-300 (v4) — the web's `dark:text-lime-300` on MoodCard PrettyGood */
+  lime300: "187 244 81",
+  /** lime-400 (v4) — the web's `fill-lime-400` on MoodCard PrettyGoodFace */
+  lime400: "157 229 0",
+  /** lime-500 (v4) — the web's `bg-lime-500` on MoodCard trend bar */
+  lime500: "131 204 0",
+  /** lime-700 (v4) — the web's `text-lime-700` on MoodCard PrettyGood */
+  lime700: "75 124 0",
+  /** lime-900 (v4) — the web's `dark:bg-lime-900/30` on MoodCard PrettyGood */
+  lime900: "53 83 14",
+  /** emerald-100 (v4) — the web's `bg-emerald-100` on MoodCard Great */
+  emerald100: "208 250 229",
+  /** emerald-300 (v4) — the web's `dark:text-emerald-300` on MoodCard Great */
+  emerald300: "94 233 181",
+  /** emerald-700 (v4) — the web's `text-emerald-700` on MoodCard Great */
+  emerald700: "0 120 87",
+  /** emerald-900 (v4) — the web's `dark:bg-emerald-900/30` on MoodCard Great */
+  emerald900: "0 78 59",
+  /** amber-100 (v4) — the web's `bg-amber-100` */
+  amber100: "254 243 198",
+  /** amber-300 (v4) — the web's `dark:text-amber-300` */
+  amber300: "255 210 55",
+  /** amber-700 (v4) — the web's `text-amber-700` */
+  amber700: "181 82 0",
+  /** amber-900 (v4) — the web's `dark:bg-amber-900/30` */
+  amber900: "123 51 6",
+  /** orange-100 (v4) — the web's `bg-orange-100` */
+  orange100: "255 237 213",
+  /** orange-300 (v4) — the web's `dark:text-orange-300` */
+  orange300: "255 185 112",
+  /** orange-700 (v4) — the web's `text-orange-700` */
+  orange700: "196 62 0",
+  /** orange-900 (v4) — the web's `dark:bg-orange-900/30` */
+  orange900: "126 42 12",
+  /** red-100 (v4) — the web's `bg-red-100` */
+  red100: "255 226 226",
+  /** red-300 (v4) — the web's `dark:text-red-300` */
+  red300: "255 163 164",
+  /** red-700 (v4) — the web's `text-red-700` */
+  red700: "191 0 15",
+  /** red-900 (v4) — the web's `dark:bg-red-900/30` */
+  red900: "130 24 26",
+  /** green-100 (v4) — the web's `bg-green-100` */
+  green100: "220 252 231",
+  /** green-900 (v4) — the web's `dark:bg-green-900/30` */
+  green900: "13 84 43",
+  /** blue-100 (v4) — the web's `bg-blue-100` */
+  blue100: "219 234 254",
+  /** blue-900 (v4) — the web's `dark:bg-blue-900/30` */
+  blue900: "28 57 142",
+  /** purple-100 (v4) — the web's `bg-purple-100` */
+  purple100: "243 232 255",
+  /** purple-500 (v4) — the web's `bg-purple-500` */
+  purple500: "171 78 255",
+  /** purple-900 (v4) — the web's `dark:bg-purple-900/30` */
+  purple900: "89 22 139",
+  /** violet-100 (v4) — the web's `bg-violet-100` */
+  violet100: "237 233 254",
+  /** violet-300 (v4) — the web's `dark:text-violet-300` */
+  violet300: "196 180 255",
+  /** violet-900 (v4) — the web's `dark:bg-violet-900/30` */
+  violet900: "77 23 154",
+  /** zinc-300 (v4) — the web's `bg-zinc-300` / `dark:text-zinc-300` */
+  zinc300: "212 212 216",
+  /** zinc-400 (v4) — the web's `text-zinc-400` / `bg-zinc-400` */
+  zinc400: "159 159 169",
+  /** zinc-500 (v4) — the web's `dark:text-zinc-500` / `dark:bg-zinc-500` */
+  zinc500: "113 113 123",
+  /** zinc-600 (v4) — the web's `text-zinc-600` / `dark:text-zinc-600` */
+  zinc600: "82 82 92",
+  /** zinc-700 (v4) — the web's `dark:bg-zinc-700` / `fill-zinc-700` */
+  zinc700: "63 63 70",
   /** black — the web's `from-black/…` photo scrims */
   black: "0 0 0",
 } as const;
@@ -422,34 +506,34 @@ export const webGradientTokens = {
 export const webGradientRamps = {
   /** violet-500 → green-500 (Type, WriteAffirm) */
   violetToGreen: [
-    "139 92 246",
-    "124 128 215",
-    "105 155 181",
-    "80 177 143",
+    "141 86 255",
+    "125 126 222",
+    "106 154 186",
+    "81 177 146",
     "34 197 94",
   ],
   /** amber-500 → green-500 (Win, Vision) */
   amberToGreen: [
-    "245 158 11",
-    "211 171 48",
-    "173 182 67",
-    "125 190 82",
+    "246 158 0",
+    "212 171 45",
+    "173 182 66",
+    "125 190 81",
     "34 197 94",
   ],
   /** red-500 → amber-500 (Challenge) */
   redToAmber: [
-    "239 68 68",
-    "242 95 62",
-    "244 118 53",
-    "245 138 39",
-    "245 158 11",
+    "251 44 54",
+    "251 84 49",
+    "251 112 41",
+    "249 136 29",
+    "246 158 0",
   ],
   /** sky-500 → green-500 (Assemble) */
   skyToGreen: [
-    "14 165 233",
-    "0 175 203",
-    "0 184 171",
-    "16 191 137",
+    "0 165 234",
+    "0 175 204",
+    "0 184 172",
+    "12 191 137",
     "34 197 94",
   ],
 } as const;
