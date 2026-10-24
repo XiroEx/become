@@ -53,7 +53,7 @@ import {
   sparklinePoints,
   type ExitEdge,
 } from '@/lib/becoming/focusedCard'
-import type { Pillar } from '@/lib/becoming/pillarColors'
+import { pillarColor, type Pillar } from '@/lib/becoming/pillarColors'
 import { usePulse } from '@/lib/becoming/pulse'
 import {
   CARD_RADIUS,
@@ -68,7 +68,7 @@ import {
 } from '@/lib/becoming/stageMotion'
 import { useReducedMotion } from '@/lib/a11y/reducedMotion'
 import { hitSlopToMinTarget, minTouchTarget } from '@/lib/a11y/touchTarget'
-import { becomingStageTokens, rgbOf } from '@/lib/theme/tokens'
+import { becomingStageTokens, rgbOf, webGradientTokens } from '@/lib/theme/tokens'
 import { useThemeTokens } from '@/lib/theme/useThemeTokens'
 
 const PILLAR_ICON: Record<CardPillar, typeof Brain> = {
@@ -544,22 +544,46 @@ export const WeekCard = memo(function WeekCard({
                   styles.stepBadge,
                   {
                     backgroundColor: isPeak
-                      ? tint('accent', 0.22)
-                      : isUp
-                      ? tint('accent', 0.2)
-                      : tint('muted', 0.4),
+                      ? isDark
+                        ? rgbOf(becomingStageTokens.gold, 0.22)
+                        : tint('accent', 0.22)
+                      : isDark
+                        ? pillarColor(w.subject, w.score, 60, 0.18)
+                        : isUp
+                          ? tint('accent', 0.2)
+                          : tint('muted', 0.4),
                   },
                 ]}
                 testID={`week-card-step-${isPeak ? 'peak' : w.step}`}
               >
                 <StepIcon
                   size={12}
-                  color={isPeak || isUp ? colors.accent : colors.foreground}
+                  color={
+                    isPeak
+                      ? isDark
+                        ? rgbOf(becomingStageTokens.gold)
+                        : colors.accent
+                      : isDark
+                        ? colors.foreground
+                        : isUp
+                          ? colors.accent
+                          : colors.foreground
+                  }
                 />
                 <Text
                   style={[
                     styles.stepText,
-                    { color: isPeak || isUp ? colors.accent : colors.foreground },
+                    {
+                      color: isPeak
+                        ? isDark
+                          ? rgbOf(becomingStageTokens.gold)
+                          : colors.accent
+                        : isDark
+                          ? colors.foreground
+                          : isUp
+                            ? colors.accent
+                            : colors.foreground,
+                    },
                   ]}
                 >
                   {stepText}
@@ -626,7 +650,7 @@ export const WeekCard = memo(function WeekCard({
           <LandingRow {...land(WEEK_CARD_ROW.wins)} style={styles.winsWrap} testID="week-card-wins">
             {wins.map((win: string, idx: number) => (
               <View key={`win-${idx}`} style={styles.winRow}>
-                <Sparkles size={14} color={colors.accent} style={{ marginTop: 2 }} />
+                <Sparkles size={14} color={isDark ? rgbOf(webGradientTokens.violet300) : colors['mind-violet']} style={{ marginTop: 2 }} />
                 <Text style={[styles.winText, { color: colors.foreground }]} numberOfLines={2}>{win}</Text>
               </View>
             ))}

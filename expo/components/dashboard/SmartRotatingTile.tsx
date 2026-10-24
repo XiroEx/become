@@ -28,11 +28,27 @@
  * the tile then shows the most relevant card and holds it.
  */
 
-import React, { useEffect, useMemo, useState } from "react";
-import { View, StyleSheet } from "react-native";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { View, StyleSheet, type GestureResponderEvent } from "react-native";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from "@/lib/motion/reanimated";
 import { Text } from "@/components/Text";
+import { PulseView } from "@/components/motion/PulseView";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { useReducedMotion } from "@/lib/a11y/reducedMotion";
+import {
+  SMART_TILE_FADE_MS,
+  SMART_TILE_MANUAL_PAUSE_MS,
+  SMART_TILE_SLIDE_DISTANCE,
+  SMART_TILE_SPRING,
+  SMART_TILE_SWIPE_DISTANCE,
+} from "@/lib/motion/motion";
+import { useLoopActive } from "@/lib/motion/useLoopActive";
 import {
   DEFAULT_SMART_INTERVAL_MS,
   type DashboardMetricSummary,
@@ -135,18 +151,78 @@ export function SmartRotatingTile({
   const count = items.length;
   const intervalMs = tile.settings?.intervalMs ?? DEFAULT_SMART_INTERVAL_MS;
   const [step, setStep] = useState(0);
+  const loopActive = useLoopActive(count > 1);
+  const dirRef = useRef<1 | -1>(1);
+  const prevStepRef = useRef(0);
+  const pauseUntilRef = useRef(0);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  const slideX = useSharedValue(0);
+  const slideOpacity = useSharedValue(1);
+
   // Unbounded step + modulo, so the pool changing size (a metric landing, a
   // tap re-ordering it) never leaves the index out of range.
   const index = count > 0 ? (((startIndex + step) % count) + count) % count : 0;
 
   useEffect(() => {
     if (count <= 1) return;
-    if (reduceMotion) return;
+    if (reduceMotion || !loopActive) return;
     const timer = setInterval(() => {
+      if (Date.now() < pauseUntilRef.current) return;
+      dirRef.current = 1;
       setStep((prev) => prev + 1);
     }, intervalMs);
     return () => clearInterval(timer);
-  }, [count, intervalMs, reduceMotion]);
+  }, [count, intervalMs, reduceMotion, loopActive]);
+
+  useEffect(() => {
+    if (step === prevStepRef.current) return;
+    prevStepRef.current = step;
+    if (reduceMotion) {
+      slideX.set(0);
+      slideOpacity.set(1);
+      return;
+    }
+    const dir = dirRef.current;
+    slideX.set(dir * SMART_TILE_SLIDE_DISTANCE);
+    slideX.set(withSpring(0, SMART_TILE_SPRING));
+    slideOpacity.set(0);
+    slideOpacity.set(
+      withTiming(1, {
+        duration: SMART_TILE_FADE_MS,
+        easing: Easing.out(Easing.quad),
+      }),
+    );
+  }, [step, reduceMotion, slideX, slideOpacity]);
+
+  const slideStyle = useAnimatedStyle(() => ({
+    opacity: slideOpacity.value,
+    transform: [{ translateX: slideX.value }],
+  }));
+
+  const handleTouchStart = (e: GestureResponderEvent) => {
+    touchStartRef.current = {
+      x: e.nativeEvent.pageX,
+      y: e.nativeEvent.pageY,
+    };
+  };
+
+  const handleTouchEnd = (e: GestureResponderEvent) => {
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    if (!start || count <= 1) return;
+    const dx = e.nativeEvent.pageX - start.x;
+    const dy = e.nativeEvent.pageY - start.y;
+    if (
+      Math.abs(dx) >= SMART_TILE_SWIPE_DISTANCE &&
+      Math.abs(dx) > Math.abs(dy)
+    ) {
+      const delta: 1 | -1 = dx < 0 ? 1 : -1;
+      dirRef.current = delta;
+      pauseUntilRef.current = Date.now() + SMART_TILE_MANUAL_PAUSE_MS;
+      setStep((prev) => prev + delta);
+    }
+  };
 
   if (count === 0) {
     // Nothing eligible: every card in the pool is already pinned. Same copy as
@@ -230,16 +306,27 @@ export function SmartRotatingTile({
   }
 
   return (
-    <View testID={rootTestId} style={styles.wrapper}>
-      {card}
+    <View
+      testID={rootTestId}
+      style={styles.wrapper}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
+      <Animated.View
+        testID={`${rootTestId}-slide`}
+        style={[styles.slideLayer, reduceMotion ? undefined : slideStyle]}
+      >
+        {card}
+      </Animated.View>
       {/* The "live" affordance: a small dot, non-interactive so it can never
           swallow a press on the card underneath. The web's is indigo
-          (`bg-indigo-500`), never the brand red — closest token is `info`. */}
-      <View
+          (`bg-indigo-500`), never the brand red. */}
+      <PulseView
+        active={count > 1}
         pointerEvents="none"
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
-        style={[styles.liveDot, { backgroundColor: colors.info }]}
+        style={[styles.liveDot, { backgroundColor: colors.indigo }]}
       />
     </View>
   );
@@ -250,6 +337,11 @@ const styles = StyleSheet.create({
     position: "relative",
     // Resolves the fixed 96px cell down to the rendered card below, which
     // fills it with `height: "100%"` (NP-352).
+    height: "100%",
+    borderRadius: 16,
+    overflow: "hidden",
+  },
+  slideLayer: {
     height: "100%",
   },
   card: {

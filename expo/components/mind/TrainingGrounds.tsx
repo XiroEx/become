@@ -83,9 +83,9 @@ export function getSystemIconColor(
 ): string {
   switch (system) {
     case "discipline":
-      return colors.primary;
-    case "anti-sabotage":
       return colors.destructive;
+    case "anti-sabotage":
+      return colors.orange;
     case "vision":
       return colors.success;
     default:
@@ -122,7 +122,7 @@ export default function TrainingGrounds({
       <View className="mb-4 flex-row items-end justify-between gap-3">
         <View className="flex-1">
           <View className="flex-row items-center gap-2">
-            <Dumbbell size={24} color={colors.accent} />
+            <Dumbbell size={24} color={colors["mind-violet"]} />
             <Text className="text-2xl font-extrabold text-foreground">
               Training Grounds
             </Text>

@@ -1,6 +1,7 @@
 import React from "react";
 import { View, StyleSheet } from "react-native";
 import { Text } from "@/components/Text";
+import { rgbOf, webGradientTokens } from "@/lib/theme/tokens";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import type { DashboardTile } from "@become/api-client";
 import {
@@ -22,14 +23,16 @@ export interface PlaceholderTileProps {
 type TokenThemeType = ReturnType<typeof useThemeTokens>;
 
 function getTileConfig(tile: DashboardTile, theme: TokenThemeType) {
-  const { colors, tint } = theme;
+  const { colors, isDark } = theme;
 
   if (tile.kind === "smart-rotating") {
     return {
       label: tile.id === "smart" ? "Smart Tile" : tile.id,
       Icon: Sparkles,
       color: colors.accent,
-      bg: tint("accent", 0.15),
+      bg: isDark
+        ? rgbOf(webGradientTokens.amber900, 0.3)
+        : rgbOf(webGradientTokens.amber100),
     };
   }
   if (tile.kind === "metric") {
@@ -39,8 +42,10 @@ function getTileConfig(tile: DashboardTile, theme: TokenThemeType) {
     return {
       label,
       Icon: Activity,
-      color: colors.primary,
-      bg: tint("primary", 0.15),
+      color: colors.info,
+      bg: isDark
+        ? rgbOf(webGradientTokens.blue900, 0.3)
+        : rgbOf(webGradientTokens.blue100),
     };
   }
 
@@ -50,7 +55,9 @@ function getTileConfig(tile: DashboardTile, theme: TokenThemeType) {
       label: "Day Streak",
       Icon: Flame,
       color: colors.accent,
-      bg: tint("accent", 0.15),
+      bg: isDark
+        ? rgbOf(webGradientTokens.amber900, 0.3)
+        : rgbOf(webGradientTokens.amber100),
     };
   }
   if (tile.id === "mood") {
@@ -58,7 +65,7 @@ function getTileConfig(tile: DashboardTile, theme: TokenThemeType) {
       label: "Today's Mood",
       Icon: Flame,
       color: colors["muted-foreground"],
-      bg: tint("muted", 0.3),
+      bg: isDark ? colors.muted : rgbOf(webGradientTokens.zinc100),
     };
   }
   if (tile.id === "weekly") {
@@ -66,7 +73,9 @@ function getTileConfig(tile: DashboardTile, theme: TokenThemeType) {
       label: "This Week",
       Icon: TrendingUp,
       color: colors.success,
-      bg: tint("success", 0.15),
+      bg: isDark
+        ? rgbOf(webGradientTokens.green900, 0.3)
+        : rgbOf(webGradientTokens.green100),
     };
   }
   if (tile.id === "goal") {
@@ -74,23 +83,29 @@ function getTileConfig(tile: DashboardTile, theme: TokenThemeType) {
       label: "Goal",
       Icon: Target,
       color: colors.accent,
-      bg: tint("accent", 0.15),
+      bg: isDark
+        ? rgbOf(webGradientTokens.amber900, 0.3)
+        : rgbOf(webGradientTokens.amber100),
     };
   }
   if (tile.id === "calories") {
     return {
       label: "Calories",
       Icon: Utensils,
-      color: colors.primary,
-      bg: tint("primary", 0.15),
+      color: isDark ? colors.destructive : colors.brand,
+      bg: isDark
+        ? rgbOf(webGradientTokens.red900, 0.3)
+        : rgbOf(webGradientTokens.red100),
     };
   }
   if (tile.id === "water") {
     return {
       label: "Water",
       Icon: Droplets,
-      color: colors.primary,
-      bg: tint("primary", 0.15),
+      color: colors.info,
+      bg: isDark
+        ? rgbOf(webGradientTokens.blue900, 0.3)
+        : rgbOf(webGradientTokens.blue100),
     };
   }
   if (tile.id === "weight") {
@@ -98,7 +113,7 @@ function getTileConfig(tile: DashboardTile, theme: TokenThemeType) {
       label: "Weight",
       Icon: Scale,
       color: colors["muted-foreground"],
-      bg: tint("muted", 0.3),
+      bg: isDark ? colors.muted : rgbOf(webGradientTokens.zinc100),
     };
   }
   if (tile.id === "workouts") {
@@ -106,7 +121,7 @@ function getTileConfig(tile: DashboardTile, theme: TokenThemeType) {
       label: "Total Workouts",
       Icon: Dumbbell,
       color: colors["muted-foreground"],
-      bg: tint("muted", 0.3),
+      bg: isDark ? colors.muted : rgbOf(webGradientTokens.zinc100),
     };
   }
 
@@ -117,7 +132,7 @@ function getTileConfig(tile: DashboardTile, theme: TokenThemeType) {
     label,
     Icon: Activity,
     color: colors["muted-foreground"],
-    bg: tint("muted", 0.3),
+    bg: isDark ? colors.muted : rgbOf(webGradientTokens.zinc100),
   };
 }
 

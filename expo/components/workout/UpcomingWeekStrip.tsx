@@ -12,6 +12,7 @@ import {
 } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { Card } from "@/components/Card";
+import { PulseView } from "@/components/motion/PulseView";
 import {
   apiFetch,
   ScheduleApiResponseSchema,
@@ -223,14 +224,14 @@ export function UpcomingWeekStrip({
             </Text>
           </View>
         </View>
-        <View className="flex-row justify-between gap-1 py-3">
+        <PulseView className="flex-row justify-between gap-1 py-3">
           {Array.from({ length: 7 }).map((_, i) => (
             <View
               key={i}
               className="flex-1 h-16 rounded-lg bg-muted animate-pulse"
             />
           ))}
-        </View>
+        </PulseView>
       </Card>
     );
   }

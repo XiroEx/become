@@ -19,6 +19,7 @@ import { useAuth } from "@/lib/auth/useAuth";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { tzOffsetMinutes } from "@/lib/time/localDay";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { ScreenEnter } from "@/components/motion/ScreenEnter";
 
 export interface IdentityOnboardingProps {
   onComplete: () => void;
@@ -211,7 +212,7 @@ export function IdentityOnboarding({
 
       {/* Step 1 */}
       {step === 1 && (
-        <View className="flex-1">
+        <ScreenEnter key="step-1" className="flex-1">
           <Text className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">
             Step 1 of 3
           </Text>
@@ -271,12 +272,12 @@ export function IdentityOnboarding({
             </Text>
             <ArrowRight size={18} color={colors["primary-foreground"]} />
           </Pressable>
-        </View>
+        </ScreenEnter>
       )}
 
       {/* Step 2 */}
       {step === 2 && (
-        <View className="flex-1">
+        <ScreenEnter key="step-2" className="flex-1">
           <Text className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">
             Step 2 of 3
           </Text>
@@ -336,12 +337,12 @@ export function IdentityOnboarding({
               <ArrowRight size={18} color={colors["primary-foreground"]} />
             </Pressable>
           </View>
-        </View>
+        </ScreenEnter>
       )}
 
       {/* Step 3 */}
       {step === 3 && (
-        <View className="flex-1">
+        <ScreenEnter key="step-3" className="flex-1">
           <Text className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">
             Step 3 of 3
           </Text>
@@ -420,7 +421,7 @@ export function IdentityOnboarding({
               )}
             </Pressable>
           </View>
-        </View>
+        </ScreenEnter>
       )}
     </ScrollView>
   );

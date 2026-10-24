@@ -6,7 +6,7 @@ import { Text } from "@/components/Text";
 import type { MindSceneProps } from "@/components/mind/session/scenes/types";
 import { useReducedMotion } from "@/lib/a11y/reducedMotion";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
-import { resolveToken } from "@/lib/theme/tokens";
+import { onDarkForeground, resolveToken } from "@/lib/theme/tokens";
 
 /**
  * ALWAYS BLACK, LIKE THE WEB. See `WinScene.tsx` — this scene renders
@@ -76,7 +76,7 @@ export function ComposeScene({
         {locked ? (
           <Check size={24} color={C.success} strokeWidth={3} />
         ) : (
-          <SlidersHorizontal size={24} color={C["primary-foreground"]} />
+          <SlidersHorizontal size={24} color={onDarkForeground} />
         )}
       </View>
 

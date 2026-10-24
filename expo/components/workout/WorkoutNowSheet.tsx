@@ -28,6 +28,11 @@ import { Button } from "@/components/Button";
 import { NativeShareButton } from "@/components/share/NativeShareButton";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
+import {
+  onDarkForeground,
+  rgbOf,
+  webGradientTokens,
+} from "@/lib/theme/tokens";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { localDateKey } from "@/lib/time/localDay";
 import {
@@ -313,7 +318,10 @@ export function WorkoutNowSheet({
       // close button beside the title; the sheet had neither.
       headerLeading={
         <LinearGradient
-          colors={[colors.success, colors.mindset]}
+          colors={[
+            rgbOf(webGradientTokens.green500),
+            rgbOf(webGradientTokens.purple500),
+          ]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={{
@@ -324,7 +332,7 @@ export function WorkoutNowSheet({
             justifyContent: "center",
           }}
         >
-          <Sparkles size={16} color={colors["primary-foreground"]} />
+          <Sparkles size={16} color={onDarkForeground} />
         </LinearGradient>
       }
       headerTrailing={
@@ -920,7 +928,7 @@ function WorkoutNowBody({
                       >
                         <View className="flex-row items-center justify-center" style={{ gap: 6 }}>
                           <Zap size={14} color={colors["primary-foreground"]} />
-                          <Text className="text-white text-sm font-semibold">Start session</Text>
+                          <Text className="text-primary-foreground text-sm font-semibold">Start session</Text>
                         </View>
                       </Button>
                     </View>

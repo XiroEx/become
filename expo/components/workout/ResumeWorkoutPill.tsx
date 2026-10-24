@@ -1,9 +1,22 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Play } from "lucide-react-native";
 import { z } from "zod";
 import { Text } from "@/components/Text";
+import { WebGradient } from "@/components/WebGradient";
+import { PingDot } from "@/components/motion/PingDot";
+import Animated, {
+  Easing,
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withSequence,
+  withSpring,
+  withTiming,
+} from "@/lib/motion/reanimated";
 import {
   apiFetch,
   WorkoutInProgressResponseSchema,
@@ -18,10 +31,26 @@ import {
   type KeyValueStore,
 } from "@/lib/live/liveWorkoutCache";
 import { ConfirmModal } from "@/components/workout/ConfirmModal";
+import {
+  becomingStageTokens,
+  onDarkForeground,
+  rgbOf,
+  webGradientTokens,
+} from "@/lib/theme/tokens";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { subscribeProgramUpdates } from "@/lib/programs/programEvents";
 import { useScreenFocus } from "@/lib/navigation/useScreenFocus";
 import { quickSessionOverviewHref } from "@/lib/quickSession/store";
+import { useReducedMotion } from "@/lib/a11y/reducedMotion";
+import {
+  RESUME_ENTER_SCALE,
+  RESUME_ENTER_SPRING,
+  RESUME_ENTER_Y,
+  RESUME_SHINE_DELAY_MS,
+  RESUME_SHINE_MS,
+} from "@/lib/motion/motion";
+import { useLoopActive } from "@/lib/motion/useLoopActive";
+import { usePressScale } from "@/lib/motion/usePressScale";
 
 export interface ResumeWorkoutPillProps {
   className?: string;
@@ -38,7 +67,7 @@ export function ResumeWorkoutPill({
   testID = "resume-workout-pill",
   onDiscard,
 }: ResumeWorkoutPillProps) {
-  const { colors } = useThemeTokens();
+  const { colors, isDark } = useThemeTokens();
   const router = useRouter();
   const { token } = useAuth();
   const mountedRef = useRef(true);
@@ -101,12 +130,82 @@ export function ResumeWorkoutPill({
 
   const workout = data?.workout;
   const planned = data?.planned;
+  const hasEntry = Boolean(workout || planned);
+
+  const reduced = useReducedMotion();
+  const loopActive = useLoopActive(hasEntry);
+  const pressScale = usePressScale();
+
+  // Web entrance (`ResumeWorkoutButton.tsx`):
+  // `initial={{ opacity: 0, y: -8, scale: 0.96 }}`
+  // `animate={{ opacity: 1, y: 0, scale: 1 }}`
+  // `transition={{ type: 'spring', stiffness: 320, damping: 22 }}`
+  const enterT = useSharedValue(1);
+  const pillWidth = useSharedValue(340);
+  const shineProgress = useSharedValue(0);
+
+  useEffect(() => {
+    if (!hasEntry || reduced) {
+      enterT.set(1);
+      return;
+    }
+    enterT.set(0);
+    enterT.set(withSpring(1, RESUME_ENTER_SPRING));
+  }, [hasEntry, reduced, enterT]);
+
+  useEffect(() => {
+    if (!loopActive || reduced) {
+      cancelAnimation(shineProgress);
+      shineProgress.set(0);
+      return;
+    }
+    shineProgress.set(0);
+    shineProgress.set(
+      withRepeat(
+        withSequence(
+          withTiming(1, {
+            duration: RESUME_SHINE_MS,
+            easing: Easing.inOut(Easing.ease),
+          }),
+          withDelay(RESUME_SHINE_DELAY_MS, withTiming(0, { duration: 0 })),
+        ),
+        -1,
+        false,
+      ),
+    );
+    return () => {
+      cancelAnimation(shineProgress);
+      shineProgress.set(0);
+    };
+  }, [loopActive, reduced, shineProgress]);
+
+  const enterStyle = useAnimatedStyle(() => {
+    const p = enterT.value;
+    return {
+      opacity: Math.max(0, Math.min(1, p)),
+      transform: [
+        { translateY: RESUME_ENTER_Y * (1 - p) },
+        { scale: RESUME_ENTER_SCALE + (1 - RESUME_ENTER_SCALE) * p },
+      ],
+    };
+  });
+
+  const shineStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: (-1 + 3 * shineProgress.value) * pillWidth.value },
+    ],
+  }));
 
   if (!workout && !planned) {
     return null;
   }
 
   const isPlanned = !workout && !!planned;
+  const shineColors = [
+    rgbOf(becomingStageTokens.ink, 0),
+    rgbOf(becomingStageTokens.ink, 0.3),
+    rgbOf(becomingStageTokens.ink, 0),
+  ] as const;
   const label = isPlanned
     ? planned.title || "Quick session"
     : workout?.kind === "quick"
@@ -206,8 +305,24 @@ export function ResumeWorkoutPill({
     }
   };
 
+  const gradientStops = isDark
+    ? ([
+        rgbOf(webGradientTokens.emerald600),
+        rgbOf(webGradientTokens.green600),
+        rgbOf(webGradientTokens.teal600),
+      ] as const)
+    : ([
+        rgbOf(webGradientTokens.emerald500),
+        colors["mind-green"],
+        colors.teal,
+      ] as const);
+  const whiteInk = rgbOf(onDarkForeground);
+
   return (
-    <View className={`relative ${className}`}>
+    <Animated.View
+      className={`relative ${className}`}
+      style={[reduced ? undefined : enterStyle, pressScale.style]}
+    >
       <Pressable
         testID={testID}
         accessibilityRole="button"
@@ -218,20 +333,59 @@ export function ResumeWorkoutPill({
         }
         accessibilityHint="Long press to discard workout"
         onPress={handlePress}
+        onPressIn={pressScale.onPressIn}
+        onPressOut={pressScale.onPressOut}
         onLongPress={handleLongPress}
         delayLongPress={500}
-        className="rounded-2xl p-4 bg-emerald-600 active:opacity-90 shadow-md"
+        onLayout={(e) => {
+          const w = e.nativeEvent.layout.width;
+          if (w > 0) pillWidth.set(w);
+        }}
+        className="overflow-hidden rounded-2xl p-4 active:opacity-90"
+        style={{
+          boxShadow: `0 10px 15px -3px ${rgbOf(webGradientTokens.emerald500, 0.3)}`,
+          shadowColor: rgbOf(webGradientTokens.emerald500),
+          shadowOpacity: 0.35,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: 4 },
+        }}
       >
+        <WebGradient
+          testID="resume-workout-pill-gradient"
+          colors={gradientStops}
+          direction="br"
+          fill
+        />
+        {loopActive && !reduced ? (
+          <Animated.View
+            testID="resume-workout-shine"
+            pointerEvents="none"
+            importantForAccessibility="no"
+            style={[StyleSheet.absoluteFill, shineStyle]}
+          >
+            <WebGradient colors={shineColors} direction="r" fill />
+          </Animated.View>
+        ) : null}
+
         <View className="flex-row items-center gap-3">
-          {/* Active dot */}
-          <View className="h-3 w-3 rounded-full bg-white items-center justify-center">
-            {!isPlanned && (
-              <View
-                testID="resume-live-pulse-dot"
-                className="h-2 w-2 rounded-full bg-emerald-300"
-              />
-            )}
-          </View>
+          {/* Active dot: pinging ring when mid-workout, static when planned */}
+          {!isPlanned ? (
+            <PingDot
+              testID="resume-live-pulse-dot"
+              color={whiteInk}
+              size={12}
+              active
+            />
+          ) : (
+            <View
+              style={{
+                width: 12,
+                height: 12,
+                borderRadius: 6,
+                backgroundColor: whiteInk,
+              }}
+            />
+          )}
 
           <View className="flex-1 min-w-0">
             <Text className="text-[11px] font-bold uppercase tracking-wider text-white/80">
@@ -244,7 +398,7 @@ export function ResumeWorkoutPill({
           </View>
 
           <View className="h-10 w-10 rounded-full bg-white/20 items-center justify-center">
-            <Play size={18} color={colors["primary-foreground"]} fill={colors["primary-foreground"]} />
+            <Play size={18} color={whiteInk} fill={whiteInk} />
           </View>
         </View>
       </Pressable>
@@ -273,6 +427,6 @@ export function ResumeWorkoutPill({
         onCancel={() => setConfirmOpen(false)}
         testID="resume-confirm-modal"
       />
-    </View>
+    </Animated.View>
   );
 }

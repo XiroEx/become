@@ -7,6 +7,9 @@ import {
   type ViewStyle,
 } from "react-native";
 import type { DashboardTile, DashboardTilesResponse } from "@become/api-client";
+import { PulseView } from "@/components/motion/PulseView";
+import { ScreenEnter } from "@/components/motion/ScreenEnter";
+import { SECTION_STAGGER_MS } from "@/lib/motion/motion";
 import { TileErrorBoundary } from "./TileErrorBoundary";
 import { StatActionTile } from "./StatActionTile";
 import { PlaceholderTile } from "./PlaceholderTile";
@@ -297,7 +300,7 @@ export function TileGrid({
               { width: col1Width > 0 ? col1Width : "48.5%" },
             ]}
           >
-            <View className="h-24 bg-card rounded-2xl border border-border opacity-60" />
+            <PulseView className="h-24 bg-card rounded-2xl border border-border opacity-60" />
           </View>
         ))}
       </View>
@@ -421,12 +424,17 @@ export function TileGrid({
                 { width: cellWidth },
               ]}
             >
-              <TileErrorBoundary
-                label={tile.id}
-                testID={`tile-error-${tile.id}`}
+              <ScreenEnter
+                delayMs={idx * SECTION_STAGGER_MS}
+                style={styles.cellInner}
               >
-                {tileContent}
-              </TileErrorBoundary>
+                <TileErrorBoundary
+                  label={tile.id}
+                  testID={`tile-error-${tile.id}`}
+                >
+                  {tileContent}
+                </TileErrorBoundary>
+              </ScreenEnter>
             </View>
           );
         })}
@@ -475,6 +483,9 @@ const styles = StyleSheet.create({
   // `mt-2` into the 16pt band above "Customize tiles".
   cell: {
     height: 96,
+  },
+  cellInner: {
+    height: "100%",
   },
   cell1x1: {},
   cell2x1: {},

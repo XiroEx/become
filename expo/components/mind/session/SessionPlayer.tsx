@@ -63,13 +63,22 @@ import { WEBAPP_BASE_URL } from "@/lib/config";
 import { announce } from "@/lib/a11y/announce";
 import { modalAnimation, useReducedMotion } from "@/lib/a11y/reducedMotion";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
-import { onDarkForeground, resolveToken, tintToken } from "@/lib/theme/tokens";
+import {
+  onDarkForeground,
+  resolveToken,
+  rgbOf,
+  tintToken,
+  webGradientTokens,
+} from "@/lib/theme/tokens";
+import { WebGradient } from "@/components/WebGradient";
 import { tzOffsetMinutes } from "@/lib/time/localDay";
 import { reflectOnAnswers } from "@/lib/mind/reflect";
 import {
   invalidateMindSession,
   warmMindSession,
 } from "@/lib/mind/sessionCache";
+import { ScreenEnter } from "@/components/motion/ScreenEnter";
+import { SECTION_STAGGER_MS } from "@/lib/motion/motion";
 
 /**
  * THE MIND SESSION PLAYER, natively (NP-098 / NP-101).
@@ -859,16 +868,21 @@ export function SessionPlayer({
                     className="mt-5 w-full max-w-xs gap-1.5"
                   >
                     {recapItems.map((label, i) => (
-                      <View
+                      <ScreenEnter
                         key={`${label}-${i}`}
-                        testID={`${testID}-payoff-recap-${i}`}
-                        className="flex-row items-center gap-2.5 rounded-xl bg-white/[0.06] px-3 py-2"
+                        delayMs={i * SECTION_STAGGER_MS}
+                        distance={6}
                       >
-                        <Check size={14} color={PLAYER_GREEN} strokeWidth={3} />
-                        <Text className="text-xs font-medium text-white/75">
-                          {label}
-                        </Text>
-                      </View>
+                        <View
+                          testID={`${testID}-payoff-recap-${i}`}
+                          className="flex-row items-center gap-2.5 rounded-xl bg-white/[0.06] px-3 py-2"
+                        >
+                          <Check size={14} color={PLAYER_GREEN} strokeWidth={3} />
+                          <Text className="text-xs font-medium text-white/75">
+                            {label}
+                          </Text>
+                        </View>
+                      </ScreenEnter>
                     ))}
                   </View>
                 ) : null}
@@ -1022,8 +1036,15 @@ export function SessionPlayer({
                         }
                       }}
                       style={minTouchTarget}
-                      className="mt-8 w-full max-w-xs flex-row items-center justify-center gap-2 rounded-2xl bg-amber-400 py-4"
+                      className="mt-8 w-full max-w-xs flex-row items-center justify-center gap-2 overflow-hidden rounded-2xl bg-amber-400 py-4"
                     >
+                      {/* The web's `bg-gradient-to-r from-amber-400 to-amber-500`. */}
+                      <WebGradient
+                        testID={`${testID}-payoff-chapter-unlock-gradient`}
+                        fill
+                        direction="r"
+                        colors={[PLAYER_AMBER, rgbOf(webGradientTokens.amber500)]}
+                      />
                       <ChevronUp size={20} color={PLAYER_BLACK} />
                       <Text className="text-base font-bold text-black">
                         New chapter unlocked

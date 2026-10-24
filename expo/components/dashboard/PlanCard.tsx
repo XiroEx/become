@@ -17,6 +17,7 @@ import { View, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import { Sparkles } from "lucide-react-native";
 import { Text } from "@/components/Text";
+import { ProgressFill } from "@/components/motion/ProgressFill";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import {
@@ -44,6 +45,7 @@ export interface PlanMeterProps {
 }
 
 export function PlanMeter({ ent, label, suffix, feature }: PlanMeterProps) {
+  const { colors } = useThemeTokens();
   const limit = ent.limit ?? 0;
   if (limit <= 0) return null;
   const used = Math.min(Math.max(ent.used, 0), limit);
@@ -66,10 +68,11 @@ export function PlanMeter({ ent, label, suffix, feature }: PlanMeterProps) {
         </Text>
       </View>
       <View className="h-2 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
-        <View
+        <ProgressFill
           testID={`plan-meter-${feature}-bar`}
+          pct={pct}
+          color={spent ? colors.amber : colors.success}
           className={`h-full rounded-full ${spent ? "bg-amber-500" : "bg-green-500"}`}
-          style={{ width: `${Math.min(Math.max(pct, 0), 100)}%` }}
         />
       </View>
     </View>

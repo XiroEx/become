@@ -23,7 +23,6 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ArrowLeftRight, ChefHat, Pencil, Trash2 } from "lucide-react-native";
-import { LinearGradient } from "expo-linear-gradient";
 import { z } from "zod";
 import {
   apiFetch,
@@ -36,6 +35,7 @@ import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { Modal } from "@/components/Modal";
 import { Text } from "@/components/Text";
+import { WebGradient } from "@/components/WebGradient";
 import { AuthedImage } from "@/components/media/AuthedImage";
 import { MealLogSheet } from "@/components/nutrition/MealLogSheet";
 import {
@@ -461,11 +461,9 @@ export function MealDetail() {
               ) : (
                 // The web's gradient fallback (amber→orange→rose) with the
                 // chef icon ABOVE the title — never a grey box under it.
-                <LinearGradient
+                <WebGradient
                   testID="meal-detail-photo-fallback"
                   colors={[tint("accent", 0.22), tint("accent", 0.06)]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
                   style={{
                     height: 128,
                     width: "100%",
@@ -474,7 +472,7 @@ export function MealDetail() {
                   }}
                 >
                   <ChefHat size={36} color={colors.accent} />
-                </LinearGradient>
+                </WebGradient>
               )}
               <View style={{ padding: 16, gap: 8 }}>
                 <Text

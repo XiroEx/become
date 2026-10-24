@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, TextInput, View } from "react-native";
 import Animated, { FadeIn, FadeInUp } from "react-native-reanimated";
-import { ArrowRight, Check, Keyboard } from "lucide-react-native";
+import { ArrowRight, Keyboard } from "lucide-react-native";
 import { Text } from "@/components/Text";
+import { DoneBadge } from "@/components/mind/session/scenes/DoneBadge";
 import type { MindSceneProps } from "@/components/mind/session/scenes/types";
 import { useReducedMotion } from "@/lib/a11y/reducedMotion";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
@@ -99,9 +100,7 @@ export function TypeScene({
           entering={reduced ? undefined : FadeIn.duration(250)}
           className="w-full max-w-sm items-center"
         >
-          <View className="h-16 w-16 items-center justify-center rounded-full bg-green-500/20">
-            <Check size={32} color={C.success} />
-          </View>
+          <DoneBadge tone="violet" testID={`${testID}-done-badge`} />
           <Text className="mt-4 text-center text-lg font-bold text-white">
             In your own hand.
           </Text>

@@ -4,6 +4,8 @@ import { useRouter } from "expo-router";
 import { Pause, Play, Zap } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { Card } from "@/components/Card";
+import { ProgressFill } from "@/components/motion/ProgressFill";
+import { PulseView } from "@/components/motion/PulseView";
 import {
   apiFetch,
   ActiveProgramsApiResponseSchema,
@@ -15,6 +17,7 @@ import { useAuth } from "@/lib/auth/useAuth";
 import { workoutIndexFromDayLabel } from "@/lib/schedule/scheduleSlots";
 import { hitSlopToMinTarget } from "@/lib/a11y/touchTarget";
 import { formatStartLabel } from "@/lib/workout/formatStartLabel";
+import { onDarkForeground } from "@/lib/theme/tokens";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { subscribeProgramUpdates } from "@/lib/programs/programEvents";
 import { useScreenFocus } from "@/lib/navigation/useScreenFocus";
@@ -127,10 +130,10 @@ export function ContinueTrainingSection({
     // attached to the real header row and program-card container (the "..."
     // heading, the misplaced pill and the grey block under the card).
     return (
-      <View key="loading" testID={`${testID}-loading`} className="mb-4">
+      <PulseView key="loading" testID={`${testID}-loading`} className="mb-4">
         <View className="h-6 w-36 rounded bg-muted animate-pulse mb-3" />
         <View className="h-28 rounded-2xl bg-muted animate-pulse" />
-      </View>
+      </PulseView>
     );
   }
 
@@ -156,7 +159,7 @@ export function ContinueTrainingSection({
               onPress={handleWorkoutNow}
               className="flex-row items-center gap-1.5 px-3.5 py-2 rounded-full bg-emerald-600"
             >
-              <Zap size={14} color={colors["primary-foreground"]} fill={colors["primary-foreground"]} />
+              <Zap size={14} color={onDarkForeground} fill={onDarkForeground} />
               <Text className="text-white text-xs font-bold">Workout Now</Text>
             </Pressable>
           </View>
@@ -185,7 +188,7 @@ export function ContinueTrainingSection({
           onPress={handleWorkoutNow}
           className="flex-row items-center gap-1 px-3 py-1.5 rounded-full bg-emerald-600 shrink-0"
         >
-          <Zap size={14} color={colors["primary-foreground"]} fill={colors["primary-foreground"]} />
+          <Zap size={14} color={onDarkForeground} fill={onDarkForeground} />
           <Text className="text-white text-xs font-bold">Workout Now</Text>
         </Pressable>
       </View>
@@ -290,9 +293,9 @@ export function ContinueTrainingSection({
                     }`}
                   >
                     {isPaused ? (
-                      <Pause size={18} color={colors["primary-foreground"]} />
+                      <Pause size={18} color={onDarkForeground} />
                     ) : (
-                      <Play size={18} color={colors["primary-foreground"]} fill={colors["primary-foreground"]} />
+                      <Play size={18} color={onDarkForeground} fill={onDarkForeground} />
                     )}
                   </Pressable>
                 </View>
@@ -300,8 +303,8 @@ export function ContinueTrainingSection({
 
               {/* Progress Bar */}
               <View className="h-1.5 w-full rounded-full bg-muted overflow-hidden mt-1">
-                <View
-                  style={{ width: `${progress}%` }}
+                <ProgressFill
+                  pct={progress}
                   className={`h-full rounded-full ${
                     isPaused ? "bg-amber-500" : "bg-emerald-500"
                   }`}

@@ -4,6 +4,8 @@ import { Text } from "@/components/Text";
 import { Input } from "@/components/Input";
 import { ArrowUpDown, ChevronDown, Layers, Trash2, Unlink } from "lucide-react-native";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { onDarkForeground, rgbOf, webGradientTokens } from "@/lib/theme/tokens";
+import { WebGradient } from "@/components/WebGradient";
 import { hitSlopToMinTarget } from "@/lib/a11y/touchTarget";
 import {
   LiveSetRow,
@@ -353,19 +355,33 @@ export function TrackWorkoutView({
           accessibilityLabel={`${isCollapsed ? "Expand" : "Collapse"} ${ex.name}`}
           style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
         >
+          {/* The web's done badge is `from-green-500 to-emerald-600`; the
+              gradient is the clipped circle behind the badge so the badge's
+              own single Text child (what the tests read) is untouched. */}
           <View
-            testID={`${testID}-exercise-${ex.slug}-badge`}
-            className={`h-9 w-9 rounded-full items-center justify-center ${
-              allDone ? "bg-green-500" : "bg-zinc-100 dark:bg-zinc-800"
-            }`}
+            style={{ height: 36, width: 36, borderRadius: 18, overflow: "hidden" }}
           >
-            <Text
-              className={`${
-                allDone ? "text-white" : "text-zinc-700 dark:text-zinc-300"
-              } text-sm font-bold`}
+            {allDone ? (
+              <WebGradient
+                testID={`${testID}-exercise-${ex.slug}-badge-gradient`}
+                fill
+                colors={[colors["mind-green"], rgbOf(webGradientTokens.emerald600)]}
+              />
+            ) : null}
+            <View
+              testID={`${testID}-exercise-${ex.slug}-badge`}
+              className={`h-9 w-9 rounded-full items-center justify-center ${
+                allDone ? "bg-transparent" : "bg-zinc-100 dark:bg-zinc-800"
+              }`}
             >
-              {allDone ? "✓" : exIdx + 1}
-            </Text>
+              <Text
+                className={`${
+                  allDone ? "text-white" : "text-zinc-700 dark:text-zinc-300"
+                } text-sm font-bold`}
+              >
+                {allDone ? "✓" : exIdx + 1}
+              </Text>
+            </View>
           </View>
           <View style={{ flex: 1, gap: 2 }}>
             <Text className="text-foreground text-base font-semibold">{ex.name}</Text>
@@ -435,9 +451,16 @@ export function TrackWorkoutView({
                 className="h-1.5 w-14 overflow-hidden rounded-full bg-muted"
               >
                 <View
+                  testID={`${testID}-exercise-${ex.slug}-progress-fill`}
                   style={{ width: `${pct}%` }}
-                  className="h-full rounded-full bg-green-500"
-                />
+                  className="h-full overflow-hidden rounded-full bg-green-500"
+                >
+                  <WebGradient
+                    fill
+                    direction="r"
+                    colors={[colors["mind-green"], colors["mind-emerald"]]}
+                  />
+                </View>
               </View>
               <ChevronDown
                 size={18}
@@ -646,7 +669,7 @@ export function TrackWorkoutView({
             testID={`${testID}-group-${groupId}-badge`}
             className={`h-7 w-7 rounded-lg items-center justify-center ${style.badge}`}
           >
-            <Layers size={14} color={colors["primary-foreground"]} />
+            <Layers size={14} color={onDarkForeground} />
           </View>
           <Text
             testID={`${testID}-group-${groupId}`}
@@ -676,9 +699,16 @@ export function TrackWorkoutView({
           ) : null}
           <View className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
             <View
+              testID={`${testID}-group-${groupId}-progress-fill`}
               style={{ width: `${groupPct}%` }}
-              className="h-full rounded-full bg-green-500"
-            />
+              className="h-full overflow-hidden rounded-full bg-green-500"
+            >
+              <WebGradient
+                fill
+                direction="r"
+                colors={[colors["mind-green"], colors["mind-emerald"]]}
+              />
+            </View>
           </View>
           <Text
             testID={`${testID}-group-${groupId}-percent`}

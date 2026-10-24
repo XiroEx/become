@@ -61,6 +61,14 @@ import {
 } from "@/lib/nutrition/scanHistory";
 import { servingQuantityStep } from "@become/core";
 import type { Food } from "@become/api-client";
+import { rgbOf, webGradientTokens } from "@/lib/theme/tokens";
+import { WebGradient } from "@/components/WebGradient";
+
+/** The web's photo scrim: `from-black/N to-transparent`, rising from the bottom edge. */
+const photoScrim = (alpha: number) => [
+  rgbOf(webGradientTokens.black, alpha),
+  rgbOf(webGradientTokens.black, 0),
+];
 
 export type EstimateSheetPhase =
   | "chooser"
@@ -972,6 +980,13 @@ export function EstimateSheet({
                   testID={`${testID}-compose-preview`}
                   accessibilityLabel="Your photo"
                 />
+                {/* The web's `bg-gradient-to-t from-black/30 to-transparent`. */}
+                <WebGradient
+                  testID={`${testID}-compose-scrim`}
+                  fill
+                  direction="t"
+                  colors={photoScrim(0.3)}
+                />
               </View>
               <Input
                 testID={`${testID}-compose-note`}
@@ -1033,23 +1048,33 @@ export function EstimateSheet({
           {phase === "review" && (
             <View testID={`${testID}-review`} style={{ gap: 10, paddingTop: 4 }}>
               {imageThumb ? (
-                imageThumb.startsWith("/api/blob/") ? (
-                  <AuthedImage
-                    source={imageThumb}
-                    accessibilityLabel="Your plate"
-                    testID={`${testID}-review-photo`}
-                    containerStyle={{ height: 140, borderRadius: 12 }}
-                    style={{ height: 140, borderRadius: 12 }}
+                // The web's review photo: a 140pt clip with a
+                // `from-black/40 to-transparent` scrim rising from the bottom.
+                <View style={{ height: 140, borderRadius: 12, overflow: "hidden" }}>
+                  {imageThumb.startsWith("/api/blob/") ? (
+                    <AuthedImage
+                      source={imageThumb}
+                      accessibilityLabel="Your plate"
+                      testID={`${testID}-review-photo`}
+                      containerStyle={{ height: 140, borderRadius: 12 }}
+                      style={{ height: 140, borderRadius: 12 }}
+                    />
+                  ) : (
+                    <Image
+                      source={{ uri: imageThumb }}
+                      style={{ width: "100%", height: 140, borderRadius: 12 }}
+                      resizeMode="cover"
+                      testID={`${testID}-review-photo`}
+                      accessibilityLabel="Your plate"
+                    />
+                  )}
+                  <WebGradient
+                    testID={`${testID}-review-scrim`}
+                    fill
+                    direction="t"
+                    colors={photoScrim(0.4)}
                   />
-                ) : (
-                  <Image
-                    source={{ uri: imageThumb }}
-                    style={{ width: "100%", height: 140, borderRadius: 12 }}
-                    resizeMode="cover"
-                    testID={`${testID}-review-photo`}
-                    accessibilityLabel="Your plate"
-                  />
-                )
+                </View>
               ) : null}
               <Text className="text-muted-foreground text-xs">
                 AI estimate — adjust if needed · {sourceLabel}

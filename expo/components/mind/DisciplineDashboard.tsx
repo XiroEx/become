@@ -43,6 +43,7 @@ import { WEBAPP_BASE_URL } from "@/lib/config";
 import { celebrationHaptic, lightHaptic } from "@/lib/feedback/haptics";
 import { mindAccentColor } from "@/lib/mind/accents";
 import { reflectOnAnswers } from "@/lib/mind/reflect";
+import { onDarkForeground } from "@/lib/theme/tokens";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { tzOffsetMinutes } from "@/lib/time/localDay";
 
@@ -500,7 +501,7 @@ export default function DisciplineDashboard() {
       <ProtocolUnlockModal
         unlocked={justUnlocked}
         onDismiss={dismissUnlock}
-        accentColor={colors.primary}
+        accentColor={mindAccentColor("discipline")}
       />
 
       <SystemHero
@@ -511,7 +512,7 @@ export default function DisciplineDashboard() {
         statLabel="best streak"
         colorClass="text-red-500"
         bgClass="border-red-500/20 bg-red-500/10"
-        iconColor={colors.primary}
+        iconColor={mindAccentColor("discipline")}
         testID="mind-system-hero"
       />
 
@@ -558,7 +559,7 @@ export default function DisciplineDashboard() {
                 {n.checkedToday ? (
                   <Check
                     size={16}
-                    color={colors["primary-foreground"]}
+                    color={onDarkForeground}
                     strokeWidth={3}
                   />
                 ) : null}
@@ -630,7 +631,7 @@ export default function DisciplineDashboard() {
                 onPress={() => void createNonNeg(inlineText)}
                 className="h-8 w-8 items-center justify-center rounded-xl bg-red-500/20"
               >
-                <Plus size={16} color={colors.primary} />
+                <Plus size={16} color={mindAccentColor("discipline")} />
               </Pressable>
             </View>
 
@@ -647,7 +648,7 @@ export default function DisciplineDashboard() {
               }
               className="flex-row items-center justify-center gap-2 rounded-2xl border border-dashed border-red-500/40 py-3 active:bg-red-500/10"
             >
-              <ShieldCheck size={16} color={colors.primary} />
+              <ShieldCheck size={16} color={mindAccentColor("discipline")} />
               <Text className="text-sm font-semibold text-red-500">
                 Draw a new line
               </Text>
@@ -695,7 +696,7 @@ export default function DisciplineDashboard() {
           blurb="One tap. Sets the bar for the day."
           ctaLabel="Check"
           colorClass="text-red-500"
-          iconColor={colors.primary}
+          iconColor={mindAccentColor("discipline")}
           testID="mind-fight-check-drop"
           onClick={() =>
             setFlow({
@@ -743,7 +744,7 @@ export default function DisciplineDashboard() {
             >
               <Check
                 size={16}
-                color={colors["primary-foreground"]}
+                color={onDarkForeground}
                 strokeWidth={3}
               />
               <Text className="text-sm font-bold text-white">I did it</Text>
@@ -776,6 +777,7 @@ export default function DisciplineDashboard() {
         onStart={() => void runAiFlow("do the hard thing I am avoiding today")}
         colorClass="text-red-500"
         bgClass="border-red-500/30 bg-red-500/10"
+        iconColor={mindAccentColor("discipline")}
         title="Aimed at the hard thing you’ve actually been dodging."
         subtitle="Shaped by your standards and today’s challenge."
         testID="mind-adaptive-session"
@@ -794,7 +796,7 @@ export default function DisciplineDashboard() {
               title={p.title}
               blurb={p.blurb}
               colorClass="text-red-500"
-              iconColor={colors.primary}
+              iconColor={mindAccentColor("discipline")}
               locked={i >= 1 + (reps ?? 0)}
               lockedHint={`Locked — do ${i - (reps ?? 0)} more rep${i - (reps ?? 0) === 1 ? "" : "s"} in Discipline to unlock`}
               onClick={() =>
