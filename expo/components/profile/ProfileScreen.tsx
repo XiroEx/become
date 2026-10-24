@@ -42,6 +42,7 @@ import { GOAL_LABELS } from "@/lib/profile/icons";
 import { useAuth } from "@/lib/auth/useAuth";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { useTabBarCondenseOnScroll } from "@/lib/navigation/tabBarCondense";
 import { TAB_BAR_CONTENT_INSET } from "@/lib/navigation/tabBarInset";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { PageHeader } from "@/components/navigation/PageHeader";
@@ -75,6 +76,7 @@ export function ProfileScreen({
 }: ProfileScreenProps) {
   const router = useRouter();
   const { colors } = useThemeTokens();
+  const tabBarScroll = useTabBarCondenseOnScroll();
   const { token, user } = useAuth();
   const { from } = useLocalSearchParams<{ from?: string }>();
 
@@ -208,6 +210,7 @@ export function ProfileScreen({
       testID={testID}
     >
       <ScrollView
+        {...tabBarScroll}
         testID="profile-scroll"
         contentContainerStyle={{
           padding: 16,

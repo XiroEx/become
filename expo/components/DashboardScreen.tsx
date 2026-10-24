@@ -14,6 +14,7 @@ import { WorkoutNowSheet } from "@/components/workout/WorkoutNowSheet";
 import { MissedWorkoutsCard } from "@/components/dashboard/MissedWorkoutsCard";
 import { DashboardQuickLinks } from "@/components/dashboard/DashboardQuickLinks";
 import type { MissedWorkoutSummary } from "@/lib/dashboard/trainingCards";
+import { useTabBarCondenseOnScroll } from "@/lib/navigation/tabBarCondense";
 import { TAB_BAR_CONTENT_INSET } from "@/lib/navigation/tabBarInset";
 import { ProgressChart } from "@/components/dashboard/ProgressChart";
 import { NutritionCard } from "@/components/dashboard/NutritionCard";
@@ -335,6 +336,7 @@ export function DashboardScreen({
   showPushCard = false,
 }: DashboardScreenProps) {
   const { colors, tint } = useThemeTokens();
+  const tabBarScroll = useTabBarCondenseOnScroll();
   const [internalGatewayMood, setInternalGatewayMood] =
     useState<MoodLevel | null>(null);
   const isGatewayMoodControlled = gatewayMood !== undefined;
@@ -481,6 +483,7 @@ export function DashboardScreen({
       testID="dashboard-screen"
     >
       <ScrollView
+        {...tabBarScroll}
         testID="dashboard-scroll"
         contentContainerStyle={{
           // Web phone padding: `px-3 py-4` in app/dashboard/layout.tsx (12

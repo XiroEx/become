@@ -283,7 +283,7 @@ describe("the window, the status bar and the navigators follow it too", () => {
     const bar = readExpo("components/navigation/GlassTabBar.tsx");
     expect(bar).toContain("useThemeTokens()");
     expect(bar).toContain('tint("border", 0.7)');
-    expect(bar).toContain('tint("card", liquidGlass ? 0 : 0.6)');
+    expect(bar).toContain('tint("card", liquidGlass ? 0 : 0.8)');
     expect(bar).toContain('colorScheme={isDark ? "dark" : "light"}');
     expect(bar).not.toContain("borderTopColor");
   });

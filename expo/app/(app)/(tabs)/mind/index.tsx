@@ -57,6 +57,7 @@ import { useAuth } from "@/lib/auth/useAuth";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { showUpgradeSheet } from "@/lib/entitlements/upgradeSheet";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { useTabBarCondenseOnScroll } from "@/lib/navigation/tabBarCondense";
 import { TAB_BAR_CONTENT_INSET } from "@/lib/navigation/tabBarInset";
 import { tzOffsetMinutes, useLocalDay } from "@/lib/time/localDay";
 import {
@@ -135,6 +136,7 @@ export const MOVE_CHIP: Record<string, string> = {
 function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
   const router = useRouter();
   const { colors } = useThemeTokens();
+  const tabBarScroll = useTabBarCondenseOnScroll();
   const { token } = useAuth();
   const localDay = useLocalDay();
   const params = useLocalSearchParams<{ start?: string }>();
@@ -586,6 +588,7 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
       testID={testID}
     >
       <ScrollView
+        {...tabBarScroll}
         contentContainerStyle={{
           padding: 16,
           gap: 20,
