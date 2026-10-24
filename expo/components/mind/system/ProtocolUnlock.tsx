@@ -3,6 +3,19 @@ import { Modal, Pressable, View } from "react-native";
 import { Sparkles } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "@/lib/motion/reanimated";
+import { useReducedMotion } from "@/lib/a11y/reducedMotion";
+import {
+  EASE_OUT_EXPO,
+  MODAL_INITIAL_SCALE,
+  MODAL_MS,
+  motionMs,
+} from "@/lib/motion/motion";
 
 export interface UnlockableProtocol {
   id: string;
@@ -48,23 +61,58 @@ export default function ProtocolUnlockModal({
   accentColor?: string;
 }) {
   const { colors } = useThemeTokens();
+  const reduced = useReducedMotion();
   const accent = accentColor ?? colors.accent;
   const many = unlocked.length > 1;
+  const open = unlocked.length > 0;
 
-  if (unlocked.length === 0) return null;
+  const scale = useSharedValue(reduced ? 1 : MODAL_INITIAL_SCALE);
+  const opacity = useSharedValue(reduced ? 1 : 0);
+
+  useEffect(() => {
+    if (!open) return;
+    if (reduced) {
+      scale.set(1);
+      opacity.set(1);
+      return;
+    }
+    const cfg = {
+      duration: motionMs(MODAL_MS, reduced),
+      easing: Easing.bezier(
+        EASE_OUT_EXPO[0],
+        EASE_OUT_EXPO[1],
+        EASE_OUT_EXPO[2],
+        EASE_OUT_EXPO[3],
+      ),
+    };
+    scale.set(MODAL_INITIAL_SCALE);
+    opacity.set(0);
+    scale.set(withTiming(1, cfg));
+    opacity.set(withTiming(1, cfg));
+  }, [open, reduced, scale, opacity]);
+
+  const cardStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ scale: scale.value }],
+  }));
+
+  if (!open) return null;
 
   return (
     <Modal
       transparent
       animationType="fade"
-      visible={unlocked.length > 0}
+      visible={open}
       onRequestClose={onDismiss}
     >
       <View
         testID="protocol-unlock-modal"
         className="flex-1 items-center justify-center bg-black/70 px-6"
       >
-        <View className="w-full max-w-sm rounded-3xl bg-card p-6 border border-border items-center">
+        <Animated.View
+          style={cardStyle}
+          className="w-full max-w-sm rounded-3xl bg-card p-6 border border-border items-center"
+        >
           <View className="h-14 w-14 items-center justify-center rounded-2xl bg-muted mb-4">
             <Sparkles size={28} color={accent} />
           </View>
@@ -119,7 +167,7 @@ export default function ProtocolUnlockModal({
               Let&apos;s go
             </Text>
           </Pressable>
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );

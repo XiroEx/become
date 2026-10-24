@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import Animated, { FadeIn, FadeInUp } from "react-native-reanimated";
-import { Blocks, Check } from "lucide-react-native";
+import { Blocks } from "lucide-react-native";
 import { Text } from "@/components/Text";
+import { DoneBadge } from "@/components/mind/session/scenes/DoneBadge";
 import type { MindSceneProps } from "@/components/mind/session/scenes/types";
 import { useReducedMotion } from "@/lib/a11y/reducedMotion";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
@@ -116,9 +117,7 @@ export function AssembleScene({
           entering={reduced ? undefined : FadeIn.duration(250)}
           className="w-full max-w-sm items-center"
         >
-          <View className="h-16 w-16 items-center justify-center rounded-full bg-green-500/20">
-            <Check size={32} color={C.success} strokeWidth={3} />
-          </View>
+          <DoneBadge tone="assemble" testID={`${testID}-done-badge`} />
           <Text className="mt-4 max-w-sm text-center text-xl font-bold leading-snug text-white">
             &ldquo;{move.statement}&rdquo;
           </Text>

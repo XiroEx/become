@@ -1,5 +1,5 @@
 import { Image } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
+import { WebGradient } from "@/components/WebGradient";
 import {
   Apple,
   Beef,
@@ -190,13 +190,11 @@ export function FoodThumbnail({
   const stop2 = shadeTriplet(stop1, isDark ? 14 : -18);
 
   return (
-    <LinearGradient
+    <WebGradient
       testID={testID}
       accessibilityRole="image"
       accessibilityLabel={name}
       colors={[`rgb(${stop1})`, `rgb(${stop2})`]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
       style={{
         width: "100%",
         height,
@@ -210,7 +208,7 @@ export function FoodThumbnail({
         height={iconSize}
         color={`rgb(${isDark ? picked.iconDark : picked.iconLight})`}
       />
-    </LinearGradient>
+    </WebGradient>
   );
 }
 

@@ -88,6 +88,13 @@ import { QuickSessionNamePrompt } from "@/components/workout/QuickSessionNamePro
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import {
+  becomingStageTokens,
+  onDarkForeground,
+  rgbOf,
+  webGradientTokens,
+} from "@/lib/theme/tokens";
+import { WebGradient } from "@/components/WebGradient";
 import { hitSlopToMinTarget, minTouchTarget } from "@/lib/a11y/touchTarget";
 import { routeApiError } from "@/lib/errors";
 import { useRouter } from "expo-router";
@@ -1016,12 +1023,18 @@ export function SessionBuilder({
           borderRadius: 12,
           paddingVertical: 12,
           backgroundColor: colors.success,
+          overflow: "hidden",
           opacity: chosen.length === 0 ? 0.5 : 1,
           ...minTouchTarget,
         }}
       >
-        <Dumbbell size={16} color={colors["primary-foreground"]} strokeWidth={2} />
-        <Text style={{ fontSize: 14, fontWeight: "600", color: colors["primary-foreground"] }}>
+        <WebGradient
+          fill
+          direction="r"
+          colors={[rgbOf(webGradientTokens.green600), colors["mind-green"]]}
+        />
+        <Dumbbell size={16} color={onDarkForeground} strokeWidth={2} />
+        <Text style={{ fontSize: 14, fontWeight: "600", color: onDarkForeground }}>
           Start session
         </Text>
         {chosen.length > 0 ? (
@@ -1033,10 +1046,10 @@ export function SessionBuilder({
               borderRadius: 999,
               paddingHorizontal: 6,
               paddingVertical: 2,
-              backgroundColor: tint("primary-foreground", 0.2),
+              backgroundColor: rgbOf(becomingStageTokens.ink, 0.2),
             }}
           >
-            <Text style={{ fontSize: 11, color: colors["primary-foreground"] }}>
+            <Text style={{ fontSize: 11, color: onDarkForeground }}>
               {chosen.length}
             </Text>
           </View>

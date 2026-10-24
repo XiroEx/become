@@ -28,6 +28,8 @@ import { AccessibilityInfo, Text } from "react-native";
 import { BecomingDoor } from "@/components/dashboard/BecomingDoor";
 import { ScreenEnter } from "@/components/motion/ScreenEnter";
 import { ProgressFill } from "@/components/motion/ProgressFill";
+import { PulseView } from "@/components/motion/PulseView";
+import { PingDot } from "@/components/motion/PingDot";
 import { AvatarMenuPop } from "@/components/navigation/AvatarMenuPop";
 import { Toast } from "@/components/Toast";
 import { MoodGatewayBanner } from "@/components/dashboard/MoodGatewayBanner";
@@ -37,19 +39,45 @@ import { WeeklyHighlight } from "@/components/settings/WeeklyHighlight";
 import {
   BANNER_ENTER_DISTANCE,
   BANNER_MS,
+  BECOMING_MODAL_ENTER_Y,
+  BECOMING_MODAL_MS,
+  BECOMING_TAB_PILL_SPRING,
+  BECOMING_TAB_SLIDE_DISTANCE,
+  BECOMING_TAB_SLIDE_MS,
   CELEBRATION_POP_MS,
   CELEBRATION_POP_PEAK,
+  DOOR_NUDGE_MIN_OPACITY,
   DOOR_NUDGE_MS,
+  DOOR_NUDGE_PEAK_ALPHA,
+  DOOR_NUDGE_SPREAD,
   DOOR_PULSE_MS,
+  DOOR_PULSE_PEAK_ALPHA,
+  DOOR_PULSE_SPREAD,
+  EASE_OUT_EXPO,
   HIGHLIGHT_PULSE_COUNT,
   HIGHLIGHT_PULSE_MS,
   MENU_ENTER_DISTANCE,
   MENU_ENTER_MS,
   MENU_ENTER_SCALE,
+  MODAL_INITIAL_SCALE,
+  MODAL_MS,
+  PING_MAX_SCALE,
+  PING_MS,
   PROGRESS_FILL_MS,
+  PULSE_MIN_OPACITY,
+  PULSE_MS,
+  RESUME_ENTER_SCALE,
+  RESUME_ENTER_SPRING,
+  RESUME_ENTER_Y,
+  RESUME_SHINE_DELAY_MS,
+  RESUME_SHINE_MS,
   SCREEN_ENTER_DISTANCE,
   SCREEN_ENTER_MS,
   SHEET_ENTER_DISTANCE,
+  SHEET_MS,
+  SMART_TILE_FADE_MS,
+  SMART_TILE_SPRING,
+  STREAK_SLIDE_DISTANCE,
   TILE_CROSSFADE_EASING,
   TILE_CROSSFADE_MS,
   TOAST_ENTER_DISTANCE,
@@ -112,11 +140,45 @@ describe("the vocabulary matches the web's numbers", () => {
     expect(CELEBRATION_POP_PEAK).toBe(1.3);
     expect(CELEBRATION_POP_MS).toBe(500);
   });
-  it("the door breathes 2.4s loud / 3.2s calm; the weekly highlight pulses 1s x3", () => {
+  it("the door breathes 2.4s loud / 3.2s calm with exact web halo spread & alpha; the weekly highlight pulses 1s x3", () => {
     expect(DOOR_PULSE_MS).toBe(2400);
+    expect(DOOR_PULSE_SPREAD).toBe(8);
+    expect(DOOR_PULSE_PEAK_ALPHA).toBe(0.55);
     expect(DOOR_NUDGE_MS).toBe(3200);
+    expect(DOOR_NUDGE_SPREAD).toBe(5);
+    expect(DOOR_NUDGE_PEAK_ALPHA).toBe(0.16);
+    expect(DOOR_NUDGE_MIN_OPACITY).toBe(0.96);
     expect(HIGHLIGHT_PULSE_MS).toBe(1000);
     expect(HIGHLIGHT_PULSE_COUNT).toBe(3);
+  });
+  it("SmartRotatingTile slides on spring 320/34 with 180ms fade; StreakTile slides 18pt", () => {
+    expect(SMART_TILE_SPRING).toEqual({ stiffness: 320, damping: 34 });
+    expect(SMART_TILE_FADE_MS).toBe(180);
+    expect(STREAK_SLIDE_DISTANCE).toBe(18);
+  });
+  it("ResumeWorkoutButton enters on spring 320/22 from y=-8/scale=0.96 and sweeps shine 2.4s + 1.6s delay", () => {
+    expect(RESUME_ENTER_Y).toBe(-8);
+    expect(RESUME_ENTER_SCALE).toBe(0.96);
+    expect(RESUME_ENTER_SPRING).toEqual({ stiffness: 320, damping: 22 });
+    expect(RESUME_SHINE_MS).toBe(2400);
+    expect(RESUME_SHINE_DELAY_MS).toBe(1600);
+  });
+  it("Tailwind animate-ping (1s, scale 2) and animate-pulse (2s, opacity 0.5)", () => {
+    expect(PING_MS).toBe(1000);
+    expect(PING_MAX_SCALE).toBe(2);
+    expect(PULSE_MS).toBe(2000);
+    expect(PULSE_MIN_OPACITY).toBe(0.5);
+  });
+  it("BecomingDetails modal/tab motion and modal/sheet timing constants match web", () => {
+    expect(BECOMING_MODAL_ENTER_Y).toBe(24);
+    expect(BECOMING_MODAL_MS).toBe(280);
+    expect(BECOMING_TAB_PILL_SPRING).toEqual({ stiffness: 400, damping: 34 });
+    expect(BECOMING_TAB_SLIDE_DISTANCE).toBe(40);
+    expect(BECOMING_TAB_SLIDE_MS).toBe(260);
+    expect(EASE_OUT_EXPO).toEqual([0.22, 1, 0.36, 1]);
+    expect(SHEET_MS).toBe(280);
+    expect(MODAL_INITIAL_SCALE).toBe(0.96);
+    expect(MODAL_MS).toBe(220);
   });
   it("Reduce Motion keeps the end state and drops the travel", () => {
     expect(motionMs(400, false)).toBe(400);
@@ -135,6 +197,22 @@ describe("the surfaces render with and without motion", () => {
       </ScreenEnter>,
     );
     expect(getByTestId("enter")).toBeTruthy();
+    restore();
+  });
+
+  it("PulseView and PingDot render and honour Reduce Motion", () => {
+    const restore = mockA11y(false);
+    const { getByTestId, UNSAFE_queryByProps } = render(
+      <>
+        <PulseView testID="pulse-box">
+          <Text>loading</Text>
+        </PulseView>
+        <PingDot testID="live-dot" color="rgb(255 255 255)" active />
+      </>,
+    );
+    expect(getByTestId("pulse-box")).toBeTruthy();
+    expect(UNSAFE_queryByProps({ testID: "live-dot" })).not.toBeNull();
+    expect(UNSAFE_queryByProps({ testID: "live-dot-ring" })).not.toBeNull();
     restore();
   });
 
@@ -213,13 +291,36 @@ describe("the surfaces render with and without motion", () => {
     restore();
   });
 
-  it("BecomingDoor renders calm with no data and marks nothing seen", async () => {
+  it("BecomingDoor renders calm with no data and marks nothing seen, and draws the violet halo when nudging", async () => {
     const restore = mockA11y(false);
-    const { getByTestId } = render(
+    const { getByTestId, UNSAFE_queryByProps, rerender } = render(
       <BecomingDoor goals={null} mind={null} testID="door" />,
     );
     expect(getByTestId("door")).toBeTruthy();
     await waitFor(() => expect(getByTestId("becoming-door-chips")).toBeTruthy());
+    expect(UNSAFE_queryByProps({ testID: "door-halo" })).toBeNull();
+
+    rerender(
+      <BecomingDoor
+        goals={
+          {
+            todayKey: "2026-10-02",
+            nutrition: {
+              suggestion: {
+                id: "n1",
+                severity: "nudge",
+                title: "Protein",
+                sub: "Hit 150g today",
+              },
+            },
+            training: {},
+          } as never
+        }
+        mind={null}
+        testID="door"
+      />,
+    );
+    expect(UNSAFE_queryByProps({ testID: "door-halo" })).not.toBeNull();
     restore();
   });
 });

@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Pressable, View } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
 import { ChevronRight, Sparkles } from "lucide-react-native";
 import { Text } from "@/components/Text";
+import { WebGradient } from "@/components/WebGradient";
+import { onDarkForeground } from "@/lib/theme/tokens";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { CoachChat } from "@/components/ai/CoachChat";
 
@@ -32,10 +33,8 @@ export function MindCoachTeaser({ testID = "mind-coach-teaser" }: { testID?: str
         onPress={() => setOpen(true)}
         style={{ borderRadius: 18, overflow: "hidden" }}
       >
-        <LinearGradient
+        <WebGradient
           colors={[tint("mind-violet", 0.08), tint("mind-green", 0.08)]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
           style={{
             borderRadius: 18,
             borderWidth: 1,
@@ -44,10 +43,8 @@ export function MindCoachTeaser({ testID = "mind-coach-teaser" }: { testID?: str
           }}
         >
           <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <LinearGradient
+            <WebGradient
               colors={[colors["mind-violet"], colors["mind-green"]]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
               style={{
                 width: 40,
                 height: 40,
@@ -57,8 +54,8 @@ export function MindCoachTeaser({ testID = "mind-coach-teaser" }: { testID?: str
                 marginRight: 12,
               }}
             >
-              <Sparkles size={18} color={colors["primary-foreground"]} />
-            </LinearGradient>
+              <Sparkles size={18} color={onDarkForeground} />
+            </WebGradient>
             <View style={{ flex: 1 }}>
               <Text className="text-foreground text-sm font-semibold">Talk to your coach</Text>
               <Text className="text-muted-foreground text-xs" numberOfLines={1}>
@@ -67,7 +64,7 @@ export function MindCoachTeaser({ testID = "mind-coach-teaser" }: { testID?: str
             </View>
             <ChevronRight size={18} color={colors["muted-foreground"]} />
           </View>
-        </LinearGradient>
+        </WebGradient>
       </Pressable>
 
       <CoachChat

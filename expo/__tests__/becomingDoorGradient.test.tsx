@@ -14,6 +14,7 @@
 import * as React from "react";
 import { StyleSheet } from "react-native";
 import { render, act, fireEvent } from "@testing-library/react-native";
+import { gradientPoints } from "@/components/WebGradient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { BecomingDoor } from "@/components/dashboard/BecomingDoor";
 import {
@@ -67,6 +68,26 @@ describe("BecomingDoor unread gradient (web parity)", () => {
     );
     expect(titleStyle.color).toBe(rgb(becomingStageTokens.ink));
     expect(getByTestId("becoming-door")).toBeTruthy();
+  });
+
+  it("the door is a wide card: once measured, `to-br` uses CSS's skewed points", async () => {
+    await AsyncStorage.setItem("becoming.everSeen", "1");
+    const { findByTestId } = renderDoor();
+    const gradient = await findByTestId("becoming-door-gradient");
+    await act(async () => {
+      fireEvent(gradient, "layout", {
+        nativeEvent: { layout: { x: 0, y: 0, width: 350, height: 110 } },
+      });
+    });
+    const measured = await findByTestId("becoming-door-gradient");
+    const expected = gradientPoints("br", { width: 350, height: 110 });
+    expect(measured.props.start).toEqual(expected.start);
+    expect(measured.props.end).toEqual(expected.end);
+    // Same stops as ever.
+    expect(measured.props.colors).toEqual([
+      rgb(becomingStageTokens.doorVioletFrom),
+      rgb(lightTokens["mind-violet"]),
+    ]);
   });
 
   it("opening the door clears the highlight", async () => {

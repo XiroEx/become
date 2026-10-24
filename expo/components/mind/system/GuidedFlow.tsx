@@ -16,6 +16,7 @@ import { Text } from "@/components/Text";
 import { useAndroidBackHandler, type BackHandlerLike } from "@/lib/android/backHandler";
 import { onDarkForeground, resolveToken, tintToken } from "@/lib/theme/tokens";
 import { ProgressFill } from "@/components/motion/ProgressFill";
+import { ScreenEnter } from "@/components/motion/ScreenEnter";
 import type { GuidedStep } from "@/lib/ai/sanitize";
 
 export type { GuidedStep };
@@ -256,23 +257,26 @@ export default function GuidedFlow({
             keyboardShouldPersistTaps="handled"
           >
             {done ? (
-              <View testID="guided-flow-done" className="items-center py-12">
-                <View
-                  testID="guided-flow-done-check"
-                  className="h-20 w-20 items-center justify-center rounded-full bg-white/10 mb-5"
-                >
-                  <Check size={40} color={accent} strokeWidth={3} />
+              <ScreenEnter key="guided-done">
+                <View testID="guided-flow-done" className="items-center py-12">
+                  <View
+                    testID="guided-flow-done-check"
+                    className="h-20 w-20 items-center justify-center rounded-full bg-white/10 mb-5"
+                  >
+                    <Check size={40} color={accent} strokeWidth={3} />
+                  </View>
+                  <Text
+                    testID="guided-flow-done-text"
+                    className="text-xl font-bold text-white text-center"
+                  >
+                    {doneText}
+                  </Text>
                 </View>
-                <Text
-                  testID="guided-flow-done-text"
-                  className="text-xl font-bold text-white text-center"
-                >
-                  {doneText}
-                </Text>
-              </View>
+              </ScreenEnter>
             ) : showReflectionView ? (
               /* Adaptive close step */
-              <View testID="guided-flow-reflect" className="items-center w-full">
+              <ScreenEnter key="guided-reflect" className="w-full">
+                <View testID="guided-flow-reflect" className="items-center w-full">
                 <Text className="text-xs font-semibold uppercase tracking-widest text-white/40 text-center">
                   {title}
                 </Text>
@@ -308,10 +312,12 @@ export default function GuidedFlow({
                   </Text>
                   <ArrowRight size={18} color={SURFACE_BLACK} />
                 </Pressable>
-              </View>
+                </View>
+              </ScreenEnter>
             ) : (
               /* Standard step */
-              <View testID="guided-flow-step" className="items-center w-full">
+              <ScreenEnter key={`guided-step-${idx}`} className="w-full">
+                <View testID="guided-flow-step" className="items-center w-full">
                 <Text className="text-xs font-semibold uppercase tracking-widest text-white/40 text-center">
                   {title}
                 </Text>
@@ -420,7 +426,8 @@ export default function GuidedFlow({
                     <ArrowRight size={18} color={SURFACE_BLACK} />
                   </Pressable>
                 ) : null}
-              </View>
+                </View>
+              </ScreenEnter>
             )}
           </ScrollView>
         </KeyboardAvoidingView>

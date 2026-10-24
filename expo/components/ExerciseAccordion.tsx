@@ -3,6 +3,12 @@ import { Pressable, View } from "react-native";
 import { ChevronDown, ChevronUp, Dumbbell, Play } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { FramedVideo } from "@/components/FramedVideo";
+import { ScreenEnter } from "@/components/motion/ScreenEnter";
+import {
+  onDarkForeground,
+  rgbOf,
+  webGradientTokens,
+} from "@/lib/theme/tokens";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import type { VideoFramingOverride } from "@/lib/videoFraming";
 import type { VideoTrimOverride } from "@/lib/videoTrim";
@@ -165,12 +171,12 @@ export function ExerciseAccordion({
             width: 36,
             height: 36,
             borderRadius: 18,
-            backgroundColor: colors.success,
+            backgroundColor: rgbOf(webGradientTokens.green600),
             alignItems: "center",
             justifyContent: "center",
           }}
         >
-          <Text style={{ fontSize: 14, fontWeight: "700", color: colors["primary-foreground"] }}>
+          <Text style={{ fontSize: 14, fontWeight: "700", color: onDarkForeground }}>
             {index + 1}
           </Text>
         </View>
@@ -296,49 +302,51 @@ export function ExerciseAccordion({
           </View>
 
           {/* Tab Content */}
-          {activeTab === "video" ? (
-            <View testID={`${testID}-exercise-video-container-${exercise.slug}`}>
-              <FramedVideo
-                src={exercise.videoUrl}
-                thumbnailUrl={exercise.thumbnailUrl}
-                surface="preview"
-                exerciseName={exercise.name}
-                videoWidth={exercise.videoWidth}
-                videoHeight={exercise.videoHeight}
-                videoFraming={exercise.videoFraming}
-                videoTrim={exercise.videoTrim}
-                isPlaying={isPlaying}
-                onPlayPress={onPlayPress}
-                testID={`${testID}-exercise-video-${exercise.slug}`}
-              />
-            </View>
-          ) : null}
+          <ScreenEnter key={activeTab} durationMs={180} distance={6}>
+            {activeTab === "video" ? (
+              <View testID={`${testID}-exercise-video-container-${exercise.slug}`}>
+                <FramedVideo
+                  src={exercise.videoUrl}
+                  thumbnailUrl={exercise.thumbnailUrl}
+                  surface="preview"
+                  exerciseName={exercise.name}
+                  videoWidth={exercise.videoWidth}
+                  videoHeight={exercise.videoHeight}
+                  videoFraming={exercise.videoFraming}
+                  videoTrim={exercise.videoTrim}
+                  isPlaying={isPlaying}
+                  onPlayPress={onPlayPress}
+                  testID={`${testID}-exercise-video-${exercise.slug}`}
+                />
+              </View>
+            ) : null}
 
-          {activeTab === "instructions" ? (
-            <View testID={`${testID}-exercise-instructions-${exercise.slug}`} style={{ gap: 6 }}>
-              {instructions.map((step, idx) => (
-                <View key={idx} style={{ flexDirection: "row", gap: 8 }}>
-                  <Text style={{ fontSize: 13, color: colors.primary, fontWeight: "700" }}>•</Text>
-                  <Text style={{ flex: 1, fontSize: 13, color: colors.foreground, lineHeight: 18 }}>
-                    {step}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          ) : null}
+            {activeTab === "instructions" ? (
+              <View testID={`${testID}-exercise-instructions-${exercise.slug}`} style={{ gap: 6 }}>
+                {instructions.map((step, idx) => (
+                  <View key={idx} style={{ flexDirection: "row", gap: 8 }}>
+                    <Text style={{ fontSize: 13, color: colors.primary, fontWeight: "700" }}>•</Text>
+                    <Text style={{ flex: 1, fontSize: 13, color: colors.foreground, lineHeight: 18 }}>
+                      {step}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
 
-          {activeTab === "tips" ? (
-            <View testID={`${testID}-exercise-tips-${exercise.slug}`} style={{ gap: 6 }}>
-              {tips.map((tipText, idx) => (
-                <View key={idx} style={{ flexDirection: "row", gap: 8 }}>
-                  <Dumbbell size={14} color={colors.primary} style={{ marginTop: 2 }} />
-                  <Text style={{ flex: 1, fontSize: 13, color: colors.foreground, lineHeight: 18 }}>
-                    {tipText}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          ) : null}
+            {activeTab === "tips" ? (
+              <View testID={`${testID}-exercise-tips-${exercise.slug}`} style={{ gap: 6 }}>
+                {tips.map((tipText, idx) => (
+                  <View key={idx} style={{ flexDirection: "row", gap: 8 }}>
+                    <Dumbbell size={14} color={colors.primary} style={{ marginTop: 2 }} />
+                    <Text style={{ flex: 1, fontSize: 13, color: colors.foreground, lineHeight: 18 }}>
+                      {tipText}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </ScreenEnter>
         </View>
       ) : null}
     </View>

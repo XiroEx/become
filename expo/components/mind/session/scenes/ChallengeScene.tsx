@@ -7,6 +7,7 @@ import {
   MindDisciplineResponseSchema,
 } from "@become/api-client";
 import { Text } from "@/components/Text";
+import { DoneBadge } from "@/components/mind/session/scenes/DoneBadge";
 import type { MindSceneProps } from "@/components/mind/session/scenes/types";
 import { useReducedMotion } from "@/lib/a11y/reducedMotion";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
@@ -139,9 +140,7 @@ export function ChallengeScene({
           entering={reduced ? undefined : FadeIn.duration(250)}
           className="mt-6 w-full max-w-sm items-center"
         >
-          <View className="h-16 w-16 items-center justify-center rounded-full bg-green-500/20">
-            <Check size={32} color={C.success} strokeWidth={3} />
-          </View>
+          <DoneBadge tone="challenge" testID={`${testID}-done-badge`} />
           <Text className="mt-4 text-center text-lg font-bold text-white">
             That&apos;s a rep.
           </Text>

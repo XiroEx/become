@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Pressable, StyleSheet } from "react-native";
 import { Text } from "@/components/Text";
+import { rgbOf, webGradientTokens } from "@/lib/theme/tokens";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import type { DashboardTile } from "@become/api-client";
 import { Brain, UtensilsCrossed, Zap, ChevronRight, Scale } from "lucide-react-native";
@@ -31,7 +32,7 @@ export function StatActionTile({
   onTap,
   testID,
 }: StatActionTileProps) {
-  const { colors, tint } = useThemeTokens();
+  const { colors, isDark } = useThemeTokens();
   const router = useRouter();
   const tilePress = usePressed();
   const wide = tile.size === "2x1";
@@ -41,7 +42,9 @@ export function StatActionTile({
   let subtitle = "";
   let IconComponent = Zap;
   let color = colors.success;
-  let bg = tint("success", 0.15);
+  let bg = isDark
+    ? rgbOf(webGradientTokens.green900, 0.3)
+    : rgbOf(webGradientTokens.green100);
   let handlePress = () => {};
 
   if (tile.id === "mindset") {
@@ -49,8 +52,10 @@ export function StatActionTile({
     actionValue = "Begin";
     subtitle = "Jump into today's session";
     IconComponent = Brain;
-    color = colors.accent;
-    bg = tint("accent", 0.15);
+    color = colors.mindset;
+    bg = isDark
+      ? rgbOf(webGradientTokens.purple900, 0.3)
+      : rgbOf(webGradientTokens.purple100);
     handlePress = () => {
       if (onOpenMind) {
         onOpenMind();
@@ -63,8 +68,10 @@ export function StatActionTile({
     actionValue = "Log";
     subtitle = "Add today's meals";
     IconComponent = UtensilsCrossed;
-    color = colors.primary;
-    bg = tint("primary", 0.15);
+    color = isDark ? colors.destructive : colors.brand;
+    bg = isDark
+      ? rgbOf(webGradientTokens.red900, 0.3)
+      : rgbOf(webGradientTokens.red100);
     handlePress = () => {
       if (onOpenNutrition) {
         onOpenNutrition();
@@ -78,7 +85,9 @@ export function StatActionTile({
     subtitle = "Jump into a session now";
     IconComponent = Zap;
     color = colors.success;
-    bg = tint("success", 0.15);
+    bg = isDark
+      ? rgbOf(webGradientTokens.green900, 0.3)
+      : rgbOf(webGradientTokens.green100);
     handlePress = () => {
       if (onOpenWorkoutNow) {
         onOpenWorkoutNow();
@@ -91,8 +100,8 @@ export function StatActionTile({
     actionValue = "Log";
     subtitle = "Track today's weight";
     IconComponent = Scale;
-    color = colors.primary;
-    bg = tint("primary", 0.15);
+    color = colors["muted-foreground"];
+    bg = isDark ? colors.muted : rgbOf(webGradientTokens.zinc100);
     handlePress = () => {
       if (onOpenWeight) {
         onOpenWeight();

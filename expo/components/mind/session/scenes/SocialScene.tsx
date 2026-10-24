@@ -8,6 +8,7 @@ import type { MindSceneProps } from "@/components/mind/session/scenes/types";
 import { useReducedMotion } from "@/lib/a11y/reducedMotion";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { onDarkForeground, resolveToken } from "@/lib/theme/tokens";
+import { WebGradient } from "@/components/WebGradient";
 
 /**
  * ALWAYS BLACK, LIKE THE WEB. See `WinScene.tsx` — this scene renders
@@ -91,10 +92,22 @@ export function SocialScene({
           accessibilityLabel={committed ? "I'm on it." : "I'll do this"}
           onPress={commit}
           style={minTouchTarget}
-          className={`mt-10 w-full flex-row items-center justify-center gap-2 rounded-2xl py-4 ${
+          className={`mt-10 w-full flex-row items-center justify-center gap-2 overflow-hidden rounded-2xl py-4 ${
             committed ? "bg-green-500" : "bg-white"
           }`}
         >
+          {/* The web's `bg-gradient-to-r from-emerald-500 to-green-500`. */}
+          {committed ? (
+            <WebGradient
+              testID={`${testID}-commit-gradient`}
+              fill
+              direction="r"
+              colors={[
+                resolveToken("mind-emerald", "dark"),
+                resolveToken("mind-green", "dark"),
+              ]}
+            />
+          ) : null}
           <Check
             size={20}
             color={committed ? onDarkForeground : C["primary-foreground"]}

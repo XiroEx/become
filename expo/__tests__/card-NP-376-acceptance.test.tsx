@@ -15,7 +15,7 @@
 //      capsule's whole footprint, not just a hand-tuned guess at it;
 //   2. a STATIC SCAN of every screen under `app/(app)/(tabs)/**` fails the
 //      build if a future edit reintroduces a bare `position: "absolute"` +
-//      a literal `bottom:` under the bar's height (`TAB_BAR_HEIGHT`, 56) on
+//      a literal `bottom:` under the bar's height (`TAB_BAR_HEIGHT`, 62) on
 //      anything that is not a `bottom: 0` full-screen overlay/backdrop —
 //      which is exactly the shape of bug this card fixes in five places
 //      (`nutrition/index.tsx`, `nutrition/recipes/index.tsx` ×2,
@@ -132,9 +132,10 @@ describe("(NP-376) the Nutrition FAB clears the glass tab bar", () => {
     expect(style.position).toBe("absolute");
 
     const required = tabBarScreenInset(TEST_BOTTOM_INSET);
-    // Pinned to the real geometry (NP-351: 34 + 10 + 56 + 12 = 112), so a
-    // drift in either this card's fix or the bar's own numbers is caught.
-    expect(required).toBe(112);
+    // Pinned to the real geometry (34 + 10 + 62 + 12 = 118; the capsule is the
+    // web's 62pt tall), so a drift in either this card's fix or the bar's own
+    // numbers is caught.
+    expect(required).toBe(118);
     expect(style.bottom).toBeGreaterThanOrEqual(required);
   });
 });
@@ -188,7 +189,7 @@ function listSourceFiles(dir: string): string[] {
 
 describe("(NP-376) no (tabs) screen reintroduces an absolute control under the bar", () => {
   it("has zero bare `bottom:` literals under TAB_BAR_HEIGHT outside bottom:0 overlays", () => {
-    expect(TAB_BAR_HEIGHT).toBe(56);
+    expect(TAB_BAR_HEIGHT).toBe(62);
 
     const tabsDir = path.join(EXPO_DIR, "app", "(app)", "(tabs)");
     const files = listSourceFiles(tabsDir);

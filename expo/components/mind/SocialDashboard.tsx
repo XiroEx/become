@@ -32,6 +32,7 @@ import { celebrationHaptic } from "@/lib/feedback/haptics";
 import { mindAccentColor } from "@/lib/mind/accents";
 import { reflectOnAnswers } from "@/lib/mind/reflect";
 import { dailyPick } from "@/lib/mind/rotation";
+import { onDarkForeground } from "@/lib/theme/tokens";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { tzOffsetMinutes } from "@/lib/time/localDay";
 
@@ -344,7 +345,7 @@ export default function SocialDashboard() {
       <ProtocolUnlockModal
         unlocked={justUnlocked}
         onDismiss={dismissUnlock}
-        accentColor={colors.accent}
+        accentColor={mindAccentColor("social")}
       />
 
       <SystemHero
@@ -355,7 +356,7 @@ export default function SocialDashboard() {
         statLabel="connections"
         colorClass="text-pink-500"
         bgClass="border-pink-500/20 bg-pink-500/10"
-        iconColor={colors.accent}
+        iconColor={mindAccentColor("social")}
         testID="mind-system-hero"
       />
 
@@ -399,7 +400,9 @@ export default function SocialDashboard() {
           >
             <HeartHandshake
               size={18}
-              color={cooldown > 0 ? colors.accent : colors["primary-foreground"]}
+              color={
+                cooldown > 0 ? colors["muted-foreground"] : onDarkForeground
+              }
             />
             <Text
               className={`text-sm font-bold ${
@@ -425,6 +428,7 @@ export default function SocialDashboard() {
         }
         colorClass="text-pink-500"
         bgClass="border-pink-500/20 bg-pink-500/10"
+        iconColor={mindAccentColor("social")}
         title="Built from your circle and where you want to go."
         subtitle="Shaped by your environment and standards."
         testID="mind-adaptive-session"
@@ -443,7 +447,7 @@ export default function SocialDashboard() {
               title={p.title}
               blurb={p.blurb}
               colorClass="text-pink-500"
-              iconColor={colors.accent}
+              iconColor={mindAccentColor("social")}
               locked={i >= 1 + (reps ?? 0)}
               lockedHint={`Locked — do ${i - (reps ?? 0)} more rep${i - (reps ?? 0) === 1 ? "" : "s"} in Social to unlock`}
               onClick={() =>

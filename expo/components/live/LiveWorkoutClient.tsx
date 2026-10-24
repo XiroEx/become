@@ -58,6 +58,10 @@ import {
 } from "@/lib/live/bellStyle";
 import type { BellChoices, BellCount } from "@/lib/live/bellCount";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { onDarkForeground, rgbOf, webGradientTokens } from "@/lib/theme/tokens";
+import { WebGradient } from "@/components/WebGradient";
+import { minTouchTarget } from "@/lib/a11y/touchTarget";
+import { WRAPPABLE_TEXT } from "@/lib/a11y/dynamicType";
 import { formatElapsed, overallProgressPercent } from "@/lib/live/liveProgress";
 
 export type { WorkoutView };
@@ -1498,16 +1502,54 @@ export function LiveWorkoutClient({
   // finish (the web has no always-visible Complete Workout in Live either).
   const allSetsDone = totalSets > 0 && completedSets === totalSets;
 
+  // The web's Track finish is `bg-linear-to-r from-green-500 to-emerald-600`
+  // with white ink in both modes — a green CTA, not the neutral primary — so
+  // it is its own Pressable over a gradient (Button's label ink follows the
+  // scheme and would go dark on the green in dark mode). Same a11y contract
+  // as Button: role, busy/disabled state, a name, a 44pt target.
+  const finishLabel = finishing ? "Saving…" : "Complete Workout! 🎉";
   const finishButton =
     allSetsDone && view === "track" ? (
-      <Button
+      <Pressable
         testID={`${testID}-finish`}
-        variant="primary"
+        accessibilityRole="button"
+        accessibilityState={{ disabled: finishing, busy: false }}
+        accessibilityLabel={finishLabel}
         disabled={finishing}
-        onPress={() => onFinish?.(gridRef.current)}
+        onPress={finishing ? undefined : () => onFinish?.(gridRef.current)}
+        style={[
+          minTouchTarget,
+          {
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 12,
+            overflow: "hidden",
+            paddingHorizontal: 16,
+            paddingVertical: 14,
+            opacity: finishing ? 0.7 : 1,
+          },
+        ]}
       >
-        {finishing ? "Saving…" : "Complete Workout! 🎉"}
-      </Button>
+        <WebGradient
+          testID={`${testID}-finish-gradient`}
+          fill
+          direction="r"
+          colors={[colors["mind-green"], rgbOf(webGradientTokens.emerald600)]}
+        />
+        <Text
+          style={[
+            WRAPPABLE_TEXT,
+            {
+              textAlign: "center",
+              fontSize: 16,
+              fontWeight: "600",
+              color: onDarkForeground,
+            },
+          ]}
+        >
+          {finishLabel}
+        </Text>
+      </Pressable>
     ) : null;
 
   // Offline / failure banners, shown in BOTH views (Live is a full-screen
@@ -1711,11 +1753,20 @@ export function LiveWorkoutClient({
                   style={{
                     height: "100%",
                     borderRadius: 999,
+                    overflow: "hidden",
                     width: `${overallProgressPercent(grid)}%`,
-                    // emerald-500 in both modes, the web bar's colour (NP-123: no hex).
+                    // emerald-500 in both modes, the web bar's colour (NP-123: no hex);
+                    // the gradient below is the web's `from-green-500 to-emerald-500`.
                     backgroundColor: colors["mind-emerald"],
                   }}
-                />
+                >
+                  <WebGradient
+                    testID={`${testID}-overall-progress-gradient`}
+                    fill
+                    direction="r"
+                    colors={[colors["mind-green"], colors["mind-emerald"]]}
+                  />
+                </View>
               </View>
               <Text
                 testID={`${testID}-progress`}

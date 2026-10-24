@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import {
   View,
   StyleSheet,
@@ -13,6 +13,19 @@ import { X, Trophy, Check, Info } from 'lucide-react-native'
 import type { LiftProgress } from '@/lib/becoming/types'
 import { minTouchTarget } from '@/lib/a11y/touchTarget'
 import { useThemeTokens } from '@/lib/theme/useThemeTokens'
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from '@/lib/motion/reanimated'
+import { useReducedMotion } from '@/lib/a11y/reducedMotion'
+import {
+  EASE_OUT_EXPO,
+  SHEET_ENTER_DISTANCE,
+  SHEET_MS,
+  motionMs,
+} from '@/lib/motion/motion'
 
 export const EST_MAX_LABEL = 'Estimated max'
 export const EST_MAX_LABEL_SHORT = 'Est. max'
@@ -47,6 +60,37 @@ export function StrengthTargetSheet({
   hue = 'hsl(142, 71%, 58%)',
 }: StrengthTargetSheetProps) {
   const { colors, tint, scrim } = useThemeTokens()
+  const reduced = useReducedMotion()
+  const translateY = useSharedValue(reduced ? 0 : SHEET_ENTER_DISTANCE)
+  const opacity = useSharedValue(reduced ? 1 : 0)
+
+  useEffect(() => {
+    if (!open) return
+    if (reduced) {
+      translateY.set(0)
+      opacity.set(1)
+      return
+    }
+    const cfg = {
+      duration: motionMs(SHEET_MS, reduced),
+      easing: Easing.bezier(
+        EASE_OUT_EXPO[0],
+        EASE_OUT_EXPO[1],
+        EASE_OUT_EXPO[2],
+        EASE_OUT_EXPO[3],
+      ),
+    }
+    translateY.set(SHEET_ENTER_DISTANCE)
+    opacity.set(0)
+    translateY.set(withTiming(0, cfg))
+    opacity.set(withTiming(1, cfg))
+  }, [open, reduced, translateY, opacity])
+
+  const sheetAnimStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateY: translateY.value }],
+  }))
+
   // Fixed at 80% of the window height, like every `BottomSheet` drawer.
   const insets = useSafeAreaInsetsOrZero()
   const { height: windowHeight } = useWindowDimensions()
@@ -73,7 +117,13 @@ export function StrengthTargetSheet({
           accessibilityLabel="Dismiss sheet"
           accessibilityRole="button"
         />
-        <View style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border, height: sheetHeight, maxHeight: sheetHeight }]}>
+        <Animated.View
+          style={[
+            styles.sheet,
+            { backgroundColor: colors.card, borderColor: colors.border, height: sheetHeight, maxHeight: sheetHeight },
+            sheetAnimStyle,
+          ]}
+        >
           <View style={[styles.header, { borderBottomColor: colors.border }]}>
             <View style={styles.headerLeft}>
               <View style={[styles.iconWrap, { backgroundColor: tint('muted', 0.5) }]}>
@@ -159,7 +209,7 @@ export function StrengthTargetSheet({
               </View>
             </View>
           </ScrollView>
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   )

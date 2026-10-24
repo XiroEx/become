@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Pressable,
@@ -7,6 +7,12 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "@/lib/motion/reanimated";
 import { Text } from "@/components/Text";
 import { useRouter } from "expo-router";
 import {
@@ -24,6 +30,15 @@ import {
 } from "@become/core";
 import { FireNumber } from "@/components/streaks/FireNumber";
 import { ProgressFill } from "@/components/motion/ProgressFill";
+import { PulseView } from "@/components/motion/PulseView";
+import { useReducedMotion } from "@/lib/a11y/reducedMotion";
+import {
+  STREAK_SLIDE_DISTANCE,
+  TILE_CROSSFADE_EASING,
+  TILE_CROSSFADE_MS,
+  motionMs,
+} from "@/lib/motion/motion";
+import { rgbOf, webGradientTokens } from "@/lib/theme/tokens";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import type { DashboardStatData } from "@/lib/dashboard/types";
 
@@ -58,7 +73,7 @@ export function StreakTile({
   testID,
   style,
 }: StreakTileProps) {
-  const { colors, tint } = useThemeTokens();
+  const { colors, isDark } = useThemeTokens();
   const router = useRouter();
 
   const inkMap: Record<
@@ -66,29 +81,41 @@ export function StreakTile({
     { icon: string; badge: string; bar: string }
   > = {
     super: {
-      icon: colors.accent,
-      badge: tint("accent", 0.15),
-      bar: colors.accent,
+      icon: isDark
+        ? rgbOf(webGradientTokens.orange400)
+        : rgbOf(webGradientTokens.orange600),
+      badge: isDark
+        ? rgbOf(webGradientTokens.orange900, 0.3)
+        : rgbOf(webGradientTokens.orange100),
+      bar: colors.orange,
     },
     overall: {
       icon: colors.accent,
-      badge: tint("accent", 0.15),
-      bar: colors.accent,
+      badge: isDark
+        ? rgbOf(webGradientTokens.amber900, 0.3)
+        : rgbOf(webGradientTokens.amber100),
+      bar: rgbOf(webGradientTokens.amber500),
     },
     workout: {
       icon: colors.success,
-      badge: tint("success", 0.15),
-      bar: colors.success,
+      badge: isDark
+        ? rgbOf(webGradientTokens.green900, 0.3)
+        : rgbOf(webGradientTokens.green100),
+      bar: colors["mind-green"],
     },
     nutrition: {
-      icon: colors.primary,
-      badge: tint("primary", 0.15),
-      bar: colors.primary,
+      icon: isDark ? colors.destructive : colors.brand,
+      badge: isDark
+        ? rgbOf(webGradientTokens.red900, 0.3)
+        : rgbOf(webGradientTokens.red100),
+      bar: colors.brand,
     },
     mindset: {
-      icon: colors.accent,
-      badge: tint("accent", 0.15),
-      bar: colors.accent,
+      icon: colors.mindset,
+      badge: isDark
+        ? rgbOf(webGradientTokens.purple900, 0.3)
+        : rgbOf(webGradientTokens.purple100),
+      bar: rgbOf(webGradientTokens.purple500),
     },
   };
 
@@ -138,17 +165,56 @@ export function StreakTile({
 
   const pages = streakPages(fallback);
   const leadId = pages[0]?.id;
+  const reduced = useReducedMotion();
   const [nav, setNav] = useState<{ lead: string | undefined; i: number }>({
     lead: leadId,
     i: 0,
   });
+  const dirRef = useRef<1 | -1>(1);
+  const prevIndexRef = useRef(0);
+  const pageProgress = useSharedValue(1);
+  const pageDir = useSharedValue<number>(1);
+
   const i =
     nav.lead === leadId
       ? Math.min(nav.i, Math.max(0, pages.length - 1))
       : 0;
 
+  useEffect(() => {
+    if (i === prevIndexRef.current) return;
+    prevIndexRef.current = i;
+    if (reduced) {
+      pageProgress.set(1);
+      return;
+    }
+    pageDir.set(dirRef.current);
+    pageProgress.set(0);
+    pageProgress.set(
+      withTiming(1, {
+        duration: motionMs(TILE_CROSSFADE_MS, false),
+        easing: Easing.bezier(
+          TILE_CROSSFADE_EASING[0],
+          TILE_CROSSFADE_EASING[1],
+          TILE_CROSSFADE_EASING[2],
+          TILE_CROSSFADE_EASING[3],
+        ),
+      }),
+    );
+  }, [i, reduced, pageProgress, pageDir]);
+
+  const pageAnim = useAnimatedStyle(() => ({
+    opacity: pageProgress.value,
+    transform: [
+      {
+        translateX:
+          pageDir.value * STREAK_SLIDE_DISTANCE * (1 - pageProgress.value),
+      },
+    ],
+  }));
+
   const goTo = (next: number) => {
     if (!pages.length) return;
+    dirRef.current = next >= i ? 1 : -1;
     setNav({
       lead: leadId,
       i: ((next % pages.length) + pages.length) % pages.length,
@@ -200,7 +266,7 @@ export function StreakTile({
           style,
         ]}
       >
-        <View style={styles.squareContent}>
+        <PulseView style={styles.squareContent}>
           <View style={styles.topRow}>
             <View
               style={[styles.circleBadge, { backgroundColor: colors.muted, opacity: 0.6 }]}
@@ -233,7 +299,7 @@ export function StreakTile({
               { backgroundColor: colors.muted, opacity: 0.6 },
             ]}
           />
-        </View>
+        </PulseView>
       </View>
     );
   }
@@ -300,9 +366,19 @@ export function StreakTile({
       ]}
     >
       {wide ? (
-        <View style={styles.wideRow}>
+        <Animated.View
+          style={[styles.wideRow, reduced ? undefined : pageAnim]}
+        >
           <View style={styles.wideLeft}>
-            <View style={[styles.badge, { backgroundColor: ink.badge }]}>
+            <View
+              style={[
+                styles.badge,
+                {
+                  backgroundColor: ink.badge,
+                  opacity: p.doneToday || p.emphasis ? 1 : 0.6,
+                },
+              ]}
+            >
               <IconComponent size={20} color={ink.icon} />
             </View>
             <View style={styles.wideMeta}>
@@ -360,9 +436,13 @@ export function StreakTile({
                       backgroundColor:
                         idx === i
                           ? pg.id === "super"
-                            ? colors.accent
-                            : colors["muted-foreground"]
-                          : colors.border,
+                            ? colors.orange
+                            : isDark
+                              ? rgbOf(webGradientTokens.zinc500)
+                              : rgbOf(webGradientTokens.zinc400)
+                          : isDark
+                            ? rgbOf(webGradientTokens.zinc700)
+                            : colors.border,
                     }}
                   />
                 ))}
@@ -371,14 +451,24 @@ export function StreakTile({
               <ChevronRight size={16} color={colors["muted-foreground"]} />
             )}
           </View>
-        </View>
+        </Animated.View>
       ) : (
         // Horizontal 1x1 layout, matching the web's `StatTile.tsx` (NP-352):
         // a circular badge on the LEFT with label + value stacked beside it,
         // not the old vertically-stacked badge-above-label shape.
-        <View style={styles.squareContent}>
+        <Animated.View
+          style={[styles.squareContent, reduced ? undefined : pageAnim]}
+        >
           <View style={styles.topRow}>
-            <View style={[styles.circleBadge, { backgroundColor: ink.badge }]}>
+            <View
+              style={[
+                styles.circleBadge,
+                {
+                  backgroundColor: ink.badge,
+                  opacity: p.doneToday || p.emphasis ? 1 : 0.6,
+                },
+              ]}
+            >
               <IconComponent size={18} color={ink.icon} />
             </View>
             <View style={styles.topMeta}>
@@ -439,9 +529,13 @@ export function StreakTile({
                         backgroundColor:
                           idx === i
                             ? pg.id === "super"
-                              ? colors.accent
-                              : colors["muted-foreground"]
-                            : colors.border,
+                              ? colors.orange
+                              : isDark
+                                ? rgbOf(webGradientTokens.zinc500)
+                                : rgbOf(webGradientTokens.zinc400)
+                            : isDark
+                              ? rgbOf(webGradientTokens.zinc700)
+                              : colors.border,
                       }}
                     />
                   ))}
@@ -449,7 +543,7 @@ export function StreakTile({
               ) : null}
             </View>
           </View>
-        </View>
+        </Animated.View>
       )}
     </Pressable>
   );

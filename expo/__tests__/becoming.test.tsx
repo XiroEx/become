@@ -1,4 +1,5 @@
 import React from 'react'
+import { StyleSheet } from 'react-native'
 import { render, fireEvent, act } from '@testing-library/react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
@@ -15,6 +16,7 @@ import {
 } from '@/lib/becoming/storage'
 import { weekSignals, journeySignals } from '@/lib/becoming/signals'
 import type { WeekSnapshot, JourneyPayload } from '@/lib/becoming/types'
+import { becomingStageTokens, lightTokens } from '@/lib/theme/tokens'
 
 const MOCK_WEEK: WeekSnapshot = {
   index: 0,
@@ -338,6 +340,42 @@ describe('NP-192 / NP-012: The Becoming door, story, and details', () => {
       expect(getByTestId('details-screen-mind')).toBeTruthy()
       expect(getByText('Becoming score')).toBeTruthy()
       expect(getByText('1,250')).toBeTruthy()
+    })
+
+    it('Mind score banner is the web\'s violet-600 → violet-500 gradient with white ink', () => {
+      const { getByTestId, getByText } = render(
+        <SafeAreaProvider
+          initialMetrics={{
+            insets: { top: 0, left: 0, right: 0, bottom: 0 },
+            frame: { x: 0, y: 0, width: 375, height: 812 },
+          }}
+        >
+          <BecomingDetails
+            open={true}
+            onClose={jest.fn()}
+            initialTab="mind"
+            weeks={[MOCK_WEEK]}
+            weighIns={MOCK_JOURNEY.weights}
+            todayKey={MOCK_JOURNEY.todayKey}
+            unit="lbs"
+            identity="Consistent, disciplined builder"
+            chapter={2}
+            becomingScore={1250}
+          />
+        </SafeAreaProvider>,
+      )
+
+      const gradient = getByTestId('mind-score-banner-gradient')
+      expect(gradient.props.colors).toEqual([
+        `rgb(${becomingStageTokens.doorVioletFrom})`,
+        `rgb(${lightTokens['mind-violet']})`,
+      ])
+      // `bg-gradient-to-br`: top-left → bottom-right.
+      expect(gradient.props.start).toEqual({ x: 0, y: 0 })
+      expect(gradient.props.end).toEqual({ x: 1, y: 1 })
+      expect(StyleSheet.flatten(getByText('1,250').props.style).color).toBe(
+        `rgb(${becomingStageTokens.ink})`,
+      )
     })
 
     it('renders Training tab with Then/Now/Next, What you moved, suggestions, and Est. max sheet', () => {

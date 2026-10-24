@@ -1,6 +1,5 @@
 import { Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
 import {
   Trophy,
   Flame,
@@ -12,8 +11,11 @@ import {
   Calendar,
 } from "lucide-react-native";
 import { Text } from "@/components/Text";
+import { WebGradient } from "@/components/WebGradient";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
+import { ScreenEnter } from "@/components/motion/ScreenEnter";
+import { PAGE_STAGGER_MS } from "@/lib/motion/motion";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { WRAPPABLE_TEXT } from "@/lib/a11y/dynamicType";
 import type {
@@ -200,11 +202,10 @@ export function ProgramJourney({
             around the trophy and a gold "PROGRAM COMPLETE"
             (`from-yellow-500/20 to-amber-600/10`, `ring-yellow-500/30`,
             `text-yellow-400`), carried over via the `accent` token. */}
+        <ScreenEnter delayMs={0} distance={12}>
         <View testID={`${testID}-hero`} style={{ borderRadius: 16, overflow: "hidden" }}>
-          <LinearGradient
+          <WebGradient
             colors={[tint("accent", 0.2), tint("accent", 0.08)]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
             style={{
               borderRadius: 16,
               borderWidth: 1,
@@ -252,8 +253,9 @@ export function ProgramJourney({
             <Text className="text-muted-foreground text-xs mt-2 text-center">
               You showed up and did the work. That&apos;s everything.
             </Text>
-          </LinearGradient>
+          </WebGradient>
         </View>
+        </ScreenEnter>
 
         {/* Key stats grid (NP-363) — a unified 2x2 grid, 12px gap between
             rows AND columns, matching the web's `grid grid-cols-2 gap-3`
@@ -261,6 +263,7 @@ export function ProgramJourney({
             Coloured like the web's: green sessions, blue volume, violet
             length, success/amber weight change (never neutral
             `text-foreground`). */}
+        <ScreenEnter delayMs={PAGE_STAGGER_MS} distance={10}>
         <View testID={`${testID}-stats-grid`} style={{ gap: 12 }}>
           <View style={{ flexDirection: "row", gap: 12 }}>
             <View style={{ flex: 1 }}>
@@ -358,9 +361,11 @@ export function ProgramJourney({
             </View>
           </View>
         </View>
+        </ScreenEnter>
 
         {/* Top PRs — the web's amber PR weights, never neutral. */}
         {journey.topPRs.length > 0 ? (
+          <ScreenEnter delayMs={PAGE_STAGGER_MS * 2} distance={10}>
           <View testID={`${testID}-prs`}>
             <View
               style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 }}
@@ -432,10 +437,12 @@ export function ProgramJourney({
               ))}
             </View>
           </View>
+          </ScreenEnter>
         ) : null}
 
         {/* Footer CTAs — the web's Dumbbell on "Find My Next Challenge" and
             Calendar on "View Full Training Log" (previously no icons). */}
+        <ScreenEnter delayMs={PAGE_STAGGER_MS * 3} distance={10}>
         <View style={{ gap: 8, paddingTop: 4 }}>
           <Button
             testID={`${testID}-next`}
@@ -463,6 +470,7 @@ export function ProgramJourney({
             View Full Training Log
           </Button>
         </View>
+        </ScreenEnter>
         <View style={{ height: 8 }} />
       </ScrollView>
     </SafeAreaView>

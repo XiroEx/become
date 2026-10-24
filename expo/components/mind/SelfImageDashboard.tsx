@@ -40,6 +40,7 @@ import { WEBAPP_BASE_URL } from "@/lib/config";
 import { mindAccentColor } from "@/lib/mind/accents";
 import { reflectOnAnswers } from "@/lib/mind/reflect";
 import { dailyPick } from "@/lib/mind/rotation";
+import { onDarkForeground } from "@/lib/theme/tokens";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { ProgressFill } from "@/components/motion/ProgressFill";
 import { tzOffsetMinutes } from "@/lib/time/localDay";
@@ -739,13 +740,13 @@ export default function SelfImageDashboard() {
               disabled={affirming}
               className="mt-3 flex-row items-center justify-center gap-2 rounded-xl bg-violet-500 py-3 active:opacity-90 disabled:opacity-60"
             >
-              <Fingerprint size={16} color={colors["primary-foreground"]} />
+              <Fingerprint size={16} color={onDarkForeground} />
               <Text className="text-sm font-bold text-white">
                 This is me — affirm it
               </Text>
               {affirm.streak > 0 ? (
                 <View className="flex-row items-center gap-0.5">
-                  <Flame size={14} color={colors["primary-foreground"]} />
+                  <Flame size={14} color={onDarkForeground} />
                   <Text className="text-sm font-bold text-white">
                     {affirm.streak}
                   </Text>
@@ -815,7 +816,7 @@ export default function SelfImageDashboard() {
             disabled={savingWin || winInput.trim().length < 3}
             className="h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-500 active:opacity-90 disabled:opacity-40"
           >
-            <Plus size={18} color={colors["primary-foreground"]} strokeWidth={3} />
+            <Plus size={18} color={onDarkForeground} strokeWidth={3} />
           </Pressable>
         </View>
 

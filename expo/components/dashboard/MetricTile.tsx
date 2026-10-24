@@ -27,6 +27,7 @@
 import React from "react";
 import { View, Pressable, StyleSheet } from "react-native";
 import { Text } from "@/components/Text";
+import { PulseView } from "@/components/motion/PulseView";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { usePressed } from "@/lib/a11y/usePressed";
 import type {
@@ -112,14 +113,14 @@ export function MetricTile({
         accessibilityLabel={`Loading ${metricFallbackLabel(fallbackId ?? "")}`}
         style={cardStyle}
       >
-        <View style={styles.body}>
+        <PulseView style={styles.body}>
           <View
             style={[styles.skeletonLabel, { backgroundColor: colors.muted }]}
           />
           <View
             style={[styles.skeletonValue, { backgroundColor: colors.muted }]}
           />
-        </View>
+        </PulseView>
       </View>
     );
   }

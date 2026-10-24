@@ -18,6 +18,7 @@ import Animated, {
   Easing,
   useAnimatedStyle,
   useSharedValue,
+  withDelay,
   withTiming,
 } from "@/lib/motion/reanimated";
 import type { StyleProp, ViewStyle } from "react-native";
@@ -32,6 +33,11 @@ export interface ScreenEnterProps {
   children: React.ReactNode;
   /** Extra delay before the rise starts (stagger), in ms. */
   delayMs?: number;
+  /** Rise duration in ms (defaults to `SCREEN_ENTER_MS` = 400). */
+  durationMs?: number;
+  /** Vertical travel in pt (defaults to `SCREEN_ENTER_DISTANCE` = 20). */
+  distance?: number;
+  className?: string;
   style?: StyleProp<ViewStyle>;
   testID?: string;
 }
@@ -39,6 +45,9 @@ export interface ScreenEnterProps {
 export function ScreenEnter({
   children,
   delayMs = 0,
+  durationMs = SCREEN_ENTER_MS,
+  distance = SCREEN_ENTER_DISTANCE,
+  className,
   style,
   testID,
 }: ScreenEnterProps) {
@@ -51,20 +60,25 @@ export function ScreenEnter({
       return;
     }
     t.set(0);
-    const id = setTimeout(() => {
-      t.set(withTiming(1, { duration: motionMs(SCREEN_ENTER_MS, false), easing: Easing.out(Easing.quad) }));
-    }, delayMs);
-    return () => clearTimeout(id);
+    const rise = withTiming(1, {
+      duration: motionMs(durationMs, false),
+      easing: Easing.out(Easing.quad),
+    });
+    t.set(delayMs > 0 ? withDelay(delayMs, rise) : rise);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- t is a stable shared value; re-run on the inputs that matter
-  }, [reduced, delayMs]);
+  }, [reduced, delayMs, durationMs]);
 
   const anim = useAnimatedStyle(() => ({
     opacity: t.value,
-    transform: [{ translateY: SCREEN_ENTER_DISTANCE * (1 - t.value) }],
+    transform: [{ translateY: distance * (1 - t.value) }],
   }));
 
   return (
-    <Animated.View testID={testID} style={[style, reduced ? undefined : anim]}>
+    <Animated.View
+      testID={testID}
+      className={className}
+      style={[style, reduced ? undefined : anim]}
+    >
       {children}
     </Animated.View>
   );

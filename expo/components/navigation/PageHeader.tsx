@@ -14,7 +14,12 @@ import { FoodReportsBadge } from "@/components/nutrition/FoodReportsBadge";
 import { FoodReportsSheet } from "@/components/nutrition/FoodReportsSheet";
 import { FeedbackSheet } from "@/components/settings/FeedbackSheet";
 import { useAuth } from "@/lib/auth/useAuth";
+import { WEBAPP_BASE_URL } from "@/lib/config";
 import { loadMyReports } from "@/lib/nutrition/foodFlags";
+import {
+  defaultIconForGoal,
+  type FitnessGoal,
+} from "@/lib/onboarding/steps";
 import {
   requestNativeTourHub,
   requestNativeTourReplay,
@@ -56,6 +61,12 @@ const menuRow = [
 export interface PageHeaderProps {
   /** Page title, left, 28pt bold. */
   title: string;
+  /**
+   * Rendered before the title — e.g. the Mind home's brain icon (web
+   * parity: `webapp/components/mind/MindJourney.tsx` renders
+   * `<Brain /> Mindset`).
+   */
+  titleIcon?: ReactNode;
   /** Smaller muted text directly under the title. */
   subtitle?: string;
   /**
@@ -103,6 +114,7 @@ function useOptionalAuth(): ReturnType<typeof useAuth> | null {
 
 export function PageHeader({
   title,
+  titleIcon,
   subtitle,
   helpKey,
   titleAccessory,
@@ -136,6 +148,13 @@ export function PageHeader({
   // TopNav reads the same `/api/nutrition/flags/mine` `unreadCount`).
   const [unread, setUnread] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
+  // Equipped profile icon + custom avatar URL from `/api/profile` (mirroring
+  // `webapp/components/ProfileMenu.tsx`, since `/api/auth/me` does not project
+  // `profileIcon` or `avatarUrl`).
+  const [fetchedProfileIcon, setFetchedProfileIcon] = useState<string | null>(
+    null,
+  );
+  const [fetchedAvatarUrl, setFetchedAvatarUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token) {
@@ -154,10 +173,38 @@ export function PageHeader({
         // A badge is not worth an error state.
       }
     })();
+    if (
+      typeof user?.profileIcon !== "string" &&
+      typeof globalThis.fetch === "function"
+    ) {
+      void (async () => {
+        try {
+          const res = await globalThis.fetch(`${WEBAPP_BASE_URL}/api/profile`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!cancelled && res && res.ok) {
+            const data = (await res.json()) as {
+              profileIcon?: unknown;
+              avatarUrl?: unknown;
+            };
+            if (!cancelled && data && typeof data === "object") {
+              setFetchedProfileIcon(
+                typeof data.profileIcon === "string" ? data.profileIcon : null,
+              );
+              setFetchedAvatarUrl(
+                typeof data.avatarUrl === "string" ? data.avatarUrl : null,
+              );
+            }
+          }
+        } catch {
+          // Fall back to goal preset / default preset.
+        }
+      })();
+    }
     return () => {
       cancelled = true;
     };
-  }, [token, refreshKey]);
+  }, [token, refreshKey, user?.profileIcon]);
 
   const openMenu = useCallback(() => {
     // Re-read the badge on every open so the dot cannot go stale.
@@ -215,13 +262,19 @@ export function PageHeader({
     })();
   }, [logout, router, signingOut]);
 
+  const goalFallbackIcon = user?.profile?.fitnessGoal
+    ? defaultIconForGoal(user.profile.fitnessGoal as FitnessGoal)
+    : null;
   const icon =
     (typeof user?.profileIcon === "string" ? user.profileIcon : null) ??
     userIcon ??
+    (token ? fetchedProfileIcon : null) ??
+    goalFallbackIcon ??
     null;
   const imageUrl =
     (typeof user?.avatarUrl === "string" ? user.avatarUrl : null) ??
     userAvatarUrl ??
+    (token ? fetchedAvatarUrl : null) ??
     null;
   const name = displayNameOf(user, userName);
 
@@ -239,6 +292,7 @@ export function PageHeader({
           <View
             style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
           >
+            {titleIcon}
             <Text
               testID={`${testID}-title`}
               accessibilityRole="header"

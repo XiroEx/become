@@ -14,7 +14,13 @@ import { useReducedMotion } from "@/lib/a11y/reducedMotion";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { useAuth } from "@/lib/auth/useAuth";
 import { WEBAPP_BASE_URL } from "@/lib/config";
-import { onDarkForeground, resolveToken } from "@/lib/theme/tokens";
+import {
+  onDarkForeground,
+  resolveToken,
+  rgbOf,
+  webGradientRamps,
+} from "@/lib/theme/tokens";
+import { WebGradient } from "@/components/WebGradient";
 
 /**
  * ALWAYS BLACK, LIKE THE WEB. See `WinScene.tsx` — this scene renders
@@ -206,10 +212,19 @@ export function VisionScene({
             }
             onPress={lockIn}
             style={minTouchTarget}
-            className={`mt-10 w-full flex-row items-center justify-center gap-2 rounded-2xl py-4 ${
+            className={`mt-10 w-full flex-row items-center justify-center gap-2 overflow-hidden rounded-2xl py-4 ${
               locked ? "bg-green-500" : "bg-white"
             }`}
           >
+            {/* The web's `bg-gradient-to-r from-amber-500 to-green-500`. */}
+            {locked ? (
+              <WebGradient
+                testID={`${testID}-lock-in-gradient`}
+                fill
+                direction="r"
+                colors={webGradientRamps.amberToGreen.map((t) => rgbOf(t))}
+              />
+            ) : null}
             <Check
               size={20}
               color={locked ? onDarkForeground : C["primary-foreground"]}

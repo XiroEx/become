@@ -770,6 +770,7 @@ export default function VisionDashboard({
         }
         colorClass="text-emerald-500"
         bgClass="border-emerald-500/30 bg-emerald-500/10"
+        iconColor={colors.success}
         subtitle="Built from the future you and where you are right now."
       />
 
