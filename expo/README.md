@@ -338,8 +338,10 @@ hold it together:
   it is heard even when the journey arrives after it, latched, with a
   bounded fallback (`SCREEN_SHOWN_FALLBACK_MS`) for a host that never emits
   it (jest; a screen outside a native stack). And the stage's own native
-  tree laying out: the Skia `Canvas`'s `onLayout` — the beat it has a size
-  and its first frame follows natively; the gesture surface is laid out in
+  tree laying out: the Skia canvas's wrapper `View`'s `onLayout` — the wrapper
+  is the canvas's size, so the beat it has a size and its first frame follows
+  natively (the `Canvas` itself takes no `onLayout`: unsupported on the new
+  architecture); the gesture surface is laid out in
   the same commit and reports the same beat, so a dropped prop can never
   leave the opening waiting. The phase is DERIVED (`waiting` until both,
   then the stored beat), not set in an effect. `markIntroShown` stays inside
