@@ -78,10 +78,10 @@ describe("(card NP-301) mind coach header tile + send button use the violet→gr
     const headerIcon = await findByTestId("mind-coach-chat-header-icon");
     // violet-500 → green-500 (`tokens.ts`'s `mind-violet` / `mind-green`),
     // the same two stops the web's `from-violet-500 to-green-500` draws.
-    expect(headerIcon.props.colors).toEqual(["rgb(139 92 246)", "rgb(34 197 94)"]);
+    expect(headerIcon.props.colors).toEqual(["rgb(141 86 255)", "rgb(34 197 94)"]);
 
     const sendGradient = await findByTestId("mind-coach-chat-send-gradient");
-    expect(sendGradient.props.colors).toEqual(["rgb(139 92 246)", "rgb(34 197 94)"]);
+    expect(sendGradient.props.colors).toEqual(["rgb(141 86 255)", "rgb(34 197 94)"]);
   });
 
   it("the nutrition consultant keeps its flat teal tile — no gradient, no regression", async () => {
@@ -122,7 +122,7 @@ describe("(card NP-301) user/coach message bubbles match the web regardless of a
         persistKey="mind-coach"
         title="Your mindset coach"
         greeting="Hello there"
-        accentGradient={["rgb(139 92 246)", "rgb(34 197 94)"]}
+        accentGradient={["rgb(141 86 255)", "rgb(34 197 94)"]}
       />,
     );
     const bubble = flattenStyle(getByTestId("mind-coach-chat-message-0").props.style);
@@ -130,7 +130,7 @@ describe("(card NP-301) user/coach message bubbles match the web regardless of a
     // is the coach's — squared bottom-LEFT corner, never the accent colour.
     expect(bubble.borderBottomLeftRadius).toBe(6);
     expect(bubble.borderBottomRightRadius).toBe(18);
-    expect(bubble.backgroundColor).not.toBe("rgb(139 92 246)");
+    expect(bubble.backgroundColor).not.toBe("rgb(141 86 255)");
   });
 });
 

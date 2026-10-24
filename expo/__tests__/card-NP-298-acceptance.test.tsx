@@ -142,7 +142,9 @@ describe("(id: np298-accents) mindAccentColor mirrors the web's ACCENTS map", ()
 
   it("falls back rather than throwing for an unknown system", () => {
     expect(() => mindAccentColor("not-a-system")).not.toThrow();
-    expect(mindAccentColor("not-a-system")).toBe(resolveToken("mind-violet", "dark"));
+    // The web's own default is the literal `ACCENTS[system] ?? '#8b5cf6'`
+    // (ToolIntroGate), not a Tailwind class, so it stays v3 violet-500.
+    expect(mindAccentColor("not-a-system")).toBe("rgb(139 92 246)");
   });
 
   it("is a fixed colour regardless of the phone's light/dark setting", () => {

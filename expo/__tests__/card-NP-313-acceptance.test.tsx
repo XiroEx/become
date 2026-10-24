@@ -123,8 +123,8 @@ describe("1. the primary token is the web's neutral pair", () => {
 
 describe("2. red lives on `brand` and `destructive`, not on `primary`", () => {
   it("brand is the web's red family, darker in light mode for contrast", () => {
-    expect(lightTokens.brand).toBe("220 38 38"); // red-600 — `text-red-600`
-    expect(darkTokens.brand).toBe("239 68 68"); // red-500 — flat `bg-red-500`
+    expect(lightTokens.brand).toBe("228 0 22"); // red-600 (v4) — `text-red-600`
+    expect(darkTokens.brand).toBe("251 44 54"); // red-500 (v4) — flat `bg-red-500`
     // The web's red fills are `text-white` in both modes.
     expect(lightTokens["brand-foreground"]).toBe("255 255 255");
     expect(darkTokens["brand-foreground"]).toBe("255 255 255");
@@ -137,7 +137,7 @@ describe("2. red lives on `brand` and `destructive`, not on `primary`", () => {
 
   it("destructive — the error/alert red — is untouched by this card", () => {
     expect(lightTokens.destructive).toBe("185 28 28"); // red-700
-    expect(darkTokens.destructive).toBe("248 113 113"); // red-400
+    expect(darkTokens.destructive).toBe("255 101 104"); // red-400 (v4)
   });
 
   it("tailwind.config.js exposes brand as a class, both halves", () => {
@@ -293,20 +293,20 @@ describe("3. the screens draw the neutral primary and keep red where the web has
 
 describe("4. per-feature colours that already matched the web are untouched", () => {
   it("keeps purple Plus, violet/green Mind, green success, teal and amber", () => {
-    expect(lightTokens.mindset).toBe("147 51 234"); // purple-600
-    expect(darkTokens.mindset).toBe("192 132 252"); // purple-400
-    expect(lightTokens["mind-violet"]).toBe("139 92 246"); // violet-500
-    expect(darkTokens["mind-violet"]).toBe("139 92 246");
+    expect(lightTokens.mindset).toBe("152 16 250"); // purple-600 (v4)
+    expect(darkTokens.mindset).toBe("191 126 255"); // purple-400 (v4)
+    expect(lightTokens["mind-violet"]).toBe("141 86 255"); // violet-500 (v4)
+    expect(darkTokens["mind-violet"]).toBe("141 86 255");
     expect(lightTokens["mind-green"]).toBe("34 197 94"); // green-500
     expect(darkTokens["mind-green"]).toBe("34 197 94");
     expect(lightTokens.success).toBe("22 163 74"); // green-600
-    expect(darkTokens.success).toBe("74 222 128"); // green-400
+    expect(darkTokens.success).toBe("5 223 114"); // green-400 (v4)
     expect(lightTokens.teal).toBe("20 184 166"); // teal-500, both modes
     expect(darkTokens.teal).toBe("20 184 166");
     expect(lightTokens.accent).toBe("217 119 6"); // amber-600
     expect(darkTokens.accent).toBe("251 191 36"); // amber-400
-    expect(lightTokens.info).toBe("37 99 235"); // blue-600
-    expect(darkTokens.info).toBe("96 165 250"); // blue-400
+    expect(lightTokens.info).toBe("21 93 252"); // blue-600 (v4)
+    expect(darkTokens.info).toBe("86 162 255"); // blue-400 (v4)
   });
 
   it("every token still resolves for every mode, old and new", () => {
