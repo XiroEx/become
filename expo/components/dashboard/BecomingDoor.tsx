@@ -168,7 +168,9 @@ export function BecomingDoor({
       opacity: isUnread
         ? 1
         : DOOR_NUDGE_MIN_OPACITY + (1 - DOOR_NUDGE_MIN_OPACITY) * p,
-      shadowOpacity: isUnread ? 0.45 + 0.2 * p : 0.28 + 0.12 * p,
+      // The nudge has no resting glow on the web: the violet only exists
+      // mid-breath, so it starts (and ends) each loop at zero.
+      shadowOpacity: isUnread ? 0.45 + 0.2 * p : 0.4 * p,
     };
   });
 
@@ -310,7 +312,7 @@ export function BecomingDoor({
             ? {
                 backgroundColor: "transparent",
                 borderColor: "transparent",
-                boxShadow: `0 4px 12px 0 ${tint("mind-violet", 0.25)}, 0 0 0 6px ${tint("mind-violet", 0.22)}`,
+                boxShadow: `0 4px 12px 0 ${tint("mind-violet", 0.25)}`,
                 shadowColor: colors["mind-violet"],
                 shadowOpacity: 0.3,
                 shadowRadius: 10,
@@ -319,15 +321,9 @@ export function BecomingDoor({
             : {
                 backgroundColor: colors.card,
                 borderColor: colors.border,
-                ...(top
-                  ? {
-                      boxShadow: `0 1px 3px 0 ${tint("foreground", 0.1)}, 0 0 0 5px ${tint("mind-violet", 0.16)}`,
-                      shadowColor: colors["mind-violet"],
-                      shadowOpacity: 0.22,
-                      shadowRadius: 8,
-                      shadowOffset: { width: 0, height: 0 },
-                    }
-                  : {}),
+                // The violet ring is the animated halo above, never a
+                // resting border: the web's nudge starts each loop with none.
+                boxShadow: `0 1px 3px 0 ${tint("foreground", 0.1)}`,
               },
           {
             opacity: cardPress.pressed ? 0.85 : 1,
