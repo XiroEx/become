@@ -19,8 +19,8 @@ describe("theme tokens", () => {
   it("keeps the web's red on its own token, not on primary", () => {
     // Red is the exception on the web (destructive, errors, a few accents),
     // so it has its own token and `primary` is neutral.
-    expect(lightTokens.brand).toBe("220 38 38"); // red-600
-    expect(darkTokens.brand).toBe("239 68 68"); // red-500
+    expect(lightTokens.brand).toBe("228 0 22"); // red-600 (v4)
+    expect(darkTokens.brand).toBe("251 44 54"); // red-500 (v4)
     expect(lightTokens["brand-foreground"]).toBe("255 255 255");
     expect(darkTokens["brand-foreground"]).toBe("255 255 255");
     expect(lightTokens.primary).not.toBe(lightTokens.brand);
@@ -39,7 +39,7 @@ describe("theme tokens", () => {
   });
 
   it("resolveToken wraps the triplet in rgb()", () => {
-    expect(resolveToken("brand", "dark")).toBe("rgb(239 68 68)");
+    expect(resolveToken("brand", "dark")).toBe("rgb(251 44 54)");
     expect(resolveToken("primary", "dark")).toBe("rgb(255 255 255)");
     expect(resolveToken("background", "light")).toBe("rgb(250 250 250)");
     expect(resolveToken("foreground", "dark")).toBe("rgb(255 255 255)");

@@ -111,6 +111,7 @@ import { QuickAddSheet, type QuickAddData } from "@/components/nutrition/QuickAd
 import { invalidateMindSession } from "@/lib/mind/sessionCache";
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { useTabBarCondenseOnScroll } from "@/lib/navigation/tabBarCondense";
 import { TAB_BAR_CONTENT_INSET } from "@/lib/navigation/tabBarInset";
 import { useTabBarScreenInset } from "@/lib/navigation/tabBarInset";
 import { PlansResponseSchema, type MealPlan, type PlansResponse } from "@/lib/nutrition/mealPlans";
@@ -150,6 +151,7 @@ const MENU_DISMISS_MS = 350;
 
 export default function NutritionIndexRoute() {
   const { colors, scrim, tint } = useThemeTokens();
+  const tabBarScroll = useTabBarCondenseOnScroll();
   const tabBarInset = useTabBarScreenInset();
   const router = useRouter();
   const { token } = useAuth();
@@ -2034,6 +2036,7 @@ export default function NutritionIndexRoute() {
         onTouchEnd={viewMode === "day" ? onTouchEnd : undefined}
       >
         <ScrollView
+          {...tabBarScroll}
           contentContainerStyle={{
             padding: 16,
             gap: 16,

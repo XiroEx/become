@@ -650,7 +650,7 @@ export function ProgramsCatalog({
       <View style={{ marginBottom: 12 }}>
         <Input
           testID="programming-browse-search-input"
-          placeholder="Search by name, tags, or description…"
+          placeholder="Search programs by name, tags, or description..."
           accessibilityLabel="Search programs"
           value={searchQuery}
           onChangeText={setSearchQuery}

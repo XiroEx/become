@@ -16,8 +16,27 @@
  */
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-/** The capsule's own height, in points. 56 clears the 44pt touch target. */
-export const TAB_BAR_HEIGHT = 56;
+/**
+ * THE WEB'S CAPSULE, MEASURED (`webapp/components/BottomNav.tsx`).
+ *
+ * The `<ul>` is `gap-2 px-3 py-1.5` around `h-12 w-14` items with a 1px
+ * `border`, and Tailwind is border-box, so it is content-sized: five 56pt
+ * buttons, four 8pt gaps, 12pt of side padding and 6pt of top and bottom
+ * padding, plus the border. It is NOT stretched to the screen edges.
+ */
+export const TAB_BAR_ITEM_WIDTH = 56;
+export const TAB_BAR_ITEM_HEIGHT = 48;
+export const TAB_BAR_ITEM_GAP = 8;
+export const TAB_BAR_PADDING_X = 12;
+export const TAB_BAR_PADDING_Y = 6;
+export const TAB_BAR_BORDER_WIDTH = 1;
+
+/**
+ * The capsule's own height, in points: 48 + 2 × 6 + 2 × 1 = 62, the web's.
+ * (It was 56 before the capsule took the web's numbers.)
+ */
+export const TAB_BAR_HEIGHT =
+  TAB_BAR_ITEM_HEIGHT + TAB_BAR_PADDING_Y * 2 + TAB_BAR_BORDER_WIDTH * 2;
 
 /**
  * The gap between the bottom safe area and the capsule — the web's

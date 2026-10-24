@@ -28,7 +28,11 @@
 // phone's own light/dark setting. That is also why `discipline` reads
 // `darkTokens.brand` specifically rather than `resolveToken("brand", mode)`:
 // `brand` is mode-aware (red-600 in light) and this stage has no light mode.
-import { resolveToken, type TokenName } from "@/lib/theme/tokens";
+import {
+  mindAccentLiterals,
+  resolveToken,
+  type TokenName,
+} from "@/lib/theme/tokens";
 
 /** The Mind systems that carry a GuidedFlow / breath-player intro or protocol. */
 export type MindAccentSystem =
@@ -50,8 +54,11 @@ const ACCENT_TOKEN: Record<MindAccentSystem, TokenName> = {
   "anti-sabotage": "orange",
 };
 
-/** Falls back to the web's own default accent (violet) for an unknown system. */
-const DEFAULT_TOKEN: TokenName = "mind-violet";
+/** The accents the web paints as `#8b5cf6` / `#ef4444` literals, not as palette classes. */
+const ACCENT_LITERAL: Partial<Record<MindAccentSystem, string>> = {
+  "self-image": mindAccentLiterals.violet,
+  discipline: mindAccentLiterals.red,
+};
 
 /**
  * Resolve a Mind system id (`ToolIntroGate`'s `system` / a dashboard's own
@@ -59,6 +66,12 @@ const DEFAULT_TOKEN: TokenName = "mind-violet";
  * surface draws with — the native equivalent of the web's `ACCENTS[system]`.
  */
 export function mindAccentColor(system: string): string {
-  const token = ACCENT_TOKEN[system as MindAccentSystem] ?? DEFAULT_TOKEN;
+  // Two of the web's accents are hex literals whose hue the theme token (a
+  // Tailwind v4 class colour) no longer equals — see `mindAccentLiterals`.
+  const literal = ACCENT_LITERAL[system as MindAccentSystem];
+  if (literal) return `rgb(${literal})`;
+  const token = ACCENT_TOKEN[system as MindAccentSystem];
+  // Unknown system: the web's own default, `ACCENTS[system] ?? '#8b5cf6'`.
+  if (!token) return `rgb(${mindAccentLiterals.violet})`;
   return resolveToken(token, "dark");
 }

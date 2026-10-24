@@ -96,6 +96,26 @@ describe("ProgramsList", () => {
       ).toBeNull();
     });
 
+    it("renders the full weekly frequency for 4 days/week (NP-221: 4x/wk, never truncated to 4x/)", () => {
+      const programs: ProgramSummary[] = [
+        {
+          id: "p1",
+          name: "At-Home Transformation",
+          description: "d",
+          durationWeeks: 4,
+          trainingDaysPerWeek: 4,
+          targetUser: "Beginner to Intermediate",
+        },
+      ];
+      const { getByText, queryByText } = render(
+        <ProgramsList programs={programs} />,
+      );
+      expect(getByText("4w")).toBeTruthy();
+      expect(getByText("4x/wk")).toBeTruthy();
+      // The truncated badge from visual QA must not appear.
+      expect(queryByText("4x/")).toBeNull();
+    });
+
     it("caps tags at 4 and shows '+N more' for the rest", () => {
       const programs: ProgramSummary[] = [
         {

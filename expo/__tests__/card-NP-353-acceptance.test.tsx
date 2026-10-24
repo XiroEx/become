@@ -179,11 +179,11 @@ describe("NP-353: Customize Dashboard native parity pass", () => {
     });
 
     it("token system defines purple in lightTokens, darkTokens, and global.css", () => {
-      expect(lightTokens.purple).toBe("147 51 234");
-      expect(darkTokens.purple).toBe("192 132 252");
+      expect(lightTokens.purple).toBe("152 16 250");
+      expect(darkTokens.purple).toBe("191 126 255");
       const css = readExpo("global.css");
-      expect(css).toContain("--purple: 147 51 234;");
-      expect(css).toContain("--purple: 192 132 252;");
+      expect(css).toContain("--purple: 152 16 250;");
+      expect(css).toContain("--purple: 191 126 255;");
     });
   });
 

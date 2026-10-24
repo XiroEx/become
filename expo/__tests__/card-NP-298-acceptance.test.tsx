@@ -105,6 +105,15 @@ function rgbStringToArgb(rgb: string): number {
   return (((0xff << 24) | (r << 16) | (g << 8) | b) >>> 0) as number;
 }
 
+/** RN flattens `style={[a, b]}` into one object; the fill's width is its static style plus the animated one. */
+function flattenStyle(style: unknown): Record<string, unknown> {
+  if (Array.isArray(style)) {
+    return Object.assign({}, ...style.map(flattenStyle));
+  }
+  if (style && typeof style === "object") return style as Record<string, unknown>;
+  return {};
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
 });
@@ -133,7 +142,9 @@ describe("(id: np298-accents) mindAccentColor mirrors the web's ACCENTS map", ()
 
   it("falls back rather than throwing for an unknown system", () => {
     expect(() => mindAccentColor("not-a-system")).not.toThrow();
-    expect(mindAccentColor("not-a-system")).toBe(resolveToken("mind-violet", "dark"));
+    // The web's own default is the literal `ACCENTS[system] ?? '#8b5cf6'`
+    // (ToolIntroGate), not a Tailwind class, so it stays v3 violet-500.
+    expect(mindAccentColor("not-a-system")).toBe("rgb(139 92 246)");
   });
 
   it("is a fixed colour regardless of the phone's light/dark setting", () => {
@@ -205,17 +216,23 @@ describe("(id: np298-guidedflow) GuidedFlow is a bare, always-dark Modal", () =>
         onExit={jest.fn()}
       />,
     );
-    // Step 0 in progress: its own segment is the 50%-filled one, in the
-    // mission accent (blue-500), not a shared amber/red/success token.
-    const style = getByTestId("guided-flow-progress-0-fill").props.style;
-    expect(style).toMatchObject({ width: "50%", backgroundColor: accent });
+    // Step 0 in progress: its own segment is the half-filled one, in the
+    // mission accent (blue-500), not a shared amber/red/success token. The
+    // fill is a ProgressFill now (it eases its width), so its style is an array.
+    const fillStyle = getByTestId("guided-flow-progress-0-fill").props.style;
+    expect(flattenStyle(fillStyle)).toMatchObject({
+      width: "50%",
+      backgroundColor: accent,
+    });
     expect(accent).not.toBe(resolveToken("accent", "dark"));
 
     fireEvent.press(getByTestId("guided-flow-next"));
     // Step 0 complete, now behind us: fully filled, same accent.
-    expect(getByTestId("guided-flow-progress-0-fill").props.style).toMatchObject(
-      { width: "100%", backgroundColor: accent },
-    );
+    const doneStyle = getByTestId("guided-flow-progress-0-fill").props.style;
+    expect(flattenStyle(doneStyle)).toMatchObject({
+      width: "100%",
+      backgroundColor: accent,
+    });
 
     fireEvent.press(getByTestId("guided-flow-next"));
     // Done: the check icon is drawn in the accent too.
@@ -315,9 +332,10 @@ describe("(id: np298-intro) ToolIntroGate's intro run is the tool's own colour",
     "%s's intro progress bar is coloured with its OWN accent (%s)",
     async (system, accent) => {
       const { getByTestId } = await openIntro(system);
-      expect(getByTestId("guided-flow-progress-0-fill").props.style).toMatchObject(
-        { backgroundColor: accent },
-      );
+      // The fill's style is an array (ProgressFill), so read it flattened.
+      expect(
+        flattenStyle(getByTestId("guided-flow-progress-0-fill").props.style),
+      ).toMatchObject({ backgroundColor: accent });
     },
   );
 });

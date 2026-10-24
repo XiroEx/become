@@ -5,14 +5,26 @@
  * Ported 1:1 from `webapp/components/dashboard/MoodGatewayBanner.tsx`.
  */
 
-import React from "react";
+import React, { useEffect } from "react";
 import { View, Pressable } from "react-native";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "@/lib/motion/reanimated";
 import { useRouter } from "expo-router";
 import { ArrowRight, Brain, X } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { moodGateway, type MoodLevel } from "@become/core";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
+import { useReducedMotion } from "@/lib/a11y/reducedMotion";
+import {
+  BANNER_ENTER_DISTANCE,
+  BANNER_MS,
+  motionMs,
+} from "@/lib/motion/motion";
 
 export interface MoodGatewayBannerProps {
   mood: MoodLevel;
@@ -30,6 +42,30 @@ export function MoodGatewayBanner({
   const { colors } = useThemeTokens();
   const router = useRouter();
   const g = moodGateway(mood);
+  // The web's banner drops 6pt in over 220ms (`initial={{ opacity: 0, y: -6
+  // }}`); under Reduce Motion it draws in place.
+  const reduced = useReducedMotion();
+  const t = useSharedValue(reduced ? 1 : 0);
+
+  useEffect(() => {
+    if (reduced) {
+      t.set(1);
+      return;
+    }
+    t.set(0);
+    t.set(
+      withTiming(1, {
+        duration: motionMs(BANNER_MS, false),
+        easing: Easing.out(Easing.quad),
+      }),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- t is a stable shared value
+  }, [reduced]);
+
+  const drop = useAnimatedStyle(() => ({
+    opacity: t.value,
+    transform: [{ translateY: BANNER_ENTER_DISTANCE * (1 - t.value) }],
+  }));
 
   const handleOpenMind = () => {
     if (onOpenMind) {
@@ -40,9 +76,10 @@ export function MoodGatewayBanner({
   };
 
   return (
-    <View
+    <Animated.View
       testID={testID}
       accessibilityRole="summary"
+      style={reduced ? undefined : drop}
       className="w-full flex-row items-center gap-3 rounded-2xl border border-purple-200 bg-purple-50 p-3 dark:border-purple-900/50 dark:bg-purple-950/30"
     >
       <View className="h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-card border border-border">
@@ -78,7 +115,7 @@ export function MoodGatewayBanner({
       >
         <X size={16} color={colors["muted-foreground"]} />
       </Pressable>
-    </View>
+    </Animated.View>
   );
 }
 

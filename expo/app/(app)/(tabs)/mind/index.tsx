@@ -10,6 +10,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   ArrowRight,
+  Brain,
   Check,
   ChevronRight,
   Flame,
@@ -23,11 +24,9 @@ import {
   MindSessionStateResponseSchema,
   MindStateResponseSchema,
   MindMissionResponseSchema,
-  ProgressMoodResponseSchema,
   type MindChapterSessions,
   type MindLevelProgress,
   type MindState,
-  type ProgressMoodPoint,
 } from "@become/api-client";
 import {
   CHAPTERS,
@@ -49,7 +48,6 @@ import {
 } from "@become/core";
 import { Text } from "@/components/Text";
 import { PageHeader } from "@/components/navigation/PageHeader";
-import { MoodHistoryStrip } from "@/components/mind/MoodHistoryStrip";
 import { IdentityOnboarding } from "@/components/mind/IdentityOnboarding";
 import { SessionPlayer } from "@/components/mind/session/SessionPlayer";
 import SuggestedActions from "@/components/mind/SuggestedActions";
@@ -59,6 +57,7 @@ import { useAuth } from "@/lib/auth/useAuth";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { showUpgradeSheet } from "@/lib/entitlements/upgradeSheet";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { useTabBarCondenseOnScroll } from "@/lib/navigation/tabBarCondense";
 import { TAB_BAR_CONTENT_INSET } from "@/lib/navigation/tabBarInset";
 import { tzOffsetMinutes, useLocalDay } from "@/lib/time/localDay";
 import {
@@ -137,6 +136,7 @@ export const MOVE_CHIP: Record<string, string> = {
 function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
   const router = useRouter();
   const { colors } = useThemeTokens();
+  const tabBarScroll = useTabBarCondenseOnScroll();
   const { token } = useAuth();
   const localDay = useLocalDay();
   const params = useLocalSearchParams<{ start?: string }>();
@@ -165,7 +165,6 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
   const [nextMainSessionAt, setNextMainSessionAt] = useState<number | null>(null);
 
   const [playing, setPlaying] = useState(false);
-  const [points, setPoints] = useState<ProgressMoodPoint[]>([]);
   const [loadedAt, setLoadedAt] = useState<number>(0);
 
   // Pre-composed AI Mind plan (NP-102); null falls back to deterministic plan
@@ -193,7 +192,6 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
         sessionRes,
         stateRes,
         missionRes,
-        userProgressRes,
       ] = await Promise.allSettled([
         apiFetch("/api/mind/identity", MindIdentityResponseSchema, {
           baseUrl: WEBAPP_BASE_URL,
@@ -227,10 +225,6 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
           baseUrl: WEBAPP_BASE_URL,
           getToken: () => token ?? undefined,
           tz: tzParam,
-        }),
-        apiFetch("/api/progress", ProgressMoodResponseSchema, {
-          baseUrl: WEBAPP_BASE_URL,
-          getToken: () => token ?? undefined,
         }),
       ]);
 
@@ -308,10 +302,6 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
       if (missionRes.status === "fulfilled") {
         const m = missionRes.value;
         setMissionAction(m?.mission?.dailyAction ?? null);
-      }
-
-      if (userProgressRes.status === "fulfilled") {
-        setPoints(userProgressRes.value?.moodData ?? []);
       }
     } catch (err) {
       console.error("Error loading mind home:", err);
@@ -598,6 +588,7 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
       testID={testID}
     >
       <ScrollView
+        {...tabBarScroll}
         contentContainerStyle={{
           padding: 16,
           gap: 20,
@@ -605,11 +596,23 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
           paddingBottom: TAB_BAR_CONTENT_INSET,
         }}
       >
-        {/* Header: title + avatar menu (help and profile live in the menu).
-            The streak badge rides beside the title. */}
+        {/* Header: brain icon + title (web parity:
+            `webapp/components/mind/MindJourney.tsx` renders
+            `<Brain /> Mindset`), with the avatar menu beside it. The
+            streak badge rides beside the title. */}
         <PageHeader
           title="Mindset"
           helpKey="mind"
+          titleIcon={
+            <View
+              testID="mind-header-icon"
+              accessibilityRole="image"
+              accessibilityLabel="Mindset"
+              style={{ justifyContent: "center" }}
+            >
+              <Brain size={26} color={colors["mind-violet"]} />
+            </View>
+          }
           titleAccessory={
             streak > 0 ? (
               <View
@@ -891,14 +894,6 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
             <Lock size={16} color={colors["muted-foreground"]} />
           </View>
         )}
-
-        {/* Recent moods (kept below the card until NP-105 ships) */}
-        <View testID="mind-recent-moods">
-          <Text className="text-foreground font-semibold mb-2">
-            Recent moods
-          </Text>
-          <MoodHistoryStrip points={points} />
-        </View>
       </ScrollView>
 
       {/* The session itself (NP-098): a full-screen modal over the home, so the

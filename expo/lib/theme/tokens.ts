@@ -77,6 +77,19 @@
  *                                          tokens for the same hues.
  *
 
+ * THESE ARE TAILWIND v4's COLOURS (not v3's). The web is Tailwind v4
+ * (`tailwindcss ^4`, `@import "tailwindcss"`), whose default palette is oklch,
+ * and most of it lies outside sRGB: a browser gamut-maps it (chroma reduced in
+ * oklch at constant lightness and hue). Each token below that names a Tailwind
+ * class is that class's v4 oklch value mapped the same way, read from
+ * tailwindcss 4.2.4's `theme.css`. A token is marked `(v4)` when it moved; one
+ * within 1 ΔE (oklab ×100) of its v3 hex was left alone (zinc-*, amber-400/600,
+ * green-500/600, teal-500, cyan-500, emerald-500, orange-500, violet-300), and
+ * so were the colours the web writes as a HEX LITERAL, which no palette
+ * touches: the mood chart (`ProgressChart.tsx` `moodColors`) and the Mind
+ * accents (`ToolIntroGate.tsx` `ACCENTS`: mind-cyan/-blue/-emerald/-pink),
+ * which stay exactly as the web paints them.
+ *
  * Nothing here is mode-agnostic any more: `resolveToken` REQUIRES a mode, so a
  * new call site cannot quietly resolve against dark the way 20 of them did
  * before this card. The mode comes from `useThemeTokens()`, which reads
@@ -126,16 +139,18 @@ export const lightTokens: Record<TokenName, string> = {
   foreground: "24 24 27", // zinc-900
   primary: "24 24 27", // zinc-900 — the web's `bg-zinc-900` primary action
   "primary-foreground": "255 255 255", // the web's `text-white` on it
-  brand: "220 38 38", // red-600 — the web's light-mode red (`text-red-600`,
-  // `bg-red-600`); the lighter red-500 is 3.6:1 on zinc-50 and this is 4.6:1
+  brand: "228 0 22", // red-600 (v4) — the web's light-mode red (`text-red-600`,
+  // `bg-red-600`); the lighter red-500 is 3.6:1 on zinc-50 and this is 4.7:1
   "brand-foreground": "255 255 255", // the web's `bg-red-500/600 text-white`
   muted: "244 244 245", // zinc-100
   "muted-foreground": "113 113 122", // zinc-500
   card: "255 255 255", // white
   border: "228 228 231", // zinc-200
-  destructive: "185 28 28", // red-700 — the web's `text-red-700` on a red tint,
+  destructive: "185 28 28", // red-700 (v3 KEPT) — the web's `text-red-700` on a red tint,
   // and what keeps the error banner at 4.5:1 in light mode
-  // (red-600 on `bg-red-50` is 3.5:1 and fails AA)
+  // (red-600 on `bg-red-50` is 3.5:1 and fails AA). Its v4 value, 191 0 15, is
+  // 1.6 ΔE away but reads 4.44:1 on the 18% tint three banners draw it on, so
+  // it stays on the v3 shade until those tints move (themeFollowsSystem.test).
   "destructive-foreground": "255 255 255",
   accent: "217 119 6", // amber-600 — the web's `text-amber-600`; amber-400 is
   // invisible on a near-white surface, which is why the
@@ -146,10 +161,10 @@ export const lightTokens: Record<TokenName, string> = {
   // colour (NP-262), identical in both modes like `primary`: the web's
   // `accentFrom="from-emerald-500" accentTo="to-teal-500"` gradient does not
   // change with the scheme either.
-  info: "37 99 235", // blue-600 — the web's `text-blue-600` (Calendar/History
+  info: "21 93 252", // blue-600 (v4) — the web's `text-blue-600` (Calendar/History
   // links); `text-blue-500` icons are one shade lighter on the web but share
   // this token rather than adding a second blue
-  mindset: "147 51 234", // purple-600 — the web's Mindset streak icon
+  mindset: "152 16 250", // purple-600 (v4) — the web's Mindset streak icon
   // (`text-purple-600 bg-purple-100`)
   // The mood chart's 5 bar/face colours (`webapp/components/ProgressChart.tsx`
   // `moodColors`). The web uses ONE flat palette in both modes — these data
@@ -160,7 +175,7 @@ export const lightTokens: Record<TokenName, string> = {
   "mood-okay": "251 191 36", // amber-400 — Okay
   "mood-good": "163 230 53", // lime-400 — Pretty Good
   "mood-great": "52 211 153", // emerald-400 — Great
-  "mind-violet": "139 92 246", // violet-500 — same in both modes, like `primary`
+  "mind-violet": "141 86 255", // violet-500 (v4) — same in both modes, like `primary`
   "mind-green": "34 197 94", // green-500 — same in both modes
   "mind-ink": "24 24 27", // zinc-900 — same in both modes
   "mind-cyan": "6 182 212", // cyan-500 — State Shift's accent (NP-298), same in both modes
@@ -169,13 +184,13 @@ export const lightTokens: Record<TokenName, string> = {
   "mind-pink": "236 72 153", // pink-500 — Social's accent (NP-298), same in both modes
   orange: "249 115 22", // orange-500 — the web's Circuit group badge
   // (`bg-orange-500`), same in both modes like `primary`
-  indigo: "99 102 241", // indigo-500 — the web's Triset group badge
-  rose: "244 63 94", // rose-500 — the web's Giant Set group badge
+  indigo: "98 96 255", // indigo-500 (v4) — the web's Triset group badge
+  rose: "255 35 87", // rose-500 (v4) — the web's Giant Set group badge
   amber: "251 191 36", // amber-400 — the streak card's progress bar, the
   // flat END of the web's `from-orange-500 to-amber-400` gradient
   // (`WorkoutSummary.tsx`), which carries no `dark:` variant either — same
   // value in both modes like `orange`, `indigo` and `rose` above (NP-334)
-  purple: "147 51 234", // purple-600 — the web's `text-purple-600` / `bg-purple-100` (NP-353)
+  purple: "152 16 250", // purple-600 (v4) — the web's `text-purple-600` / `bg-purple-100` (NP-353)
 };
 
 export const darkTokens: Record<TokenName, string> = {
@@ -183,27 +198,27 @@ export const darkTokens: Record<TokenName, string> = {
   foreground: "255 255 255",
   primary: "255 255 255", // white — the web's `dark:bg-white` primary action
   "primary-foreground": "24 24 27", // zinc-900 — the web's `dark:text-black`
-  brand: "239 68 68", // red-500 — the web's flat `bg-red-500` / `dark:text-red-500`
+  brand: "251 44 54", // red-500 (v4) — the web's flat `bg-red-500` / `dark:text-red-500`
   "brand-foreground": "255 255 255", // white on red in both modes, like the web
   muted: "39 39 42", // zinc-800
   "muted-foreground": "161 161 170", // zinc-400
   card: "24 24 27", // zinc-900
   border: "39 39 42", // zinc-800
-  destructive: "248 113 113", // red-400 — the web's `dark:text-red-400`
+  destructive: "255 101 104", // red-400 (v4) — the web's `dark:text-red-400`
   "destructive-foreground": "24 24 27",
   accent: "251 191 36", // amber-400 — the web's `dark:text-amber-400`
   "accent-foreground": "24 24 27",
-  success: "74 222 128", // green-400 — the web's `dark:text-green-400`
+  success: "5 223 114", // green-400 (v4) — the web's `dark:text-green-400`
   teal: "20 184 166", // teal-500 — mode-invariant, see lightTokens.teal
-  info: "96 165 250", // blue-400 — the web's `dark:text-blue-400`
-  mindset: "192 132 252", // purple-400 — the web's `dark:text-purple-400 dark:bg-purple-900/30`
+  info: "86 162 255", // blue-400 (v4) — the web's `dark:text-blue-400`
+  mindset: "191 126 255", // purple-400 (v4) — the web's `dark:text-purple-400 dark:bg-purple-900/30`
   // Same flat mood palette as light mode — see the comment on `lightTokens`.
   "mood-bad": "248 113 113",
   "mood-low": "251 146 60",
   "mood-okay": "251 191 36",
   "mood-good": "163 230 53",
   "mood-great": "52 211 153",
-  "mind-violet": "139 92 246", // violet-500 — same in both modes, like `primary`
+  "mind-violet": "141 86 255", // violet-500 (v4) — same in both modes, like `primary`
   "mind-green": "34 197 94", // green-500 — same in both modes
   "mind-ink": "24 24 27", // zinc-900 — same in both modes
   "mind-cyan": "6 182 212", // cyan-500 — same in both modes
@@ -211,10 +226,10 @@ export const darkTokens: Record<TokenName, string> = {
   "mind-emerald": "16 185 129", // emerald-500 — same in both modes
   "mind-pink": "236 72 153", // pink-500 — same in both modes
   orange: "249 115 22", // orange-500 — same in both modes
-  indigo: "99 102 241", // indigo-500 — same in both modes
-  rose: "244 63 94", // rose-500 — same in both modes
+  indigo: "98 96 255", // indigo-500 (v4) — same in both modes
+  rose: "255 35 87", // rose-500 (v4) — same in both modes
   amber: "251 191 36", // amber-400 — same in both modes, see lightTokens.amber
-  purple: "192 132 252", // purple-400 — the web's `dark:text-purple-400 dark:bg-purple-900/30` (NP-353)
+  purple: "191 126 255", // purple-400 (v4) — the web's `dark:text-purple-400 dark:bg-purple-900/30` (NP-353)
 };
 
 export function getTokens(mode: ThemeMode): Record<TokenName, string> {
@@ -255,6 +270,22 @@ export function tintToken(
 }
 
 /**
+ * THE TWO MIND ACCENTS THE WEB WRITES AS HEX, WHERE THE TOKEN IS A v4 CLASS.
+ *
+ * `ToolIntroGate.tsx`'s `ACCENTS` (and `SelfImageDashboard` / `DisciplineDashboard`)
+ * paint self-image `#8b5cf6` and discipline `#ef4444` as literals, i.e. the v3
+ * shades exactly. The tokens that used to stand in for them — `mind-violet` and
+ * the dark `brand` — are `violet-500` / `red-500` CLASSES elsewhere on the web
+ * and are v4 now, so `lib/mind/accents.ts` reads these instead for those two.
+ */
+export const mindAccentLiterals = {
+  /** `#8b5cf6` — self-image, and `ToolIntroGate`'s default accent */
+  violet: "139 92 246",
+  /** `#ef4444` — discipline */
+  red: "239 68 68",
+} as const;
+
+/**
  * WHITE, IN BOTH MODES — the ink for a surface that is dark in both schemes.
  *
  * A camera viewfinder, a full-screen photo behind a scrim, the program hero
@@ -291,14 +322,14 @@ export const becomingStageTokens = {
   /** violet-400 — the web's `#a78bfa` */
   violet: "167 139 250",
   /**
-   * violet-600 — the web's `from-violet-600` on The Becoming door's unread
+   * violet-600 (v4) — the web's `from-violet-600` on The Becoming door's unread
    * gradient (`bg-gradient-to-br from-violet-600 to-violet-500`,
    * `doorClassName` in `webapp/components/dashboard/BecomingDoor.tsx`).
    * The door is white ink on violet in both modes, like the stage it opens,
    * so this lives with the stage's own always-dark triplets rather than as a
    * full theme token.
    */
-  doorVioletFrom: "124 58 237",
+  doorVioletFrom: "127 34 254",
   /**
    * violet-300 — the web's `border-violet-300/60`, the Horizon card's dashed
    * border while it is the focused card (NP-344)

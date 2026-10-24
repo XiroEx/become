@@ -7,6 +7,8 @@ import { ApiError, classifyApiError } from "@become/api-client";
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
 jest.mock("expo-router", () => ({
+  // Settings reads `highlight=weekly` (the Becoming nudge's deep link).
+  useLocalSearchParams: () => ({}),
   useRouter: () => ({
     push: mockPush,
     replace: mockReplace,

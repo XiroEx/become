@@ -56,6 +56,12 @@ describe("<AppLockOverlay>", () => {
 });
 
 describe("useAppLock — the `locked` signal that drives the overlay", () => {
+  /** The "could a lock follow?" cache loads from the stores on mount. */
+  const settleCache = () =>
+    act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
   function makeAppState() {
     const listeners: ((status: AppStateStatus) => void)[] = [];
     const subscribeToAppState = jest.fn(
@@ -74,7 +80,7 @@ describe("useAppLock — the `locked` signal that drives the overlay", () => {
     };
   }
 
-  it("(id: 9d6d3254) flips `locked` true the INSTANT the app leaves the foreground, before any async read", () => {
+  it("(id: 9d6d3254) flips `locked` true the INSTANT the app enters the background, before any async read", async () => {
     const appState = makeAppState();
     // A biometrics capability whose async methods never resolve during this
     // test — if `locked` depended on awaiting any of them, it would still be
@@ -94,6 +100,7 @@ describe("useAppLock — the `locked` signal that drives the overlay", () => {
       }),
     );
 
+    await settleCache();
     expect(result.current.locked).toBe(false);
     appState.emit("background");
     expect(result.current.locked).toBe(true);
@@ -119,6 +126,7 @@ describe("useAppLock — the `locked` signal that drives the overlay", () => {
       }),
     );
 
+    await settleCache();
     appState.emit("background");
     expect(result.current.locked).toBe(true);
     clock.now += 5_000;
@@ -151,6 +159,7 @@ describe("useAppLock — the `locked` signal that drives the overlay", () => {
       }),
     );
 
+    await settleCache();
     appState.emit("background");
     clock.now += 5 * 60_000;
     appState.emit("active");
@@ -197,6 +206,7 @@ describe("useAppLock — the `locked` signal that drives the overlay", () => {
       }),
     );
 
+    await settleCache();
     appState.emit("background");
     clock.now += 5 * 60_000;
     appState.emit("active");
@@ -218,7 +228,7 @@ describe("useAppLock — the `locked` signal that drives the overlay", () => {
     await waitFor(() => expect(result.current.locked).toBe(false));
   });
 
-  it("opting out clears `locked` on the next foreground return without prompting", async () => {
+  it("opted out: leaving the app never obscures it, and the return never prompts", async () => {
     const appState = makeAppState();
     const clock = { now: 1_000_000 };
     const authenticate = jest.fn(async () => ({ success: true }));
@@ -237,14 +247,116 @@ describe("useAppLock — the `locked` signal that drives the overlay", () => {
         subscribeToAppState: appState.subscribeToAppState,
       }),
     );
+    await settleCache();
 
     appState.emit("background");
-    expect(result.current.locked).toBe(true);
+    expect(result.current.locked).toBe(false);
     clock.now += 10 * 60_000;
     appState.emit("active");
 
-    await waitFor(() => expect(result.current.locked).toBe(false));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(result.current.locked).toBe(false);
     expect(authenticate).not.toHaveBeenCalled();
+  });
+
+  it("signed out (opted in from an earlier session): `inactive` and `background` never lock", async () => {
+    const appState = makeAppState();
+    const clock = { now: 1_000_000 };
+    const authenticate = jest.fn(async () => ({ success: true }));
+
+    const { result } = renderHook(() =>
+      useAppLock({
+        tokenStore: createMemoryTokenStore(null),
+        optInStore: createMemoryTokenStore("yes"),
+        biometrics: {
+          hasHardware: async () => true,
+          isEnrolled: async () => true,
+          authenticate,
+        },
+        gracePeriodMs: 60_000,
+        now: () => clock.now,
+        subscribeToAppState: appState.subscribeToAppState,
+      }),
+    );
+    await settleCache();
+
+    // The Google / Apple / passkey sheet coming up over the sign-in screen.
+    appState.emit("inactive");
+    expect(result.current.locked).toBe(false);
+    appState.emit("background");
+    expect(result.current.locked).toBe(false);
+    clock.now += 10 * 60_000;
+    appState.emit("active");
+
+    await new Promise((r) => setTimeout(r, 20));
+    expect(result.current.locked).toBe(false);
+    expect(authenticate).not.toHaveBeenCalled();
+  });
+
+  it("opted in: `inactive` from a system sheet never presents the overlay, and the return is not a re-lock", async () => {
+    const appState = makeAppState();
+    const clock = { now: 1_000_000 };
+    const authenticate = jest.fn(async () => ({ success: true }));
+
+    const { result } = renderHook(() =>
+      useAppLock({
+        tokenStore: createMemoryTokenStore("jwt-xyz"),
+        optInStore: createMemoryTokenStore("yes"),
+        biometrics: {
+          hasHardware: async () => true,
+          isEnrolled: async () => true,
+          authenticate,
+        },
+        gracePeriodMs: 60_000,
+        now: () => clock.now,
+        subscribeToAppState: appState.subscribeToAppState,
+      }),
+    );
+    await settleCache();
+
+    appState.emit("inactive");
+    expect(result.current.locked).toBe(false);
+    // Even a sheet held open far past the grace period is not time in the
+    // background.
+    clock.now += 10 * 60_000;
+    appState.emit("active");
+
+    await new Promise((r) => setTimeout(r, 20));
+    expect(result.current.locked).toBe(false);
+    expect(authenticate).not.toHaveBeenCalled();
+  });
+
+  it("opted in: `background` past the grace period locks, then the unlock flow runs and clears it", async () => {
+    const appState = makeAppState();
+    const clock = { now: 1_000_000 };
+    const authenticate = jest.fn(async () => ({ success: true }));
+
+    const { result } = renderHook(() =>
+      useAppLock({
+        tokenStore: createMemoryTokenStore("jwt-xyz"),
+        optInStore: createMemoryTokenStore("yes"),
+        biometrics: {
+          hasHardware: async () => true,
+          isEnrolled: async () => true,
+          authenticate,
+        },
+        gracePeriodMs: 60_000,
+        now: () => clock.now,
+        subscribeToAppState: appState.subscribeToAppState,
+      }),
+    );
+    await settleCache();
+
+    // inactive on the way to the switcher, then the real background.
+    appState.emit("inactive");
+    expect(result.current.locked).toBe(false);
+    appState.emit("background");
+    expect(result.current.locked).toBe(true);
+    clock.now += 5 * 60_000;
+    appState.emit("active");
+
+    await waitFor(() => expect(authenticate).toHaveBeenCalled());
+    await waitFor(() => expect(result.current.locked).toBe(false));
   });
 
   it("defaults `locked` to false and keeps the grace period default", () => {

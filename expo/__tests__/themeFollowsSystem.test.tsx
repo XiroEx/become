@@ -283,7 +283,7 @@ describe("the window, the status bar and the navigators follow it too", () => {
     const bar = readExpo("components/navigation/GlassTabBar.tsx");
     expect(bar).toContain("useThemeTokens()");
     expect(bar).toContain('tint("border", 0.7)');
-    expect(bar).toContain('tint("card", liquidGlass ? 0 : 0.6)');
+    expect(bar).toContain('tint("card", liquidGlass ? 0 : 0.8)');
     expect(bar).toContain('colorScheme={isDark ? "dark" : "light"}');
     expect(bar).not.toContain("borderTopColor");
   });
@@ -549,9 +549,9 @@ describe("global.css and lib/theme/tokens.ts are the same palette", () => {
     expect(darkTokens.primary).toBe("255 255 255");
     expect(darkTokens["primary-foreground"]).toBe("24 24 27");
     // The brand red is still mode-aware red, on its own token.
-    expect(lightTokens.brand).toBe("220 38 38"); // red-600
-    expect(darkTokens.brand).toBe("239 68 68"); // red-500
-    expect(tintToken("destructive", "dark", 0.18)).toBe("rgba(248, 113, 113, 0.18)");
+    expect(lightTokens.brand).toBe("228 0 22"); // red-600 (v4)
+    expect(darkTokens.brand).toBe("251 44 54"); // red-500 (v4)
+    expect(tintToken("destructive", "dark", 0.18)).toBe("rgba(255, 101, 104, 0.18)");
   });
 });
 

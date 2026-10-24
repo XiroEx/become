@@ -17,6 +17,7 @@ import { GenerateSheet } from "@/components/programs/GenerateSheet";
 import { ProgramsCatalog } from "@/components/programs/ProgramsCatalog";
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { useTabBarCondenseOnScroll } from "@/lib/navigation/tabBarCondense";
 import { TAB_BAR_CONTENT_INSET } from "@/lib/navigation/tabBarInset";
 import { QUICK_SESSION_DATE_RE } from "@/lib/quickSession/logPlan";
 
@@ -36,6 +37,7 @@ import { QUICK_SESSION_DATE_RE } from "@/lib/quickSession/logPlan";
  */
 export default function ProgrammingIndexRoute() {
   const { colors } = useThemeTokens();
+  const tabBarScroll = useTabBarCondenseOnScroll();
   const router = useRouter();
   // `?quick=1` opens the Workout Now sheet in place (dashboard tile, Workout
   // tab button); `?quickDate=YYYY-MM-DD` pre-fills the overview's Log/Plan
@@ -84,6 +86,7 @@ export default function ProgrammingIndexRoute() {
       testID="programming-index-route"
     >
       <ScrollView
+        {...tabBarScroll}
         contentContainerStyle={{
           padding: 16,
           // Clear the floating glass tab bar (NP-351).
