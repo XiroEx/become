@@ -135,10 +135,21 @@ const staticInterpolate = (
   input: readonly number[],
   output: readonly number[],
 ) => {
-  if (!input.length || !output.length) return v;
-  if (v <= input[0]) return output[0];
-  if (v >= input[input.length - 1]) return output[output.length - 1];
-  return output[0];
+  const firstIn = input[0];
+  const lastIn = input[input.length - 1];
+  const firstOut = output[0];
+  const lastOut = output[output.length - 1];
+  if (
+    firstIn === undefined ||
+    lastIn === undefined ||
+    firstOut === undefined ||
+    lastOut === undefined
+  ) {
+    return v;
+  }
+  if (v <= firstIn) return firstOut;
+  if (v >= lastIn) return lastOut;
+  return firstOut;
 };
 
 export const interpolate = (

@@ -282,16 +282,20 @@ describe("the surfaces render with and without motion", () => {
 
     rerender(
       <BecomingDoor
-        goals={{
-          nutrition: {
-            suggestion: {
-              id: "n1",
-              severity: "nudge",
-              title: "Protein",
-              sub: "Hit 150g today",
+        goals={
+          {
+            todayKey: "2026-10-02",
+            nutrition: {
+              suggestion: {
+                id: "n1",
+                severity: "nudge",
+                title: "Protein",
+                sub: "Hit 150g today",
+              },
             },
-          } as never,
-        }}
+            training: {},
+          } as never
+        }
         mind={null}
         testID="door"
       />,
