@@ -50,7 +50,7 @@ export async function computeJourney(userId: string, tz: number, now = new Date(
 
   const [user, progress, mealLogs, dayRows, ngoal, sessions, states, mind, wins, goals, creditDocs] = await Promise.all([
     User.findById(userId, 'profile createdAt').lean() as Promise<{ profile?: { weightUnit?: 'lbs' | 'kg'; weeklyAvailability?: number }; createdAt?: Date } | null>,
-    UserProgress.findOne({ userId }).select('weightHistory workoutLogs exercisePRs moodHistory').lean() as Promise<Record<string, unknown> | null>,
+    UserProgress.findOne({ userId }).select('weightHistory workoutLogs externalWorkouts exercisePRs moodHistory').lean() as Promise<Record<string, unknown> | null>,
     MealLog.find({ user: uid, loggedAt: { $gte: since } }, { loggedAt: 1, 'totalNutrition.calories': 1, 'totalNutrition.protein': 1 }).lean() as Promise<Array<{ loggedAt: Date; totalNutrition?: { calories?: number; protein?: number } }>>,
     DayNutrition.find({ userId: uid, date: { $gte: since }, 'quickAdds.0': { $exists: true } }, { date: 1, quickAdds: 1 }).lean() as Promise<Array<{ date: Date; quickAdds?: Array<{ calories?: number; protein?: number }> }>>,
     NutritionGoal.findOne({ userId }).select('protein').lean() as Promise<{ protein?: number } | null>,
@@ -73,6 +73,15 @@ export async function computeJourney(userId: string, tz: number, now = new Date(
     if (l.completed !== true) continue
     const dt = new Date(l.date); if (dt < since) continue
     day(dateKey(dt, tz)).workouts.push(l.title || l.day || 'Workout')
+  }
+  // Tracked workouts done outside Become (Health imports) are workouts the
+  // member did, so their week shows them (Jon, 2026-10-26). `date` is a day
+  // MARKER: read at offset 0, never through `tz`.
+  type XW = { date: Date | string; activityName?: string }
+  for (const w of ((progress?.externalWorkouts as XW[] | undefined) ?? [])) {
+    const dt = new Date(w.date); if (Number.isNaN(dt.getTime())) continue
+    const k = dateKey(dt, 0); if (k < fromKey) continue
+    day(k).workouts.push(w.activityName || 'Workout')
   }
   type PR = { exerciseName: string; maxE1RM?: { e1rm?: number; date?: Date } | null }
   for (const p of ((progress?.exercisePRs as PR[] | undefined) ?? [])) {
