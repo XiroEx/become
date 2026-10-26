@@ -17,8 +17,9 @@
 //   2. the same sample imported twice is one weigh-in — `externalId` is what
 //      recognises it.
 //
-// Plus the decision the card asked for: an imported weigh-in does NOT credit a
-// streak day. The member did nothing in Become.
+// Plus Jon's decision (2026-10-26): an imported weigh-in dated TODAY is today's
+// check-in, so it answers the weight prompt and credits the streak day. One
+// dated any earlier day is history and credits neither.
 
 import { test, before, after, beforeEach, mock } from 'node:test'
 import assert from 'node:assert/strict'
@@ -274,34 +275,53 @@ test('a sample dated in the future is refused', async () => {
   assert.match(res.body.error, /future/)
 })
 
-// ─── An import is not a thing the member did in Become ───────────────────────
+// ─── Today's import is today's check-in; an older one is history ─────────────
 
-test('an imported sample dated TODAY credits no streak day', async () => {
+test('an imported sample dated TODAY credits the streak day', async () => {
   const res = await postW({
     ...SAMPLE, date: TODAY, loggedAt: '2026-08-12T14:00:00.000Z',
   })
 
   assert.equal(res.status, 200)
   assert.equal(res.body.date, TODAY)
-  assert.equal(res.body.streak, undefined, 'the member did nothing in Become to earn one')
+  assert.ok(res.body.streak, 'the member weighed themselves today')
+
+  const doc = await stored()
+  assert.equal(doc?.streakDays, 1)
+})
+
+test('an imported sample dated TODAY answers the weight prompt', async () => {
+  await postW({ ...SAMPLE, date: TODAY })
+
+  const doc = await stored()
+  // The check-in modal must not ask for a number the scale already sent.
+  assert.equal(iso(doc?.weightSkipTracking?.lastPromptDate), TODAY_MARKER)
+  assert.equal(iso(doc?.weightSkipTracking?.lastWeightDate), TODAY_MARKER)
+})
+
+test('an imported sample from an EARLIER day credits no streak day and leaves the prompt alone', async () => {
+  const res = await postW(SAMPLE) // three days ago
+  assert.equal(res.status, 200)
+  assert.equal(res.body.streak, undefined, 'history, not today')
 
   const doc = await stored()
   assert.equal(doc?.streakDays ?? 0, 0)
   assert.equal(doc?.lastActivityDate, undefined)
+  assert.equal(doc?.weightSkipTracking?.lastPromptDate, undefined)
 })
 
-test('an imported sample does not answer the weight prompt', async () => {
-  await postW({ ...SAMPLE, date: TODAY })
-
+test('a re-delivered TODAY sample credits nothing a second time', async () => {
+  const first = await postW({ ...SAMPLE, date: TODAY })
+  assert.ok(first.body.streak)
+  const again = await postW({ ...SAMPLE, date: TODAY })
+  assert.equal(again.status, 200)
+  assert.equal(again.body.duplicate, true)
+  assert.equal(again.body.streak, undefined, 'a repeat is not a second check-in')
   const doc = await stored()
-  // lastPromptDate means "we asked, and they answered". An import is neither.
-  assert.equal(doc?.weightSkipTracking?.lastPromptDate, undefined)
-  // The value itself is real history, so the newest weigh-in is still recorded.
-  assert.equal(iso(doc?.weightSkipTracking?.lastWeightDate), TODAY_MARKER)
+  assert.equal(doc?.streakDays, 1)
 })
 
 test('a weigh-in the member typed today still credits the streak', async () => {
-  // The guard on imports must not have cost the ordinary case its streak day.
   const res = await postW({ weight: 180.2, tz: NY })
   assert.equal(res.body.date, TODAY)
   assert.ok(res.body.streak, 'a typed weigh-in for today is still activity')
