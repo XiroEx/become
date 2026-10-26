@@ -19,6 +19,8 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { TAB_BAR_CONTENT_INSET } from "@/lib/navigation/tabBarInset";
+import { useReducedMotion } from "@/lib/a11y/reducedMotion";
+import { webAssetUrl } from "@/lib/media/webAssetUrl";
 import { workoutDayLabel } from "@/lib/programs/dayLabel";
 import {
   getTokens,
@@ -351,6 +353,16 @@ export function ProgramDetail({
   } = useSingleVideoPlayer();
   const [expandedSlug, setExpandedSlug] = useState<string | null>(null);
 
+  // The web's `useHeroSnap`: inside the hero, a scroll settles either with
+  // the hero fully in view or fully scrolled off, never half way. Past the
+  // hero the list scrolls freely (`snapToEnd={false}`). Off under Reduce
+  // Motion, like the web's `prefers-reduced-motion` bail-out.
+  const reducedMotion = useReducedMotion();
+  const [heroHeight, setHeroHeight] = useState(0);
+  const heroSnapOffsets =
+    !reducedMotion && heroHeight > 0 ? [0, heroHeight] : undefined;
+  const coverUri = webAssetUrl(program.coverImage);
+
   const handleToggleExpand = useCallback(
     (slug: string) => {
       setExpandedSlug((prev) => {
@@ -514,6 +526,9 @@ export function ProgramDetail({
       testID={testID}
       onScroll={handleScroll}
       scrollEventThrottle={16}
+      snapToOffsets={heroSnapOffsets}
+      snapToEnd={false}
+      decelerationRate={heroSnapOffsets ? "fast" : "normal"}
     >
       {/* Hero — full-bleed cover-photo header (NP-361 #1): a photo (or the
           dark-pinned fallback colour when the program carries none) behind a
@@ -526,6 +541,7 @@ export function ProgramDetail({
           up and over" the hero as the member scrolls. */}
       <View
         testID={`${testID}-hero`}
+        onLayout={(e) => setHeroHeight(Math.round(e.nativeEvent.layout.height))}
         style={{
           marginHorizontal: -16,
           marginTop: -16,
@@ -539,10 +555,10 @@ export function ProgramDetail({
           fill
           colors={heroBaseGradient}
         />
-        {program.coverImage ? (
+        {coverUri ? (
           <Image
             testID={`${testID}-hero-cover`}
-            source={{ uri: program.coverImage }}
+            source={{ uri: coverUri }}
             resizeMode="cover"
             style={StyleSheet.absoluteFill}
           />
