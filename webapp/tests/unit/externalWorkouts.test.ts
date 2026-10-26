@@ -30,6 +30,9 @@ import {
 import { hasExternalWorkoutOn, trainedDayKeys } from '../../lib/workout/trainedDays'
 import { loadWidgetFeed } from '../../lib/widgets/load'
 import { computeStreaks } from '../../lib/streaks/compute'
+import { externalWorkoutDetail } from '../../lib/workout/externalWorkoutCopy'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 const USER_ID = '65f00000000000000000e817'
 
@@ -294,4 +297,22 @@ test('it ticks off today on the widget and in streaks, and leaves the program sl
 
   const schedule = await Schedule.findOne({ userId: USER_ID }).lean()
   assert.equal(schedule?.scheduledWorkouts[0]?.status, 'scheduled', 'the program slot is NOT completed')
+})
+
+// ─── The calendar's words ────────────────────────────────────────────────────
+
+describe('externalWorkoutDetail', () => {
+  test('names the app that tracked it, and follows the member\'s unit system', () => {
+    const w = { activityName: 'Walking', durationMin: 45, distanceKm: 3.4, energyKcal: 180, originApp: 'Whoop' }
+    assert.equal(externalWorkoutDetail(w, 'lbs'), 'Tracked by Whoop · 45 min · 2.1 mi · 180 kcal')
+    assert.equal(externalWorkoutDetail(w, 'kg'), 'Tracked by Whoop · 45 min · 3.4 km · 180 kcal')
+    assert.equal(externalWorkoutDetail({ activityName: 'Yoga', durationMin: 30 }, 'kg'), 'Tracked workout · 30 min')
+  })
+
+  test('the web calendar draws it as an extra activity, in its own colour', () => {
+    const src = readFileSync(join(__dirname, '../../app/dashboard/calendar/CalendarClient.tsx'), 'utf8')
+    assert.match(src, /\/api\/workouts\/external\?/)
+    assert.match(src, /EXTERNAL_WORKOUT_LABEL/)
+    assert.doesNotMatch(src, /dayExternal\.map\([^)]*\)\s*=>\s*\(\{[^}]*bg-green-700/, 'never the program\'s completed green')
+  })
 })
