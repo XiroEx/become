@@ -15,8 +15,9 @@
  *     for a repeat and leaves the day's row exactly as it is — including a value
  *     the member has since corrected by hand. That is what lets this run on
  *     every launch with a wide window instead of keeping a cursor.
- *  3. **An import is not member activity.** No streak day, no answer to the
- *     weight prompt. Nothing here has to arrange that; the route does it.
+ *  3. **Only today's sample is today's check-in.** A sample dated today answers
+ *     the weight prompt and credits the streak day; an older one credits
+ *     neither. Nothing here has to arrange that; the route does it.
  *
  * And one rule of its own: **nothing here ever throws into its caller.** A
  * health store that is missing, a permission the member declined, one sample the

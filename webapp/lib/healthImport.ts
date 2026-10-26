@@ -2,15 +2,17 @@
  * Weigh-ins that arrived from Apple Health or Health Connect rather than from a
  * member typing one into Become.
  *
- * A HEALTH SAMPLE IS NOT A MEMBER ACTION, AND IT IS NOT DATED BY THE IMPORT.
+ * A HEALTH SAMPLE IS DATED BY THE SAMPLE, NEVER BY THE IMPORT.
  * Those are the two rules everything here exists to hold:
  *
  *   - the day comes from the SAMPLE's own local date (`date`, NP-189), never
  *     from the clock at the moment the sync ran — a sample recorded last
  *     Tuesday belongs to last Tuesday, whenever the phone got round to handing
  *     it over;
- *   - the member did nothing in Become to earn it, so it does not credit a
- *     streak day and does not answer the weight prompt.
+ *   - a sample dated TODAY counts as today's weigh-in: it answers the weight
+ *     prompt and credits the streak day, exactly like a typed one (Jon,
+ *     2026-10-26). A sample dated any earlier day is history: it credits no
+ *     streak day and leaves the prompt alone.
  *
  * Health hands back the same rows on every sync. The sample id (`externalId`)
  * is the only thing that can say "this is that one again", which is why it is
