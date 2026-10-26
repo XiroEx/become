@@ -1,5 +1,6 @@
 /* eslint-disable import/first */
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
+import { StyleSheet } from "react-native";
 
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
@@ -160,6 +161,11 @@ describe("Settings: Profile / Training / Settings tabs (NP-302)", () => {
     expect(getByTestId("profile-email-input").props.value).toBe("alex@example.com");
     expect(getByTestId("settings-body-stats")).toBeTruthy();
     expect(getByTestId("profile-save")).toBeTruthy();
+    // The tab's content is a ScrollView: its entrance wrapper must fill the
+    // screen, or it collapses to zero height and the tab renders blank.
+    expect(
+      StyleSheet.flatten(getByTestId("settings-profile-enter").props.style),
+    ).toMatchObject({ flex: 1 });
     // The Settings tab's own Account section (sign out / admin / plan) is
     // not shown while Profile is active.
     expect(queryByTestId("settings-account-section")).toBeNull();
@@ -180,6 +186,9 @@ describe("Settings: Profile / Training / Settings tabs (NP-302)", () => {
     });
     expect(getByTestId("training-preferences-experience-selector")).toBeTruthy();
     expect(getByTestId("training-preferences-equipment-selector")).toBeTruthy();
+    expect(
+      StyleSheet.flatten(getByTestId("settings-training-enter").props.style),
+    ).toMatchObject({ flex: 1 });
     expect(queryByText("Nutrition Planning")).toBeNull();
     expect(queryByTestId("training-preferences-promote-manual")).toBeNull();
     expect(queryByTestId("training-preferences-promote-auto")).toBeNull();
