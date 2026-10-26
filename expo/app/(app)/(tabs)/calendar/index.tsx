@@ -6,12 +6,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { BarChart2, Check, RotateCcw, Settings } from "lucide-react-native";
 import { onDarkForeground } from "@/lib/theme/tokens";
 import {
+  ExternalWorkoutsResponseSchema,
   ScheduleApiResponseSchema,
   WorkoutHistoryResponseSchema,
 } from "@become/api-client";
 import { Button } from "@/components/Button";
 import { Calendar } from "@/components/schedule/Calendar";
 import { DaySummarySheets } from "@/components/schedule/DaySummarySheets";
+import { ExternalWorkoutCard } from "@/components/schedule/ExternalWorkoutCard";
 import { QuickSessionMenu } from "@/components/schedule/QuickSessionMenu";
 import { RescheduleModal } from "@/components/schedule/RescheduleModal";
 import { SlotActionMenu } from "@/components/schedule/SlotActionMenu";
@@ -38,16 +40,20 @@ import {
   slotKey,
   slotsForDate,
   quickSessionsForDate,
+  externalWorkoutsForDate,
   isMakeupWorkout,
+  toExternalCalItems,
   toQuickCalItems,
   type QuickCalItem,
   type ScheduledSlot,
 } from "@/lib/schedule/slotStatus";
 import {
+  localDateKey,
   useLocalDay,
   useOnForeground,
   tzOffsetMinutes,
 } from "@/lib/time/localDay";
+import { useLiftingUnit } from "@/lib/live/useLiftingUnit";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { subscribeProgramUpdates } from "@/lib/programs/programEvents";
@@ -202,18 +208,52 @@ export default function CalendarIndexRoute() {
     },
   );
 
+  // Tracked workouts done outside Become (card 6adf69c7), for the same
+  // visible span the schedule read covers. `from`/`to` are LOCAL day keys and
+  // each row carries its own day key, so no instant passes through a zone.
+  const externalPath = useMemo(() => {
+    let from: Date;
+    let to: Date;
+    if (viewMode === "month") {
+      from = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1 - 7);
+      to = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 7);
+    } else {
+      from = new Date(
+        currentDate.getFullYear(),
+        currentDate.getMonth(),
+        currentDate.getDate() - currentDate.getDay(),
+      );
+      to = new Date(from.getFullYear(), from.getMonth(), from.getDate() + 6);
+    }
+    return `/api/workouts/external?from=${localDateKey(from)}&to=${localDateKey(to)}`;
+  }, [viewMode, currentDate]);
+
+  const { data: externalData, refetch: refetchExternal } = useFetch(
+    externalPath,
+    ExternalWorkoutsResponseSchema,
+    {
+      baseUrl: WEBAPP_BASE_URL,
+      getToken: () => token ?? undefined,
+      skip: !token,
+    },
+  );
+
   const initialTodayRef = useRef(todayDate);
   useEffect(() => {
     if (initialTodayRef.current !== todayDate) {
       initialTodayRef.current = todayDate;
       void refetch();
       void refetchLogs();
+      void refetchExternal();
     }
-  }, [todayDate, refetch, refetchLogs]);
+  }, [todayDate, refetch, refetchLogs, refetchExternal]);
 
+  // The launch/foreground Health sync may have just imported a walk, so the
+  // external read refreshes on the same beats the schedule does.
   useOnForeground(() => {
     void refetch();
     void refetchLogs();
+    void refetchExternal();
   });
 
   useEffect(() => {
@@ -227,7 +267,8 @@ export default function CalendarIndexRoute() {
     useCallback(() => {
       void refetch();
       void refetchLogs();
-    }, [refetch, refetchLogs]),
+      void refetchExternal();
+    }, [refetch, refetchLogs, refetchExternal]),
   );
 
   const slots = useMemo(() => toScheduledSlots(data), [data]);
@@ -239,6 +280,11 @@ export default function CalendarIndexRoute() {
     () => toQuickCalItems(rawLogs, todayDate),
     [rawLogs, todayDate],
   );
+  const externalWorkouts = useMemo(
+    () => toExternalCalItems(externalData),
+    [externalData],
+  );
+  const memberUnit = useLiftingUnit();
 
   const mutations = useScheduleMutations({
     getToken: () => token ?? undefined,
@@ -595,6 +641,11 @@ export default function CalendarIndexRoute() {
       selectedDate ? quickSessionsForDate(quickSessions, selectedDate) : [],
     [quickSessions, selectedDate],
   );
+  const dayExternal = useMemo(
+    () =>
+      selectedDate ? externalWorkoutsForDate(externalWorkouts, selectedDate) : [],
+    [externalWorkouts, selectedDate],
+  );
 
   return (
     <SafeAreaView
@@ -617,6 +668,7 @@ export default function CalendarIndexRoute() {
           todayDate={todayDate}
           slots={slots}
           quickSessions={quickSessions}
+          externalWorkouts={externalWorkouts}
           onSelectDay={onSelectDay}
           onPrev={onPrev}
           onNext={onNext}
@@ -641,6 +693,27 @@ export default function CalendarIndexRoute() {
             >
               {formatDateHeader(selectedDate)}
             </Text>
+
+            {/* Tracked workouts done outside Become — an extra activity
+                beside the program session, which they never complete. */}
+            {dayExternal.length > 0 ? (
+              <View
+                testID="day-detail-external"
+                style={{
+                  gap: 8,
+                  marginBottom:
+                    dayQuick.length > 0 || daySlots.length > 0 ? 12 : 0,
+                }}
+              >
+                {dayExternal.map((x) => (
+                  <ExternalWorkoutCard
+                    key={x.externalId}
+                    workout={x}
+                    unit={memberUnit}
+                  />
+                ))}
+              </View>
+            ) : null}
 
             {/* Quick sessions on this day */}
             {dayQuick.length > 0 ? (

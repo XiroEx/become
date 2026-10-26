@@ -5,9 +5,11 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { ChevronLeft, ChevronRight } from "lucide-react-native";
 import { localDateKey } from "@/lib/time/localDay";
 import {
+  type ExternalCalItem,
   type ScheduledSlot,
   type QuickCalItem,
   type SlotStatus,
+  EXTERNAL_WORKOUT_LABEL,
   isMakeupWorkout,
 } from "@/lib/schedule/slotStatus";
 
@@ -18,6 +20,11 @@ export interface CalendarProps {
   todayDate?: string;
   slots?: ScheduledSlot[];
   quickSessions?: QuickCalItem[];
+  /**
+   * Tracked workouts done outside Become (card 6adf69c7) — drawn as an EXTRA
+   * marker beside the day's program dot, never in its completed green.
+   */
+  externalWorkouts?: ExternalCalItem[];
   onSelectDay?: (date: string) => void;
   viewMode?: "month" | "week";
   currentDate?: Date;
@@ -95,6 +102,7 @@ interface DayMarker {
   status: string;
   colorClass: string;
   isQuick?: boolean;
+  isExternal?: boolean;
 }
 
 export function Calendar({
@@ -103,6 +111,7 @@ export function Calendar({
   todayDate,
   slots = [],
   quickSessions = [],
+  externalWorkouts = [],
   onSelectDay,
   viewMode: controlledViewMode,
   currentDate: controlledCurrentDate,
@@ -487,6 +496,18 @@ export function Calendar({
                 });
               }
 
+              // The web's teal `Extra activity` dot. Keyed on the session's
+              // own stored day: no instant goes through a zone here.
+              for (const x of externalWorkouts) {
+                if (x.date !== date) continue;
+                markers.push({
+                  key: `x-${x.externalId}`,
+                  status: "external",
+                  colorClass: "bg-teal-500",
+                  isExternal: true,
+                });
+              }
+
               const isToday = date === effectiveTodayDate;
               const isSelected = date === selectedDate;
               const markerLimit = activeViewMode === "week" ? 10 : 6;
@@ -566,7 +587,11 @@ export function Calendar({
                           accessibilityLabel={`status-${m.status}`}
                           style={{ width: 6, height: 6, borderRadius: 3 }}
                           className={`${m.colorClass} ${
-                            m.isQuick ? "border border-purple-400" : ""
+                            m.isQuick
+                              ? "border border-purple-400"
+                              : m.isExternal
+                                ? "border border-teal-300"
+                                : ""
                           }`}
                         />
                       ))}
@@ -709,6 +734,18 @@ export function Calendar({
           />
           <Text style={{ fontSize: 11 }} className="text-muted-foreground">
             Quick session
+          </Text>
+        </View>
+        <View
+          testID="legend-external"
+          style={{ flexDirection: "row", alignItems: "center", gap: 5 }}
+        >
+          <View
+            style={{ width: 8, height: 8, borderRadius: 4 }}
+            className="bg-teal-500 border border-teal-300"
+          />
+          <Text style={{ fontSize: 11 }} className="text-muted-foreground">
+            {EXTERNAL_WORKOUT_LABEL}
           </Text>
         </View>
       </View>

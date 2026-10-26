@@ -13,7 +13,7 @@
  *      a Schedule, and nothing that completes a slot reads this array.
  *
  * Only TRACKED sessions count, and Become's own exports never come back in.
- * Both of those are decided on the phone (`expo/lib/health/workoutImport.ts`),
+ * Both of those are decided on the phone (`expo/lib/health/sync.ts`, `buildWorkoutImport`),
  * because only the platform knows a session was typed in by hand
  * (HealthKit `tracked`, Health Connect `recordingMethod`) or written by us
  * (`sourceId` / `dataOrigin`). Steps never count; only workout records do.
