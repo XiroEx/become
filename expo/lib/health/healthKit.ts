@@ -4,8 +4,8 @@
  * `IosClientImpl` that `lib/health/ios.ts` expects.
  *
  * WHY IT IS LOADED LAZILY. HealthKit is iOS-only and has no native side in
- * Expo Go, so the module is `require`d inside `loadHealthKitModule` behind a
- * `Platform.OS` check rather than imported at the top — exactly the pattern
+ * Expo Go, so the native module is looked up inside `loadHealthKitModule`
+ * behind a `Platform.OS` check rather than imported at the top — exactly the pattern
  * `lib/health/healthConnect.ts` uses for Health Connect. Every unit test here
  * runs against an injected fake; nothing in jest ever touches the native
  * module.
@@ -38,7 +38,7 @@
  * filter, implemented with the marker HealthKit actually gives this module to
  * work with.
  */
-import { Platform } from "react-native";
+import { NativeModules, Platform, TurboModuleRegistry } from "react-native";
 import type { IosClientImpl, IosWeightSample } from "./ios";
 import type { HealthPermission } from "./types";
 
@@ -131,12 +131,46 @@ export interface HealthKitModule {
  */
 export function loadHealthKitModule(): HealthKitModule | null {
   if (Platform.OS !== "ios") return null;
+  return resolveHealthKitModule(NativeModules, TurboModuleRegistry);
+}
+
+/**
+ * The native `AppleHealthKit` module ITSELF, never `react-native-health`'s
+ * default export.
+ *
+ * That export is `Object.assign({}, NativeModules.AppleHealthKit, { Constants })`
+ * (`react-native-health/index.js`). On the Old Architecture the bridge module
+ * carried its methods as own properties and the copy worked. Become runs the
+ * New Architecture (Reanimated 4 requires it), where a legacy module reaches
+ * JS through the TurboModule interop layer as an object whose methods are not
+ * own enumerable properties — so `Object.assign` copies NONE of them and the
+ * export is `{ Constants }`. `initHealthKit` was `undefined`, calling it threw,
+ * and Settings reported every switch as "Apple Health did not grant this
+ * permission" without iOS ever showing its sheet (Jon, build 20261026.2).
+ *
+ * So ask for the module directly, the TurboModule registry first, and refuse
+ * (null, same as Expo Go) anything that does not actually carry `initHealthKit`.
+ * Exported with injectable lookups so the jest suite can pin the
+ * prototype-methods shape that broke on the device.
+ */
+export function resolveHealthKitModule(
+  nativeModules: Record<string, unknown> | undefined,
+  turboModules: { get?: (name: string) => unknown } | undefined,
+): HealthKitModule | null {
+  let candidate: unknown = null;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    return require("react-native-health") as HealthKitModule;
+    candidate = turboModules?.get?.("AppleHealthKit") ?? null;
   } catch {
+    candidate = null;
+  }
+  if (!candidate) candidate = nativeModules?.AppleHealthKit ?? null;
+  if (
+    !candidate ||
+    typeof (candidate as { initHealthKit?: unknown }).initHealthKit !== "function"
+  ) {
     return null;
   }
+  return candidate as HealthKitModule;
 }
 
 /** The HealthKit permission name behind one of Become's `HealthPermission`s. */

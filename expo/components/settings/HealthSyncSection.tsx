@@ -152,7 +152,11 @@ function HealthSyncSectionBody({
         const granted = await healthClient.ensurePermissions(wanted);
         const allGranted = wanted.every((p) => hasPermission(granted, p));
         setDenied((prev) => ({ ...prev, [direction]: !allGranted }));
-      } catch {
+      } catch (err) {
+        // A throw is not a refusal (a refusal resolves with the permission
+        // missing), but the member's next step is the same, so the notice is
+        // too. Logged so a device log tells the two apart.
+        console.warn("[health] permission request failed", err);
         setDenied((prev) => ({ ...prev, [direction]: true }));
       }
     },
