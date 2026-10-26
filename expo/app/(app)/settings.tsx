@@ -663,12 +663,15 @@ export default function SettingsScreen({
         </View>
       </View>
 
+      {/* The two embedded screens are ScrollViews: their ScreenEnter must
+          fill the space below the tab strip, or it collapses to the height of
+          its content, which for a ScrollView is zero, and the tab is blank. */}
       {activeTab === "profile" ? (
-        <ScreenEnter>
+        <ScreenEnter style={{ flex: 1 }} testID="settings-profile-enter">
           <ProfileSettingsScreen embedded />
         </ScreenEnter>
       ) : activeTab === "training" ? (
-        <ScreenEnter>
+        <ScreenEnter style={{ flex: 1 }} testID="settings-training-enter">
           <TrainingPreferencesScreen
             embedded
             highlightWeekly={highlightWeekly}

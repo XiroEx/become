@@ -50,6 +50,14 @@ export interface TabStackProps {
    * padding can never disagree about which screens those are.
    */
   fullScreenRoutes?: readonly string[];
+  /**
+   * PUSHED screens of this tab whose content passes UNDER the glass bar, the
+   * way the tab roots' does: they pad their own scroll content with
+   * `TAB_BAR_CONTENT_INSET`, so the Stack's band would pad them twice and end
+   * the page in a dead strip above the bar. The program detail is one — the
+   * web's hero-over-list page scrolls the whole height of the phone.
+   */
+  scrollUnderRoutes?: readonly string[];
 }
 
 /**
@@ -68,7 +76,10 @@ export interface TabStackProps {
  * (`lib/theme/navigationTheme.ts`); `contentStyle` alone never reached it,
  * which is why a push flashed white at the left edge whatever this file said.
  */
-export function TabStack({ fullScreenRoutes = [] }: TabStackProps = {}) {
+export function TabStack({
+  fullScreenRoutes = [],
+  scrollUnderRoutes = [],
+}: TabStackProps = {}) {
   const { colors } = useThemeTokens();
   const animation = useStackAnimation();
   // NP-351: the tab bar is a floating capsule now, absolutely positioned over
@@ -116,7 +127,7 @@ export function TabStack({ fullScreenRoutes = [] }: TabStackProps = {}) {
        * tab roots, for the opposite reason: the roots pass content UNDER the
        * bar, these have no bar at all.
        */}
-      {fullScreenRoutes.map((name) => (
+      {[...fullScreenRoutes, ...scrollUnderRoutes].map((name) => (
         <Stack.Screen
           key={name}
           name={name}
