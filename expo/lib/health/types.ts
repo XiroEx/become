@@ -25,6 +25,38 @@ export interface WeightSample {
   originPackage?: string;
 }
 
+/**
+ * A workout the member did OUTSIDE Become, as the platform store recorded it
+ * (card 6adf69c7 — an outdoor walk Whoop tracked, a Strava run). Normalised
+ * at the platform boundary: Become's own exports have already been dropped
+ * (the loop guard lives in each platform impl), and everything else is
+ * carried as it came so `lib/health/workoutImport.ts` makes the decisions.
+ */
+export interface WorkoutSample {
+  /** The session's own id in the platform store — the server's de-dup key. */
+  externalId: string;
+  startISO: string;
+  endISO: string;
+  /** The platform's own type name (`Walking`, `RUNNING_TREADMILL`). */
+  activityType: string;
+  /** What the calendar prints (`lib/health/activityNames.ts`). */
+  activityName: string;
+  /** Moving time, when the platform reports one separately from the span. */
+  durationMin?: number;
+  distanceKm?: number;
+  energyKcal?: number;
+  /** The app that recorded it, as a display name, when it is one we know. */
+  originApp?: string;
+  /** Minutes WEST of UTC at the session's start, when the platform stores one. */
+  tzOffsetMinutes?: number;
+  /**
+   * False when the member TYPED the session in by hand (HealthKit
+   * `HKMetadataKeyWasUserEntered`, Health Connect `RECORDING_METHOD_MANUAL_ENTRY`).
+   * Jon's rule: only a session a tracker actually recorded counts.
+   */
+  tracked: boolean;
+}
+
 export interface StepSample {
   count: number;
   timestamp: string;
@@ -108,6 +140,12 @@ export interface HealthClient {
   platform: "ios" | "android";
   readWeight: (range: DateRange) => Promise<WeightSample[]>;
   readSteps: (range: DateRange) => Promise<StepSample[]>;
+  /**
+   * Workout SESSIONS recorded in the platform store (card 6adf69c7). Optional
+   * like `writeWorkout`: a platform adapter without it simply imports no
+   * workouts. Never steps — only workout/exercise-session records count.
+   */
+  readWorkouts?: (range: DateRange) => Promise<WorkoutSample[]>;
   /** Present only when this platform adapter can write back. */
   write?: HealthWriteClient;
   /**

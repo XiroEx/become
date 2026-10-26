@@ -55,6 +55,7 @@ function stubHealthKitModule(): StubbedHealthKit {
       cb("", `hk-workout-uuid-${n}`);
     },
     getStepCount: (_options, cb) => cb("", { value: 0, startDate: "", endDate: "" }),
+    getAnchoredWorkouts: (_options, cb) => cb(null, { data: [] }),
   };
   return { module, workoutCalls };
 }

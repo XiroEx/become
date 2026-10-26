@@ -88,7 +88,7 @@ describe("app.json declares exactly the health permissions the code asks for", (
   const declared = config.expo.android?.permissions ?? [];
   const expected = HEALTH_CONNECT_PERMISSIONS.map(androidManifestPermission);
 
-  it("declares all three", () => {
+  it("declares all four", () => {
     for (const permission of expected) {
       expect(declared).toContain(permission);
     }
@@ -101,11 +101,12 @@ describe("app.json declares exactly the health permissions the code asks for", (
     expect(healthPermissions.sort()).toEqual([...expected].sort());
   });
 
-  // Nothing reads steps or workouts out of Health Connect, so neither is asked
-  // for. An unused health permission is a question Play will ask.
-  it("asks for no READ_STEPS and no READ_EXERCISE", () => {
+  // Steps are never read: only workout SESSIONS count toward the member's day
+  // (card 6adf69c7), so READ_EXERCISE is asked for and READ_STEPS is not. An
+  // unused health permission is a question Play will ask.
+  it("asks for READ_EXERCISE and no READ_STEPS", () => {
     expect(declared).not.toContain("android.permission.health.READ_STEPS");
-    expect(declared).not.toContain("android.permission.health.READ_EXERCISE");
+    expect(declared).toContain("android.permission.health.READ_EXERCISE");
   });
 });
 
