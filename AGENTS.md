@@ -532,8 +532,9 @@ Four things to know before touching it:
   that snapshot — so turning a direction off stops it at the NEXT LAUNCH, which
   is what Settings tells the member and what Health Connect itself does with a
   revoked permission ("does not take effect until the app process restarts").
-- **Three Android permissions and no more**: `READ_WEIGHT`, `WRITE_WEIGHT`,
-  `WRITE_EXERCISE`. Nothing reads workouts or steps back out of Health Connect.
+- **Four Android permissions and no more**: `READ_WEIGHT`, `WRITE_WEIGHT`,
+  `READ_EXERCISE` (card 6adf69c7, below) and `WRITE_EXERCISE`. Nothing reads
+  steps out of Health Connect.
   The code's list, `app.json`'s manifest permissions and Play's health apps
   declaration in `expo/RELEASE.md` are held equal by
   `expo/__tests__/androidHealthConnect.test.ts` — Play blocks a release whose
@@ -549,6 +550,58 @@ Four things to know before touching it:
 
 It needs a dev build (Health Connect is not in Expo Go) and `minSdkVersion 26`,
 raised in `app.json` through `expo-build-properties`.
+
+#### Workouts done outside Become (card 6adf69c7)
+
+Jon, 2026-10-26: a workout done OUTSIDE Become that a tracker actually recorded
+(an outdoor walk from Whoop, a Strava run, an Apple Watch session) syncs in from
+Apple Health / Health Connect, **shows on both calendars as an EXTRA activity**
+beside any program session that day, **ticks off "I did a workout today"**, and
+**never completes the scheduled program slot**. Where each rule lives:
+
+- **Its own array, not a workoutLogs kind.** `UserProgress.externalWorkouts`
+  (`IExternalWorkout`: source, externalId, a 00:00Z DAY-MARKER `date`,
+  start/end, activity type + display name, duration, optional distance/energy,
+  the recording app's name). ~35 readers walk `workoutLogs` and treat a log
+  with no `programId` as a quick session; a walk has no sets and no program.
+- **`POST /api/workouts/external { tz, workouts: [...] }`**, batches of at most
+  `EXTERNAL_WORKOUT_MAX_BATCH` (50), answered PER ITEM
+  (`{ applied, duplicate?, error? }`) so one bad sample costs nothing else.
+  `(source, externalId)` is unique, enforced by an atomic `$not $elemMatch`
+  push. `date` is required and is the session's own local day; future days are
+  refused, the window is `HEALTH_IMPORT_BACKDATE_WINDOW_DAYS` (90).
+  `lib/workout/externalWorkouts.ts` is the whole decision.
+- **Streak: today only, once.** An applied session dated TODAY credits
+  `recordStreakActivity`, the same rule as an imported weigh-in (PR #2215); an
+  earlier day credits nothing; a re-delivery credits nothing twice.
+- **"Trained days" go through `lib/workout/trainedDays.ts`**, the one union of
+  completed workoutLogs (instants, through the offset) and externalWorkouts
+  (markers, at offset 0). Readers: the training widget / badge / daily glance
+  (`lib/widgets/load.ts` — the caption names the walk when it alone ticked the
+  day), streaks (`today.trained`, weekly count), goals, the Becoming journey,
+  the consistency heatmap, and the morning workout push, which is held back
+  for a member who already trained outside today. A new "did they train"
+  reader goes through that file, never `workoutLogs` alone.
+- **`GET /api/workouts/external?from&to&tz`** (inclusive local day keys, at
+  most 400 days) feeds both calendars — a new route so `/api/schedule`'s
+  contract (NP-021) does not move. Schemas: `shared/api-client`
+  `schemas/externalWorkouts.ts`; contract test
+  `webapp/tests/unit/contract/externalWorkouts.test.ts`.
+- **Only TRACKED sessions, never our own, never steps — decided on the phone**,
+  because only the platform knows: HealthKit `tracked: false` (typed in by hand)
+  and Health Connect `recordingMethod === 3` are skipped in
+  `expo/lib/health/sync.ts` (`buildWorkoutImport`); Become's own exports are
+  dropped in the platform impls (iOS `sourceId === "io.redbtn.become"` from
+  `getAnchoredWorkouts`, Android `metadata.dataOrigin`). The day comes from the
+  session's own `startZoneOffset` (seconds east → minutes west), the device
+  offset only as a fallback.
+- **One read switch, two reads.** `permissionsForSession` asks `weight:read` +
+  `workouts:read` together (one sheet). iOS reads the `Workout` permission
+  (now both directions; `NSHealthShareUsageDescription` names workouts),
+  Android `READ_EXERCISE` — declared in `app.json`, the permission table in
+  `expo/lib/config/permissions.ts`, and Play's health apps declaration / Data
+  safety / App Privacy answers in `expo/RELEASE.md`, all held equal by
+  `androidHealthConnect.test.ts` and `releaseCandidatePermissions.test.ts`.
 
 ## Frontend Patterns
 
