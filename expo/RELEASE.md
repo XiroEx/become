@@ -333,22 +333,43 @@ stand-in, and check `npx expo-doctor` still passes 21/21.
 
 ## Apple App Privacy form
 
-Become collects these data types (declare in App Store Connect):
+Declare these in App Store Connect → App Privacy. Every type is **Linked to
+You**, **not used for Tracking**, and collected for **App Functionality**
+(plus Product Personalization where marked). Re-checked 2026-10-26 against the
+Privacy Policy (`shared/core/src/legal/privacy.ts`) before the first
+submission; the earlier version of this table listed five types and said Become
+collected no name and no photos, which was wrong.
 
-| Data type | Linked to user? | Purpose | Used for tracking? |
-|---|---|---|---|
-| **Email address** | Yes | Account, magic-link login | No |
-| **User ID (JWT)** | Yes | App functionality (auth) | No |
-| **Push notification token** | Yes | Notifications (workout reminders, streak alerts) | No |
-| **Fitness — weight** | Yes | Health sync is opt-in, per direction (NP-185): a weigh-in read from Apple Health is sent to Become's own API and stored with the member's weight history | No |
-| **Fitness — workouts** | Yes | Same read switch (card 6adf69c7): a workout another app TRACKED (not one typed in by hand, and never Become's own) is read from Apple Health and stored as an extra activity — type, start/end, duration, distance, energy and the app's name | No |
+| Apple category → type | What it is in Become | Purposes |
+|---|---|---|
+| Contact Info → **Email Address** | Account and sign-in (magic link, Google, Apple relay address) | App Functionality |
+| Contact Info → **Name** | Display name (onboarding step 2), and the name Google or Apple share at sign-in | App Functionality |
+| Health & Fitness → **Health** | Weight history, body measurements, injury notes, mood ratings, sleep entries; weigh-ins read from Apple Health if the member turns that on | App Functionality, Product Personalization |
+| Health & Fitness → **Fitness** | Workouts, sets, PRs, schedules, streaks; workouts another app tracked, read from Apple Health if the member turns that on | App Functionality, Product Personalization |
+| User Content → **Photos or Videos** | Meal photos for the estimate and food-label evidence, profile picture, feedback screenshots | App Functionality |
+| User Content → **Other User Content** | Journal and Mind entries, Vision, non-negotiables, meals and recipes, feedback text | App Functionality |
+| Identifiers → **User ID** | The Become account id (the session JWT carries it) | App Functionality |
+| Purchases → **Purchase History** | Plus subscription state from Stripe (no card data reaches Become) | App Functionality |
 
-We do NOT collect: name, phone, contacts, location, photos, browsing history,
-financial data, advertising data. HealthKit read/write are both OFF by
-default and each is its own switch in Settings — nothing moves until the
-member turns a direction on, and turning one off stops it at the next
-launch. The privacy nutrition label should select "Data Linked to You" for
-all five types above and "Tracking: No".
+Notes for the form:
+- **Third-party AI.** Meal photos and descriptions, Mind and coach inputs go
+  to Google Gemini only after the member's separate AI consent. That is still
+  App Functionality data processed by a provider, not Tracking, and it is named
+  in the Privacy Policy section 7 and the Health Data policy.
+- **Not collected:** precise or coarse location, contacts, browsing or search
+  history, advertising data, financial info (Stripe holds the card), sensitive
+  info, crash or performance diagnostics (no crash reporter ships in v1),
+  analytics.
+- **Apple Health** read and write are both OFF by default and each is its own
+  switch in Settings; nothing moves until the member turns a direction on, and
+  turning one off stops it at the next launch. Data read from Apple Health is
+  never used for advertising or marketing and never sold (Privacy Policy
+  section 6).
+- **Push notification token** (APNs): not one of Apple's App Privacy types, so
+  it has no row; it is named in the Privacy Policy section 3 and used only to
+  deliver Become's own reminders.
+- "Tracking: No" for the whole app: Become has no ad SDK and shares nothing
+  with data brokers.
 
 ## Google Data Safety form
 

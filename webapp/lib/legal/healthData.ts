@@ -83,7 +83,7 @@ export const HEALTH_DATA: LegalDoc & { lastUpdated?: { label: string; iso: strin
             {
               term: 'Body measurements',
               detail:
-                'Height, current weight, goal weight, weight history, age or date of birth, and biological sex. Used to calculate your calorie and macronutrient targets, to match you to programs, and to show your progress over time.',
+                'Height, current weight, goal weight, weight history (including weigh-ins imported from Apple Health or Health Connect, if you turn that on), age or date of birth, and biological sex. Used to calculate your calorie and macronutrient targets, to match you to programs, and to show your progress over time.',
             },
             {
               term: 'Injury and limitation notes',
@@ -93,7 +93,7 @@ export const HEALTH_DATA: LegalDoc & { lastUpdated?: { label: string; iso: strin
             {
               term: 'Physical activity',
               detail:
-                'Workouts logged, sets, reps, load, rest, personal records, session notes, schedules and streaks. Used to run your program, track your progress and time your reminders.',
+                'Workouts logged, sets, reps, load, rest, personal records, session notes, schedules and streaks, and workouts another app tracked that you import from Apple Health or Health Connect (type, time, duration, distance, energy and the app that recorded them). Used to run your program, track your progress and time your reminders.',
             },
             {
               term: 'Nutrition',
@@ -133,6 +133,7 @@ export const HEALTH_DATA: LegalDoc & { lastUpdated?: { label: string; iso: strin
             'From you, when you fill in your profile, log a workout, a meal, your weight, your mood or your sleep, write a journal entry, or scan a meal photo. This is the source of almost all of it.',
             'From the app itself, when it derives a target or an estimate from what you entered (the inferences in section 2).',
             'From your device, for your time zone offset and, if you turn them on, push notifications — a browser push subscription in the web app, or a native push token issued by Apple’s or Google’s push service in the App Store or Google Play app. None of that is health data on its own; it is listed so the picture is complete, and section 3 of the [Privacy Policy](/privacy) describes it in full.',
+            'From Apple Health on iPhone or Health Connect on Android, only if you turn on Health sync in Settings → Profile. Each direction is its own switch and both start off. With reading on, we import your weigh-ins and the workouts another app actually tracked (an Apple Watch run, a Strava ride, a Whoop or Oura session), each with its type, start and end time, duration, distance, energy and the name of the app that recorded it. We do not read any other type of health data. With writing on, we save the weigh-ins you log in Become and the workouts you finish in Become to the same store. Turning a switch off, or revoking Become’s access in the Health app or Health Connect, stops it the next time you open Become.',
             'Not from Google or Stripe. Signing in with Google gives us your email address, name and profile picture; Stripe gives us the state of a payment. Neither passes us any health data.',
           ],
         },
