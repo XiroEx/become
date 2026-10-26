@@ -31,8 +31,8 @@ import {
 
 /** When THIS document last changed. The Terms and the other legal pages keep
  *  LEGAL_LAST_UPDATED; a privacy-only correction must not re-date them. */
-export const PRIVACY_LAST_UPDATED = 'October 13, 2026'
-export const PRIVACY_LAST_UPDATED_ISO = '2026-10-13'
+export const PRIVACY_LAST_UPDATED = 'October 26, 2026'
+export const PRIVACY_LAST_UPDATED_ISO = '2026-10-26'
 
 export const PRIVACY: LegalDoc = {
   slug: 'privacy',
@@ -164,6 +164,7 @@ export const PRIVACY: LegalDoc = {
             'From your device, if you register a passkey: its public key and identifiers. The private key stays on your device or in your password manager and never reaches us.',
             'From Google, if you choose to sign in with Google: your email address, your name, your profile picture and a Google account identifier.',
             'From Apple, if you choose Sign in with Apple: an Apple account identifier and, the first time only, the name and email address you choose to share. That address can be a private relay address Apple creates, which forwards to your real one.',
+            'From Apple Health on iPhone or Health Connect on Android, only if you turn on Health sync in Settings → Profile. Each direction is its own switch and both start off. With reading on, we import your weigh-ins and the workouts another app actually tracked (an Apple Watch run, a Strava ride, a Whoop or Oura session), each with its type, start and end time, duration, distance, energy and the name of the app that recorded it. We do not read any other type of health data. With writing on, we save the weigh-ins you log in Become and the workouts you finish in Become to the same store. Turning a switch off, or revoking Become’s access in the Health app or Health Connect, stops it the next time you open Become.',
             'From Stripe, for the outcome of a payment and the state of your subscription.',
           ],
         },
@@ -250,6 +251,10 @@ export const PRIVACY: LegalDoc = {
         {
           kind: 'p',
           text: 'You decide how much to write. You can use Become without injury notes or journal entries, though some features will be less useful. In the EU and UK, where our basis for this category is your explicit consent, you give that consent by choosing to enter the data, and you can withdraw it by deleting the data or your account.',
+        },
+        {
+          kind: 'p',
+          text: '**Apple Health and Health Connect.** If you turn on Health sync, the weigh-ins and tracked workouts we read from Apple Health (HealthKit) or Health Connect are stored with the rest of your history and used for one thing: to show your progress and count the day you trained. We never use data from Apple Health or Health Connect for advertising or marketing, we never sell it, and we never disclose it to a third party except the processors in section 8 that host and run Become for us. Nothing we read from either store is used to train an AI model. Deleting your account deletes our copy; the data in Apple Health or Health Connect itself is yours and stays there.',
         },
         {
           kind: 'p',
