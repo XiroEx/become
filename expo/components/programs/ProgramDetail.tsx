@@ -1,5 +1,6 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useRef } from "react";
 import { ActivityIndicator, Image, StyleSheet, View, ScrollView, Pressable } from "react-native";
+import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Text } from "@/components/Text";
 import {
@@ -21,6 +22,7 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { TAB_BAR_CONTENT_INSET } from "@/lib/navigation/tabBarInset";
 import { useReducedMotion } from "@/lib/a11y/reducedMotion";
 import { webAssetUrl } from "@/lib/media/webAssetUrl";
+import { heroSnapTarget } from "@/lib/programs/heroSnap";
 import { workoutDayLabel } from "@/lib/programs/dayLabel";
 import {
   getTokens,
@@ -353,14 +355,44 @@ export function ProgramDetail({
   } = useSingleVideoPlayer();
   const [expandedSlug, setExpandedSlug] = useState<string | null>(null);
 
-  // The web's `useHeroSnap`: inside the hero, a scroll settles either with
-  // the hero fully in view or fully scrolled off, never half way. Past the
-  // hero the list scrolls freely (`snapToEnd={false}`). Off under Reduce
-  // Motion, like the web's `prefers-reduced-motion` bail-out.
+  // The web's `useHeroSnap` — ONE threshold (`lib/programs/heroSnap.ts`):
+  // a scroll that comes to rest inside the hero, past 25% of it, finishes
+  // hiding the cover (or, scrolling back up, returns to the top). Below the
+  // hero nothing snaps. Decided where the scroll comes to REST (end of a drag
+  // with no fling, or end of the fling), so the platform's own deceleration
+  // is untouched. Off under Reduce Motion, like the web's bail-out.
   const reducedMotion = useReducedMotion();
-  const [heroHeight, setHeroHeight] = useState(0);
-  const heroSnapOffsets =
-    !reducedMotion && heroHeight > 0 ? [0, heroHeight] : undefined;
+  const scrollRef = useRef<ScrollView>(null);
+  const heroHeightRef = useRef(0);
+  const dragStartY = useRef(0);
+  const settleHeroSnap = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      if (reducedMotion) return;
+      const target = heroSnapTarget(
+        e.nativeEvent.contentOffset.y,
+        dragStartY.current,
+        heroHeightRef.current,
+      );
+      if (target !== null) {
+        scrollRef.current?.scrollTo({ y: target, animated: true });
+      }
+    },
+    [reducedMotion],
+  );
+  const handleScrollBeginDrag = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      dragStartY.current = e.nativeEvent.contentOffset.y;
+    },
+    [],
+  );
+  const handleScrollEndDrag = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      // A fling keeps going: decide when it lands (onMomentumScrollEnd).
+      if (Math.abs(e.nativeEvent.velocity?.y ?? 0) > 0.05) return;
+      settleHeroSnap(e);
+    },
+    [settleHeroSnap],
+  );
   const coverUri = webAssetUrl(program.coverImage);
 
   const handleToggleExpand = useCallback(
@@ -526,9 +558,10 @@ export function ProgramDetail({
       testID={testID}
       onScroll={handleScroll}
       scrollEventThrottle={16}
-      snapToOffsets={heroSnapOffsets}
-      snapToEnd={false}
-      decelerationRate={heroSnapOffsets ? "fast" : "normal"}
+      ref={scrollRef}
+      onScrollBeginDrag={handleScrollBeginDrag}
+      onScrollEndDrag={handleScrollEndDrag}
+      onMomentumScrollEnd={settleHeroSnap}
     >
       {/* Hero — full-bleed cover-photo header (NP-361 #1): a photo (or the
           dark-pinned fallback colour when the program carries none) behind a
@@ -541,7 +574,9 @@ export function ProgramDetail({
           up and over" the hero as the member scrolls. */}
       <View
         testID={`${testID}-hero`}
-        onLayout={(e) => setHeroHeight(Math.round(e.nativeEvent.layout.height))}
+        onLayout={(e) => {
+          heroHeightRef.current = e.nativeEvent.layout.height;
+        }}
         style={{
           marginHorizontal: -16,
           marginTop: -16,

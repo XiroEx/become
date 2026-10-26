@@ -14,10 +14,11 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { fireEvent, render } from "@testing-library/react-native";
+import { render } from "@testing-library/react-native";
 import { ProgramDetail } from "@/components/programs/ProgramDetail";
 import type { ProgramDetailViewModel } from "@/components/programs/ProgramDetail";
 import { webAssetUrl } from "@/lib/media/webAssetUrl";
+import { heroSnapTarget } from "@/lib/programs/heroSnap";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 
 const readExpo = (rel: string) =>
@@ -70,15 +71,22 @@ describe("program detail: bottom band, cover photo, hero snap", () => {
     });
   });
 
-  it("snaps to the hero's top and bottom once the hero has a height, and scrolls freely past it", () => {
-    const { getByTestId } = render(<ProgramDetail program={sample} />);
-    const scroll = () => getByTestId("program-detail");
-    expect(scroll().props.snapToOffsets).toBeUndefined();
+  it("has ONE snap, the web's: only inside the hero, never a paging snap", () => {
+    // 412pt hero: the line is at 25% = 103.
+    expect(heroSnapTarget(150, 0, 412)).toBe(412); // down past it: hide the cover
+    expect(heroSnapTarget(80, 0, 412)).toBeNull(); // not past it: leave it
+    expect(heroSnapTarget(250, 412, 412)).toBe(0); // back up into the hero: to the top
+    expect(heroSnapTarget(350, 412, 412)).toBeNull();
+    // Below the hero the list is the platform's own scroll, every direction.
+    expect(heroSnapTarget(900, 600, 412)).toBeNull();
+    expect(heroSnapTarget(600, 900, 412)).toBeNull();
+    expect(heroSnapTarget(412, 200, 412)).toBeNull();
+    expect(heroSnapTarget(150, 0, 0)).toBeNull();
 
-    fireEvent(getByTestId("program-detail-hero"), "layout", {
-      nativeEvent: { layout: { x: 0, y: 0, width: 390, height: 412 } },
-    });
-    expect(scroll().props.snapToOffsets).toEqual([0, 412]);
-    expect(scroll().props.snapToEnd).toBe(false);
+    const { getByTestId } = render(<ProgramDetail program={sample} />);
+    const scroll = getByTestId("program-detail");
+    expect(scroll.props.snapToOffsets).toBeUndefined();
+    expect(scroll.props.pagingEnabled).toBeFalsy();
+    expect(scroll.props.decelerationRate).toBeUndefined();
   });
 });
