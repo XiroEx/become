@@ -223,11 +223,13 @@ export async function POST(request: NextRequest) {
     }
     const { dayKey: entryKey, date: entryDate, loggedAt, backdated } = entryDay
 
-    // Did the MEMBER do this, here, today? Only that answers the weight prompt
-    // and earns a streak day. A back-dated write says nothing about today, and
-    // an imported sample says nothing about Become at all — the member weighed
-    // themselves, and their scale told their phone.
-    const memberAction = !backdated && !imported
+    // Is this TODAY's weigh-in? Only that answers the weight prompt and earns a
+    // streak day. A back-dated write says nothing about today. An IMPORTED
+    // sample dated today does count (Jon, 2026-10-26: "yes, only for weigh-ins
+    // for the same day"): the member stepped on a scale today, and asking them
+    // to type the number in again is the thing the sync exists to remove. An
+    // import dated any earlier day is history and credits nothing.
+    const countsAsCheckIn = !backdated
 
     // Provenance stamped on whichever row this write lands on.
     const importFields = imported
@@ -254,7 +256,7 @@ export async function POST(request: NextRequest) {
           // The prompt is a TODAY event: a back-dated entry — or a sample the
           // member's scale sent while they were nowhere near Become — says
           // nothing about whether they have been asked, or have skipped, today.
-          lastPromptDate: memberAction ? today : undefined,
+          lastPromptDate: countsAsCheckIn ? today : undefined,
           lastWeightDate: weight ? entryDate : undefined,
           consecutiveSkips: skip ? 1 : 0
         }
@@ -345,13 +347,12 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // Reset skip tracking. Only a weigh-in the MEMBER made TODAY says they
-        // are not skipping today; a back-dated one — or an imported sample,
-        // which they did nothing in Become to produce — leaves the prompt state
-        // alone.
+        // Reset skip tracking. Only a weigh-in dated TODAY (typed, or imported
+        // from a sample taken today) says they are not skipping today; a
+        // back-dated one leaves the prompt state alone.
         if (applied) {
           const skipTrackingSet: Record<string, unknown> = {}
-          if (memberAction) {
+          if (countsAsCheckIn) {
             progress.weightSkipTracking.consecutiveSkips = 0
             progress.weightSkipTracking.lastPromptDate = today
             skipTrackingSet['weightSkipTracking.consecutiveSkips'] = 0
@@ -440,12 +441,12 @@ export async function POST(request: NextRequest) {
     // would hand the member a streak day for today they did not earn. Past
     // streak days are left exactly as they were — the deliberate default.
     //
-    // Nor does an IMPORTED sample, even one dated today: the streak is a record
-    // of showing up in Become, and a smart scale syncing in the background is
-    // not that. A member whose phone quietly kept the streak alive while they
-    // never opened the app would be handed something they did not do.
+    // An IMPORTED sample dated today DOES credit it (Jon, 2026-10-26): the
+    // member weighed themselves today, on a scale that reports to Health. A
+    // re-delivery of a sample already imported (`applied` false) credits
+    // nothing a second time.
     let streakResult = null
-    if (!skip && weight && memberAction) {
+    if (!skip && weight && countsAsCheckIn && (applied || !imported)) {
       streakResult = await recordStreakActivity(authResult.userId!, authResult.email).catch(() => null)
     }
 

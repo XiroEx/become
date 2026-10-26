@@ -779,7 +779,7 @@ test("(id: 96d4110b) recordStreakActivity, bustTilesCache and goalReached still 
     );
     assert.ok(routeCode.includes("if (!skip && weight && isCurrent)"));
     assert.ok(routeCode.includes("User.findByIdAndUpdate"));
-    assert.ok(routeCode.includes("if (!skip && weight && memberAction)"));
+    assert.ok(routeCode.includes("if (!skip && weight && countsAsCheckIn && (applied || !imported))"));
     assert.ok(routeCode.includes("recordStreakActivity"));
     assert.ok(routeCode.includes("checkGoalReached"));
     assert.ok(routeCode.includes("bustTilesCache(authResult.userId!)"));

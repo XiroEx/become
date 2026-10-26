@@ -509,12 +509,14 @@ Both are stored on the `weightHistory` entry, and four rules follow from them:
 3. **An import reaches back `HEALTH_IMPORT_BACKDATE_WINDOW_DAYS` (90)**, not the
    offline queue's 7 — a first sync carries months of real weigh-ins off a smart
    scale. Older than that is still a 400.
-4. **An import is not member activity.** No streak day, even for a sample dated
-   today (the streak records showing up in Become, and a scale syncing in the
-   background is not that), and it does not answer the weight prompt
-   (`lastPromptDate` is left alone). It IS real data, so `lastWeightDate`,
-   `profile.currentWeightKg` and the goal-reached check still follow the newest
-   weigh-in.
+4. **Only a sample dated TODAY is today's check-in** (Jon, 2026-10-26: "yes,
+   only for weigh-ins for the same day"). It answers the weight prompt
+   (`lastPromptDate`) and credits the streak day, exactly like a typed
+   weigh-in; a re-delivery of the same sample credits nothing twice. A sample
+   dated any EARLIER day is history: no streak day, prompt left alone. Either
+   way it is real data, so `lastWeightDate`, `profile.currentWeightKg` and the
+   goal-reached check follow the newest weigh-in. (Until 2026-10-26 no import
+   credited anything, today's included.)
 
 An import must carry a weight: `skip` with a `source` is a 400.
 
