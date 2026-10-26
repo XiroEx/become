@@ -479,13 +479,16 @@ describe("export (Become → Health)", () => {
 
 describe("permissionsForSession", () => {
   it("asks for exactly what the switches justify", async () => {
+    // The read switch reads weigh-ins AND tracked workouts (card 6adf69c7).
     expect(permissionsForSession(ALL_ON)).toEqual([
       { metric: "weight", direction: "read" },
+      { metric: "workouts", direction: "read" },
       { metric: "weight", direction: "write" },
       { metric: "workouts", direction: "write" },
     ]);
     expect(permissionsForSession(READ_ONLY)).toEqual([
       { metric: "weight", direction: "read" },
+      { metric: "workouts", direction: "read" },
     ]);
     expect(permissionsForSession(WRITE_ONLY)).toEqual([
       { metric: "weight", direction: "write" },

@@ -23,8 +23,13 @@ import { hasPermission, type HealthClient, type HealthPermission } from "@/lib/h
 function permissionsForDirection(
   direction: "read" | "write",
 ): HealthPermission[] {
+  // Reading covers weigh-ins AND workouts another app tracked (card
+  // 6adf69c7): one switch, so one sheet asking for both.
   return direction === "read"
-    ? [{ metric: "weight", direction: "read" }]
+    ? [
+        { metric: "weight", direction: "read" },
+        { metric: "workouts", direction: "read" },
+      ]
     : [
         { metric: "weight", direction: "write" },
         { metric: "workouts", direction: "write" },
@@ -223,10 +228,13 @@ function HealthSyncSectionBody({
             className="bg-card border border-border"
           >
             <View style={{ flex: 1, paddingRight: 12 }}>
-              <Text className="text-foreground">Read weight from {name}</Text>
+              <Text className="text-foreground">
+                Read weight and workouts from {name}
+              </Text>
               <Text className="text-muted-foreground text-xs">
-                Weigh-ins recorded by your scale or another app appear in
-                Become.
+                Weigh-ins from your scale, and workouts another app tracked —
+                a walk, a run, a ride — appear in Become and count toward
+                your day.
               </Text>
             </View>
             <Toggle
@@ -236,7 +244,7 @@ function HealthSyncSectionBody({
                 void handleDirection("read", v);
               }}
               disabled={loading}
-              accessibilityLabel={`Read weight from ${name}`}
+              accessibilityLabel={`Read weight and workouts from ${name}`}
             />
           </View>
           {denied.read ? (

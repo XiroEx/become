@@ -91,6 +91,7 @@ function fakeModule(
       cb("", "hk-workout-uuid-1");
     },
     getStepCount: (_options, cb) => cb("", { value: 0, startDate: "", endDate: "" }),
+    getAnchoredWorkouts: (_options, cb) => cb(null, { data: [] }),
     ...overrides,
   };
   return { module, initCalls, saveCalls, workoutCalls };
@@ -123,14 +124,93 @@ describe("createHealthKitImpl", () => {
     ]);
   });
 
-  it("requestAuthorization asks for the Workout permission on a workouts write, and nothing on a workouts read", async () => {
+  // Card 6adf69c7: a walk another app tracked is read back in, so a workouts
+  // READ now asks for `Workout` too — the same HealthKit permission as the
+  // write, in the other direction.
+  it("requestAuthorization asks for the Workout permission in each direction it is wanted", async () => {
     const { module, initCalls } = fakeModule();
     const impl = createHealthKitImpl(module);
     await impl.requestAuthorization([
       { metric: "workouts", direction: "write" },
       { metric: "workouts", direction: "read" },
     ]);
-    expect(initCalls).toEqual([{ permissions: { read: [], write: ["Workout"] } }]);
+    expect(initCalls).toEqual([{ permissions: { read: ["Workout"], write: ["Workout"] } }]);
+  });
+
+  describe("queryWorkouts (card 6adf69c7)", () => {
+    const row = (over: Record<string, unknown> = {}) => ({
+      id: "HK-1",
+      activityName: "Walking",
+      calories: 182.4,
+      tracked: true,
+      sourceName: "WHOOP",
+      sourceId: "com.whoop.WHOOP",
+      distance: 2, // MILES, from the native side
+      start: "2026-10-26T11:00:00.000Z",
+      end: "2026-10-26T11:45:00.000Z",
+      duration: 2400,
+      ...over,
+    });
+
+    it("reads every workout type in the window and converts miles, seconds and the name", async () => {
+      const calls: unknown[] = [];
+      const { module } = fakeModule({
+        getAnchoredWorkouts: (options, cb) => {
+          calls.push(options);
+          cb(null, { data: [row()] });
+        },
+      });
+      const out = await createHealthKitImpl(module).queryWorkouts!({
+        startISO: "2026-08-01T00:00:00.000Z",
+        endISO: "2026-10-26T12:00:00.000Z",
+      });
+      expect(calls).toEqual([
+        { startDate: "2026-08-01T00:00:00.000Z", endDate: "2026-10-26T12:00:00.000Z", type: "Workout" },
+      ]);
+      expect(out).toHaveLength(1);
+      expect(out[0]).toMatchObject({
+        externalId: "HK-1",
+        activityType: "Walking",
+        activityName: "Walking",
+        tracked: true,
+        durationMin: 40,
+        energyKcal: 182.4,
+        originApp: "WHOOP",
+      });
+      expect(out[0]!.distanceKm).toBeCloseTo(3.218688, 5);
+    });
+
+    it("drops Become's own workouts (the loop guard) and keeps the tracked flag as it came", async () => {
+      const { module } = fakeModule({
+        getAnchoredWorkouts: (_o, cb) =>
+          cb(null, {
+            data: [
+              row({ id: "OURS", sourceId: "io.redbtn.become", activityName: "TraditionalStrengthTraining" }),
+              row({ id: "TYPED", tracked: false }),
+            ],
+          }),
+      });
+      const out = await createHealthKitImpl(module).queryWorkouts!({ startISO: "a", endISO: "b" });
+      expect(out.map((w) => w.externalId)).toEqual(["TYPED"]);
+      expect(out[0]!.tracked).toBe(false);
+    });
+
+    it("names HealthKit's CamelCase types for people", async () => {
+      const { module } = fakeModule({
+        getAnchoredWorkouts: (_o, cb) =>
+          cb(null, { data: [row({ activityName: "HighIntensityIntervalTraining" }), row({ id: "2", activityName: "Hiking" })] }),
+      });
+      const out = await createHealthKitImpl(module).queryWorkouts!({ startISO: "a", endISO: "b" });
+      expect(out.map((w) => w.activityName)).toEqual(["HIIT", "Hiking"]);
+    });
+
+    it("reaches the sync as the iOS client's readWorkouts", async () => {
+      const { module } = fakeModule({
+        getAnchoredWorkouts: (_o, cb) => cb(null, { data: [row()] }),
+      });
+      const client = createIosAdapter(createHealthKitImpl(module));
+      expect(await client.readWorkouts!({ startISO: "a", endISO: "b" })).toHaveLength(1);
+    });
   });
 
   it("isWriteAuthorized reads SharingAuthorized (2) as true", async () => {

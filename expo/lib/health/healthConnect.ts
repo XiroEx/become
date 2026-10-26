@@ -25,10 +25,21 @@
  * and (before the server learned to de-duplicate) would have appended it. So a
  * read drops every record whose `metadata.dataOrigin` is this app's own
  * package. Health Connect's own `dataOriginFilter` can only ALLOW-list origins,
- * not exclude one, so the filtering is done here.
+ * not exclude one, so the filtering is done here. The same guard applies to
+ * the exercise sessions Become writes and then reads back (card 6adf69c7):
+ * a finished Become workout must not come back as an "outside" one.
  */
 import { Platform } from "react-native";
-import type { AndroidClientImpl, AndroidWeightRecord } from "./android";
+import type {
+  AndroidClientImpl,
+  AndroidWeightRecord,
+  AndroidWorkoutRecord,
+} from "./android";
+import {
+  activityDisplayName,
+  androidOriginAppLabel,
+  healthConnectExerciseTypeName,
+} from "./activityNames";
 import type {
   DateRange,
   HealthDirection,
@@ -63,14 +74,17 @@ export const RECORD_TYPES: Record<HealthMetric, string> = {
 /**
  * Every permission this app may ever ask Health Connect for, and therefore
  * every `android.permission.health.*` in `app.json` and every row of Play's
- * health apps declaration. Three, not four: nothing READS workouts back out of
- * Health Connect, so `ExerciseSession/read` is not asked for. An unused health
- * permission is a question Play will ask about and an answer the app cannot
- * justify. `__tests__/androidHealthConnect.test.ts` holds the three lists equal.
+ * health apps declaration. Four: `ExerciseSession/read` joined the three with
+ * card 6adf69c7 (Jon, 2026-10-26), so a walk another app tracked ticks off the
+ * member's day. Steps are still NOT read — only workout sessions count. An
+ * unused health permission is a question Play will ask about and an answer the
+ * app cannot justify. `__tests__/androidHealthConnect.test.ts` holds the lists
+ * equal.
  */
 export const HEALTH_CONNECT_PERMISSIONS: readonly HealthPermission[] = [
   { metric: "weight", direction: "read" },
   { metric: "weight", direction: "write" },
+  { metric: "workouts", direction: "read" },
   { metric: "workouts", direction: "write" },
 ];
 
@@ -96,6 +110,15 @@ interface HealthConnectWeightRecord {
   zoneOffset?: { totalSeconds?: number };
   weight?: { inKilograms?: number };
   metadata?: HealthConnectMetadata;
+}
+
+interface HealthConnectExerciseSessionRecord {
+  startTime: string;
+  endTime: string;
+  startZoneOffset?: { totalSeconds?: number };
+  exerciseType?: number;
+  title?: string;
+  metadata?: HealthConnectMetadata & { recordingMethod?: number };
 }
 
 interface HealthConnectStepsRecord {
@@ -268,6 +291,40 @@ export function createHealthConnectImpl(
             ...(r.metadata?.dataOrigin
               ? { originPackage: r.metadata.dataOrigin }
               : {}),
+          };
+        });
+    },
+
+    /**
+     * Exercise sessions another app recorded (card 6adf69c7). Become's own
+     * sessions are dropped here — THE LOOP GUARD, same as weight — and the
+     * recording method is carried as `tracked` so the sync can drop a session
+     * the member typed in by hand. Distance and energy live in separate Health
+     * Connect records behind permissions Become does not ask for, so they are
+     * not read; the calendar shows what the session itself says.
+     */
+    async queryWorkouts(range): Promise<AndroidWorkoutRecord[]> {
+      const { records } = await module.readRecords(
+        RECORD_TYPES.workouts,
+        between(range),
+      );
+      return (records as HealthConnectExerciseSessionRecord[])
+        .filter((r) => r.metadata?.dataOrigin !== ownPackage)
+        .filter((r) => !!r.metadata?.id && !!r.startTime && !!r.endTime)
+        .map((r) => {
+          const typeName = healthConnectExerciseTypeName(r.exerciseType);
+          const tzOffsetMinutes = zoneOffsetToMinutesWest(r.startZoneOffset);
+          const originApp = androidOriginAppLabel(r.metadata?.dataOrigin);
+          return {
+            externalId: r.metadata?.id as string,
+            startISO: r.startTime,
+            endISO: r.endTime,
+            activityType: typeName,
+            activityName: activityDisplayName(typeName),
+            tracked:
+              r.metadata?.recordingMethod !== RECORDING_METHOD_MANUAL_ENTRY,
+            ...(tzOffsetMinutes != null ? { tzOffsetMinutes } : {}),
+            ...(originApp ? { originApp } : {}),
           };
         });
     },

@@ -19,6 +19,18 @@
  *     the weight prompt and credits the streak day; an older one credits
  *     neither. Nothing here has to arrange that; the route does it.
  *
+ * WORKOUTS DONE OUTSIDE BECOME (card 6adf69c7, Jon 2026-10-26) ride the same
+ * read switch to their own route, `POST /api/workouts/external`
+ * (`webapp/lib/workout/externalWorkouts.ts`). The same three rules hold —
+ * the session's own day, its own id, today-only streak credit — plus two that
+ * only the phone can decide, because only the platform knows:
+ *
+ *  4. **Only TRACKED sessions.** One the member typed in by hand (HealthKit
+ *     `tracked: false`, Health Connect manual entry) is skipped here. Steps
+ *     never count; only workout records are read at all.
+ *  5. **Never our own.** Become writes its finished workouts to Health; each
+ *     platform impl drops those before they reach this file.
+ *
  * And one rule of its own: **nothing here ever throws into its caller.** A
  * health store that is missing, a permission the member declined, one sample the
  * server refuses — all of those are reported in the result and none of them may
@@ -41,6 +53,7 @@ import {
   type HealthPermission,
   type WeightSample,
   type WeightWrite,
+  type WorkoutSample,
   type WorkoutWrite,
 } from "./types";
 
@@ -83,7 +96,12 @@ export function permissionsForSession(
 ): HealthPermission[] {
   const wanted: HealthPermission[] = [];
   if (canImportFromHealth(session)) {
-    wanted.push({ metric: "weight", direction: "read" });
+    // One read switch, two reads: weigh-ins and — card 6adf69c7 — workouts
+    // another app tracked. Asked together so the member sees ONE sheet.
+    wanted.push(
+      { metric: "weight", direction: "read" },
+      { metric: "workouts", direction: "read" },
+    );
   }
   if (canExportToHealth(session)) {
     wanted.push(
@@ -317,6 +335,208 @@ export async function importWeightFromHealth(
   }
 }
 
+// ─── Workouts done outside Become (card 6adf69c7) ───────────────────────────
+
+/** Exactly what `POST /api/workouts/external` is sent for one session. */
+export interface WorkoutImportItem {
+  source: HealthSource;
+  externalId: string;
+  /** `YYYY-MM-DD`, the session's own local day (from its START). */
+  date: string;
+  startedAt: string;
+  endedAt: string;
+  activityType: string;
+  activityName: string;
+  durationMin?: number;
+  distanceKm?: number;
+  energyKcal?: number;
+  originApp?: string;
+}
+
+/**
+ * Sessions per request. `EXTERNAL_WORKOUT_MAX_BATCH` on the server
+ * (`webapp/lib/workout/externalWorkouts.ts`); `__tests__/healthSync.test.ts`
+ * pins the two together.
+ */
+export const WORKOUT_IMPORT_BATCH = 50;
+
+export type WorkoutSkipReason =
+  | "untracked"
+  | "no-id"
+  | "bad-span"
+  | "too-old"
+  | "future-day";
+
+/**
+ * The body for one session, or why it is not being sent. `untracked` is Jon's
+ * rule and nothing else can apply it; the rest are refusals the server would
+ * answer per item, dropped here so a first sync is not a pile of 400s.
+ */
+export function buildWorkoutImport(
+  sample: WorkoutSample,
+  input: {
+    source: HealthSource;
+    todayKey: string;
+    deviceTzOffsetMinutes: number;
+    windowDays?: number;
+  },
+): { ok: true; item: WorkoutImportItem } | { ok: false; reason: WorkoutSkipReason } {
+  if (!sample.tracked) return { ok: false, reason: "untracked" };
+  if (!sample.externalId) return { ok: false, reason: "no-id" };
+  const start = Date.parse(sample.startISO);
+  const end = Date.parse(sample.endISO);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+    return { ok: false, reason: "bad-span" };
+  }
+  const offset = sample.tzOffsetMinutes ?? input.deviceTzOffsetMinutes;
+  const date = sampleDayKey(sample.startISO, offset);
+  const distance = dayKeyDistance(input.todayKey, date);
+  if (!Number.isFinite(distance)) return { ok: false, reason: "bad-span" };
+  if (distance < 0) return { ok: false, reason: "future-day" };
+  if (distance > (input.windowDays ?? HEALTH_IMPORT_BACKDATE_WINDOW_DAYS)) {
+    return { ok: false, reason: "too-old" };
+  }
+  const round = (n: number, places: number) => {
+    const f = 10 ** places;
+    return Math.round(n * f) / f;
+  };
+  return {
+    ok: true,
+    item: {
+      source: input.source,
+      externalId: sample.externalId,
+      date,
+      startedAt: new Date(start).toISOString(),
+      endedAt: new Date(end).toISOString(),
+      activityType: sample.activityType,
+      activityName: sample.activityName,
+      ...(sample.durationMin != null && sample.durationMin > 0
+        ? { durationMin: round(sample.durationMin, 1) }
+        : {}),
+      ...(sample.distanceKm != null && sample.distanceKm > 0
+        ? { distanceKm: round(sample.distanceKm, 2) }
+        : {}),
+      ...(sample.energyKcal != null && sample.energyKcal > 0
+        ? { energyKcal: Math.round(sample.energyKcal) }
+        : {}),
+      ...(sample.originApp ? { originApp: sample.originApp } : {}),
+    },
+  };
+}
+
+/** The route's per-item answer, as much of it as the sync reads. */
+export interface WorkoutImportAnswer {
+  results?: { applied?: boolean; duplicate?: boolean; error?: string }[];
+}
+
+export interface ImportWorkoutsDeps {
+  client: HealthClient;
+  /** The LAUNCH SNAPSHOT (`lib/health/switches.ts`), never the live store. */
+  session: HealthSyncSession;
+  /** Sends one batch to `POST /api/workouts/external`. */
+  post: (items: WorkoutImportItem[]) => Promise<WorkoutImportAnswer | null>;
+  now?: Date;
+  lookbackDays?: number;
+  deviceTzOffsetMinutes?: number;
+}
+
+export interface ImportWorkoutsResult {
+  ran: boolean;
+  reason?: "switch-off" | "unavailable" | "denied" | "failed" | "no-reader";
+  /** Sessions Health handed us (Become's own already excluded). */
+  read: number;
+  applied: number;
+  duplicate: number;
+  /** Not sent: typed in by hand, outside the window, no id. */
+  skipped: number;
+  /** Refused by the server, or lost with a failed request. */
+  failed: number;
+}
+
+function emptyWorkoutsResult(): ImportWorkoutsResult {
+  return { ran: false, read: 0, applied: 0, duplicate: 0, skipped: 0, failed: 0 };
+}
+
+/**
+ * HEALTH → BECOME, for workouts tracked elsewhere. The same shape as the
+ * weight import: read the whole window, send what the server can use, count
+ * the rest, never throw. A repeat is free (the server de-duplicates on the
+ * session id), so there is no cursor to lose.
+ */
+export async function importWorkoutsFromHealth(
+  deps: ImportWorkoutsDeps,
+): Promise<ImportWorkoutsResult> {
+  const result = emptyWorkoutsResult();
+  if (!canImportFromHealth(deps.session)) {
+    return { ...result, reason: "switch-off" };
+  }
+  const readWorkouts = deps.client.readWorkouts;
+  if (!readWorkouts) return { ...result, reason: "no-reader" };
+
+  const now = deps.now ?? new Date();
+  const source: HealthSource =
+    deps.client.platform === "android" ? HEALTH_SOURCE_ANDROID : HEALTH_SOURCE_IOS;
+  const deviceOffset =
+    deps.deviceTzOffsetMinutes ?? tzOffsetMinutes(now) ?? 0;
+  const todayKey = localDayStamp(now, deviceOffset);
+  const lookbackDays = deps.lookbackDays ?? HEALTH_IMPORT_BACKDATE_WINDOW_DAYS;
+
+  try {
+    if (deps.client.isAvailable && !(await deps.client.isAvailable())) {
+      return { ...result, reason: "unavailable" };
+    }
+    if (deps.client.ensurePermissions) {
+      const granted = await ensurePermissionsOnce(deps.client, [
+        { metric: "workouts", direction: "read" },
+      ]);
+      const allowed = granted.some(
+        (p) => p.metric === "workouts" && p.direction === "read",
+      );
+      if (!allowed) return { ...result, reason: "denied" };
+    }
+
+    const samples = await readWorkouts({
+      startISO: new Date(now.getTime() - lookbackDays * 86_400_000).toISOString(),
+      endISO: now.toISOString(),
+    });
+    result.ran = true;
+    result.read = samples.length;
+
+    const items: WorkoutImportItem[] = [];
+    for (const sample of samples) {
+      const built = buildWorkoutImport(sample, {
+        source,
+        todayKey,
+        deviceTzOffsetMinutes: deviceOffset,
+        windowDays: lookbackDays,
+      });
+      if (built.ok) items.push(built.item);
+      else result.skipped += 1;
+    }
+
+    for (let i = 0; i < items.length; i += WORKOUT_IMPORT_BATCH) {
+      const batch = items.slice(i, i + WORKOUT_IMPORT_BATCH);
+      try {
+        const answer = await deps.post(batch);
+        const results = answer?.results ?? [];
+        batch.forEach((_, j) => {
+          const r = results[j];
+          if (!r || r.error) result.failed += 1;
+          else if (r.applied) result.applied += 1;
+          else result.duplicate += 1;
+        });
+      } catch {
+        // A dropped batch is offered again on the next launch, and anything
+        // that did land is recognised by its id.
+        result.failed += batch.length;
+      }
+    }
+    return result;
+  } catch {
+    return { ...result, ran: false, reason: "failed" };
+  }
+}
+
 export interface ExportResult {
   written: boolean;
   reason?: "switch-off" | "no-writer" | "failed";
@@ -406,6 +626,11 @@ export function workoutClientId(attemptId: string): string {
   return `become-workout-${attemptId}`;
 }
 
+/** The weight import's result, with the workout import's beside it. */
+export interface LaunchSyncResult extends ImportWeightResult {
+  workouts?: ImportWorkoutsResult;
+}
+
 export interface LaunchSyncDeps {
   token: string | null | undefined;
   client?: HealthClient | null;
@@ -426,7 +651,7 @@ export interface LaunchSyncDeps {
  */
 export async function runHealthLaunchSync(
   deps: LaunchSyncDeps,
-): Promise<ImportWeightResult> {
+): Promise<LaunchSyncResult> {
   const session = deps.session ?? currentHealthSyncSession();
   // `??` would treat an explicit `client: null` (a caller's deliberate "there
   // is no client to use") the same as `undefined` ("use the default") — the
@@ -448,7 +673,7 @@ export async function runHealthLaunchSync(
     ...(deps.now ? { now: () => deps.now as Date } : {}),
     ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
   });
-  return importWeightFromHealth({
+  const weight = await importWeightFromHealth({
     client,
     session,
     ...(deps.now ? { now: deps.now } : {}),
@@ -465,4 +690,27 @@ export async function runHealthLaunchSync(
       }
     },
   });
+  // A platform adapter with no workout reader (or a fake in a test) imports
+  // weight exactly as it always has and nothing else.
+  if (!client.readWorkouts) return weight;
+  // `/api/workouts` is date-scoped too, so `{ tz, tzZone }` is merged into this
+  // body by the shared client; each session carries its own `date`.
+  const workouts = await importWorkoutsFromHealth({
+    client,
+    session,
+    ...(deps.now ? { now: deps.now } : {}),
+    async post(items) {
+      const res = await api.raw("/api/workouts/external", {
+        method: "POST",
+        body: { workouts: items },
+      });
+      if (!res.ok) throw new Error(`POST /api/workouts/external ${res.status}`);
+      try {
+        return JSON.parse(await res.text()) as WorkoutImportAnswer;
+      } catch {
+        return null;
+      }
+    },
+  });
+  return { ...weight, workouts };
 }

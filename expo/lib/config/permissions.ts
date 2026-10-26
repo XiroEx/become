@@ -156,7 +156,7 @@ export const PERMISSION_BEARING_MODULES: readonly PermissionBearingModule[] = [
   {
     module: "react-native-health",
     infoPlistKey: "NSHealthShareUsageDescription",
-    what: "read weight and steps that were already recorded in Apple Health",
+    what: "read weight and workouts that were already recorded in Apple Health",
     card: "NP-185",
   },
   {
@@ -168,7 +168,7 @@ export const PERMISSION_BEARING_MODULES: readonly PermissionBearingModule[] = [
   {
     module: "@kingstinct/react-native-healthkit",
     infoPlistKey: "NSHealthShareUsageDescription",
-    what: "read weight and steps that were already recorded in Apple Health",
+    what: "read weight and workouts that were already recorded in Apple Health",
     card: "NP-185",
   },
   {
@@ -256,12 +256,25 @@ export const V1_ANDROID_RUNTIME_PERMISSIONS: readonly V1AndroidPermission[] = [
     reason:
       "Import weigh-ins the member's scale or another app already recorded, so they appear in Become without being typed twice.",
     rationaleAnchors: [
-      "components/settings/HealthSyncSection.tsx#Read weight from",
+      "components/settings/HealthSyncSection.tsx#Read weight and workouts from",
       "lib/health/sync.ts#permissionsForSession",
     ],
     card: "NP-199",
     timing:
       "Only after the member turns the read direction on in Settings; asked once per launch at most, for exactly what the switches justify.",
+  },
+  {
+    permission: "android.permission.health.READ_EXERCISE",
+    module: "react-native-health-connect",
+    reason:
+      "Import a workout another app tracked — a walk, a run, a ride — so it counts toward the member's day in Become without being logged twice.",
+    rationaleAnchors: [
+      "components/settings/HealthSyncSection.tsx#Read weight and workouts from",
+      "lib/health/sync.ts#permissionsForSession",
+    ],
+    card: "6adf69c7",
+    timing:
+      "Only after the member turns the read direction on in Settings; asked once per launch at most, together with READ_WEIGHT.",
   },
   {
     permission: "android.permission.health.WRITE_WEIGHT",

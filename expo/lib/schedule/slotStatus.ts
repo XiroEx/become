@@ -165,3 +165,97 @@ export function upcomingSlots(
 ): ScheduledSlot[] {
   return sortSlotsByDate(slots).filter((s) => s.date >= today);
 }
+
+// ─── Workouts done outside Become (card 6adf69c7) ───────────────────────────
+
+/**
+ * A tracked workout another app recorded (an outdoor walk Whoop tracked),
+ * imported from Apple Health / Health Connect and read back through
+ * `GET /api/workouts/external`. An EXTRA activity on its day: it ticks off
+ * "I trained today" and never completes the program slot beside it (Jon,
+ * 2026-10-26), so the calendar draws it in its own colour, never the
+ * program's completed green.
+ */
+export interface ExternalCalItem {
+  externalId: string;
+  /** The session's own local day, `YYYY-MM-DD` — a plain date, no zone. */
+  date: string;
+  startedAt: string;
+  activityName: string;
+  durationMin: number;
+  distanceKm?: number;
+  energyKcal?: number;
+  originApp?: string;
+}
+
+/** The parsed GET answer → calendar items, oldest first. */
+export function toExternalCalItems(
+  response:
+    | {
+        workouts?: {
+          externalId: string;
+          date: string;
+          startedAt: string;
+          activityName: string;
+          durationMin: number;
+          distanceKm?: number;
+          energyKcal?: number;
+          originApp?: string;
+        }[];
+      }
+    | null
+    | undefined,
+): ExternalCalItem[] {
+  return [...(response?.workouts ?? [])]
+    .sort((a, b) => (a.startedAt < b.startedAt ? -1 : a.startedAt > b.startedAt ? 1 : 0))
+    .map((w) => ({
+      externalId: w.externalId,
+      date: w.date.slice(0, 10),
+      startedAt: w.startedAt,
+      activityName: w.activityName || "Workout",
+      durationMin: w.durationMin,
+      ...(w.distanceKm != null ? { distanceKm: w.distanceKm } : {}),
+      ...(w.energyKcal != null ? { energyKcal: w.energyKcal } : {}),
+      ...(w.originApp ? { originApp: w.originApp } : {}),
+    }));
+}
+
+/** The external workouts on one local day — matched on the stored day key. */
+export function externalWorkoutsForDate(
+  items: ExternalCalItem[],
+  date: string,
+): ExternalCalItem[] {
+  return items.filter((x) => x.date === date);
+}
+
+const KM_PER_MILE = 1.609344;
+
+/**
+ * "Tracked by Whoop · 45 min · 2.1 mi · 180 kcal" — the web's
+ * `externalWorkoutDetail` (`webapp/lib/workout/externalWorkoutCopy.ts`),
+ * word for word, so the two calendars describe a walk the same way. Distance
+ * follows the member's unit system: kg members read km, lbs members miles.
+ */
+export function externalWorkoutDetail(
+  w: Pick<ExternalCalItem, "durationMin" | "distanceKm" | "energyKcal" | "originApp">,
+  unit: "lbs" | "kg",
+): string {
+  const parts: string[] = [
+    w.originApp ? `Tracked by ${w.originApp}` : "Tracked workout",
+  ];
+  if (w.durationMin > 0) parts.push(`${Math.round(w.durationMin)} min`);
+  if (w.distanceKm != null && w.distanceKm > 0) {
+    parts.push(
+      unit === "kg"
+        ? `${(Math.round(w.distanceKm * 10) / 10).toFixed(1)} km`
+        : `${(Math.round((w.distanceKm / KM_PER_MILE) * 10) / 10).toFixed(1)} mi`,
+    );
+  }
+  if (w.energyKcal != null && w.energyKcal > 0) {
+    parts.push(`${Math.round(w.energyKcal)} kcal`);
+  }
+  return parts.join(" · ");
+}
+
+/** The legend and badge word — the web's `EXTERNAL_WORKOUT_LABEL`. */
+export const EXTERNAL_WORKOUT_LABEL = "Extra activity";
