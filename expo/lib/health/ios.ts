@@ -39,7 +39,7 @@
  * (`lib/health/workoutIds.ts`): a retry for an id that already has one
  * resolves without writing again.
  */
-import type { DateRange, HealthClient, HealthPermission, StepSample, WeightSample, WeightWrite, WorkoutWrite } from "./types";
+import type { DateRange, HealthClient, HealthPermission, StepSample, WeightSample, WeightWrite, WorkoutSample, WorkoutWrite } from "./types";
 import { HealthPermissionError } from "./types";
 import { kgToLbs, lbsToKg } from "./units";
 import {
@@ -75,6 +75,12 @@ export interface IosClientImpl {
   isWriteAuthorized: (metric: "weight" | "workouts") => Promise<boolean>;
   queryWeightKg: (range: DateRange) => Promise<IosWeightSample[]>;
   querySteps: (range: DateRange) => Promise<{ count: number; timestamp: string }[]>;
+  /**
+   * Workouts another app recorded (card 6adf69c7), Become's own already
+   * dropped. HealthKit hides a declined READ behind an empty answer, the same
+   * blind spot weight has — a member who said no simply imports nothing.
+   */
+  queryWorkouts?: (range: DateRange) => Promise<WorkoutSample[]>;
   writeWeightKg: (input: {
     valueKg: number;
     atISO: string;
@@ -167,6 +173,13 @@ export function createIosAdapter(
       const samples = await impl.querySteps(range);
       return samples.map((s) => ({ count: s.count, timestamp: s.timestamp }));
     },
+
+    ...(impl.queryWorkouts
+      ? {
+          readWorkouts: async (range: DateRange): Promise<WorkoutSample[]> =>
+            (await impl.queryWorkouts?.(range)) ?? [],
+        }
+      : {}),
 
     write: {
       async writeWeight(sample: WeightWrite): Promise<void> {

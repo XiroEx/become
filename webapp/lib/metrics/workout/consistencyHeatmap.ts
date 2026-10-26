@@ -126,10 +126,20 @@ export const defaultWorkoutLogReader: WorkoutLogReader = async (
 ) => {
   const UserProgress = (await import('../../../models/UserProgress')).default
   const doc = await UserProgress
-    .findOne({ userId }, { workoutLogs: 1 })
-    .lean<{ workoutLogs: RawWorkoutLog[] } | null>()
+    .findOne({ userId }, { workoutLogs: 1, 'externalWorkouts.date': 1 })
+    .lean<{ workoutLogs: RawWorkoutLog[]; externalWorkouts?: Array<{ date: Date }> } | null>()
   if (!doc) return []
-  return (doc.workoutLogs || []).filter(l => {
+  // A tracked workout done outside Become (Health import, Jon 2026-10-26) is a
+  // day the member showed up, so it fills its cell. It enters as a completed
+  // session with no sets: consistency counts it, and the set total stays an
+  // honest count of sets logged here. Its `date` is a 00:00Z day marker, which
+  // is exactly what this UTC-day grid keys on.
+  const external: RawWorkoutLog[] = (doc.externalWorkouts || []).map(w => ({
+    date: new Date(w.date),
+    completed: true,
+    exercises: [],
+  }))
+  return [...(doc.workoutLogs || []), ...external].filter(l => {
     const d = new Date(l.date).getTime()
     return d >= from.getTime() && d <= to.getTime()
   })

@@ -14,6 +14,7 @@ import QuickSessionModal from '@/components/QuickSessionModal'
 import { continueQuickSession } from '@/lib/quickSession/openQuick'
 import { logPlanAvailability } from '@/lib/quickSession/logPlanDate'
 import { BackButton } from '@/components/ui/BackButton'
+import { externalWorkoutDetail, EXTERNAL_WORKOUT_LABEL } from '@/lib/workout/externalWorkoutCopy'
 import {
     ChevronLeft,
     ChevronRight,
@@ -32,6 +33,7 @@ import {
     CalendarDays,
     BarChart2,
     RotateCcw,
+    Activity,
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 
@@ -70,6 +72,23 @@ interface QuickCalItem {
   exerciseCount: number
   duration?: number
   status: 'completed' | 'planned' | 'incomplete' | 'skipped'
+}
+
+// A tracked workout done OUTSIDE Become (an outdoor walk Whoop recorded),
+// imported from Apple Health / Health Connect — GET /api/workouts/external.
+// Drawn as an EXTRA activity beside the day's program session, never instead
+// of it: it ticks off "I trained today" and leaves the slot as it is (Jon,
+// 2026-10-26).
+interface ExternalCalItem {
+  externalId: string
+  /** The session's local day, YYYY-MM-DD — a plain calendar date. */
+  date: string
+  startedAt: string
+  activityName: string
+  durationMin: number
+  distanceKm?: number
+  energyKcal?: number
+  originApp?: string
 }
 
 type ViewMode = 'month' | 'week'
@@ -233,6 +252,7 @@ export default function CalendarClient() {
   })
   const [schedules, setSchedules] = useState<ScheduleData[]>([])
   const [quick, setQuick] = useState<QuickCalItem[]>([])
+  const [external, setExternal] = useState<ExternalCalItem[]>([])
   const [summaryId, setSummaryId] = useState<string | null>(null)
   // Quick-session Manage sheet (parity with the program workout Manage sheet).
   const [quickMenu, setQuickMenu] = useState<QuickCalItem | null>(null)
@@ -372,6 +392,37 @@ export default function CalendarClient() {
 
   useEffect(() => { fetchQuick() }, [fetchQuick])
 
+  // Tracked workouts done outside Become, for the visible range (+ a week of
+  // padding either side, the same span the schedule fetch covers). `from`/`to`
+  // are LOCAL day keys and the rows are keyed by their own local day, so no
+  // instant ever passes through a timezone here.
+  const fetchExternal = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token')
+      if (!token) return
+      let from: Date
+      let to: Date
+      if (viewMode === 'month') {
+        from = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1 - 7)
+        to = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 7)
+      } else {
+        from = new Date(currentDate)
+        from.setDate(from.getDate() - from.getDay())
+        to = new Date(from)
+        to.setDate(to.getDate() + 6)
+      }
+      const qs = `from=${toDateKey(from)}&to=${toDateKey(to)}&tz=${new Date().getTimezoneOffset()}`
+      const res = await fetch(`/api/workouts/external?${qs}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) return
+      const data = (await res.json()) as { workouts?: ExternalCalItem[] }
+      setExternal(data.workouts ?? [])
+    } catch { /* non-fatal: the calendar works without them */ }
+  }, [viewMode, currentDate])
+
+  useEffect(() => { fetchExternal() }, [fetchExternal])
+
   // Shared management helpers -------------------------------------------------
   // Per-workout schedule PATCH (skip / unskip / uncomplete / reschedule …).
   const patchWorkout = useCallback(async (programId: string, action: string, workoutDate: string, extra: Record<string, unknown> = {}, confirmMsg?: string) => {
@@ -500,6 +551,14 @@ export default function CalendarClient() {
     quickByDate.set(key, existing)
   }
 
+  // External workouts carry their own local day key; never re-derive it.
+  const externalByDate = new Map<string, ExternalCalItem[]>()
+  for (const x of external) {
+    const existing = externalByDate.get(x.date) || []
+    existing.push(x)
+    externalByDate.set(x.date, existing)
+  }
+
   // Navigation
   const navigatePrev = () => {
     setDirection(-1)
@@ -594,6 +653,7 @@ export default function CalendarClient() {
 
   // Selected day detail
   const selectedQuick = selectedDate ? quickByDate.get(toDateKey(selectedDate)) || [] : []
+  const selectedExternal = selectedDate ? externalByDate.get(toDateKey(selectedDate)) || [] : []
   const selectedWorkouts = selectedDate
     ? workoutsByDate.get(toDateKey(selectedDate)) || []
     : []
@@ -772,6 +832,7 @@ export default function CalendarClient() {
                 const isSelected = selectedDate && isSameDay(day, selectedDate)
                 const dayWorkouts = workoutsByDate.get(key) || []
                 const dayQuick = quickByDate.get(key) || []
+                const dayExternal = externalByDate.get(key) || []
                 // Long-lived and test-heavy accounts can have dozens of sessions
                 // on one date. Rendering every marker turns a calendar cell into
                 // a wall of dots and stretches the month; summarize the overflow.
@@ -790,6 +851,12 @@ export default function CalendarClient() {
                   ...dayQuick.map((q, i) => ({
                     key: `q${i}`,
                     className: `ring-1 ring-purple-400 ${q.status === 'completed' ? 'bg-green-700' : q.status === 'planned' ? 'bg-blue-600' : 'bg-red-600'}`,
+                  })),
+                  // Its own colour, never the program's completed green: an
+                  // extra activity, not a finished program session.
+                  ...dayExternal.map((x) => ({
+                    key: `x${x.externalId}`,
+                    className: 'bg-teal-500 ring-1 ring-teal-300',
                   })),
                 ]
                 const markerLimit = viewMode === 'week' ? 10 : 6
@@ -883,6 +950,10 @@ export default function CalendarClient() {
               <div className="h-2 w-2 rounded-full bg-purple-500 ring-1 ring-purple-300" />
               <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Quick session</span>
             </div>
+            <div className="flex items-center gap-1.5">
+              <div className="h-2 w-2 rounded-full bg-teal-500 ring-1 ring-teal-300" />
+              <span className="text-[11px] text-zinc-500 dark:text-zinc-400">{EXTERNAL_WORKOUT_LABEL}</span>
+            </div>
           </div>
 
           {/* Selected Day Detail Panel */}
@@ -898,6 +969,36 @@ export default function CalendarClient() {
                 <h3 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-white">
                   {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
                 </h3>
+
+                {/* Tracked workouts done outside Become on this day. Read-only:
+                    Health owns them, and the program session below is
+                    untouched by them. */}
+                {selectedExternal.length > 0 && (
+                  <div className="mb-3 space-y-2">
+                    {selectedExternal.map((x) => (
+                      <div
+                        key={`sx${x.externalId}`}
+                        data-testid="external-workout-card"
+                        className="rounded-lg border border-teal-200 bg-teal-50/40 p-3 dark:border-teal-900/40 dark:bg-teal-900/10"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex min-w-0 flex-1 items-center gap-2">
+                            <Activity className="h-4 w-4 shrink-0 text-teal-600 dark:text-teal-400" aria-hidden />
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-zinc-900 dark:text-white">{x.activityName}</p>
+                              <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                                {externalWorkoutDetail(x, memberWeightUnit)}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="shrink-0 rounded-full bg-teal-100 px-2 py-0.5 text-[10px] font-semibold text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">
+                            {EXTERNAL_WORKOUT_LABEL}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {/* Quick (one-off) sessions on this day — tappable */}
                 {selectedQuick.length > 0 && (

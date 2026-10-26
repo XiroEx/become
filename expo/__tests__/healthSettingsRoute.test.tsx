@@ -208,6 +208,7 @@ describe("HealthSyncSection on Android", () => {
     async (direction) => {
       const { client, asked } = fakeHealthClient([
         { metric: "weight", direction: "read" },
+        { metric: "workouts", direction: "read" },
         { metric: "weight", direction: "write" },
         { metric: "workouts", direction: "write" },
       ]);
@@ -223,7 +224,11 @@ describe("HealthSyncSection on Android", () => {
       });
       const wanted =
         direction === "read"
-          ? [{ metric: "weight", direction: "read" }]
+          ? [
+              // Card 6adf69c7: the read switch also reads tracked workouts.
+              { metric: "weight", direction: "read" },
+              { metric: "workouts", direction: "read" },
+            ]
           : [
               { metric: "weight", direction: "write" },
               { metric: "workouts", direction: "write" },
@@ -275,6 +280,7 @@ describe("HealthSyncSection on Android", () => {
   it("clears the denied state once the permission is granted", async () => {
     const { client } = fakeHealthClient([
       { metric: "weight", direction: "read" },
+      { metric: "workouts", direction: "read" },
     ]);
     const { getByTestId, queryByTestId } = renderSection({ optedIn: true, client });
     await waitFor(() => {
@@ -390,7 +396,10 @@ describe("HealthSyncSection on iOS (NP-185)", () => {
     await waitFor(() => {
       expect(asked.length).toBeGreaterThan(0);
     });
-    expect(asked[0]).toEqual([{ metric: "weight", direction: "read" }]);
+    expect(asked[0]).toEqual([
+      { metric: "weight", direction: "read" },
+      { metric: "workouts", direction: "read" },
+    ]);
   });
 
   it("shows the denied state when HealthKit grants nothing for write", async () => {

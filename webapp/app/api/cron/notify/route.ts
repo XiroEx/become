@@ -41,6 +41,7 @@ import {
 import { checkInFactsForToday } from '@/lib/checkin/todayFacts'
 import { loadWidgetFeed } from '@/lib/widgets/load'
 import { buildDailyGlance } from '@/lib/widgets/glance'
+import { hasExternalWorkoutOn } from '@/lib/workout/trainedDays'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -274,7 +275,7 @@ export async function GET(request: NextRequest) {
   if (schedulesWithRecent.length > 0) {
     const userIds = schedulesWithRecent.map((s) => s.userId)
     const progressDocs = await UserProgress.find({ userId: { $in: userIds } })
-      .select('userId notificationPrefs lastPushSentAt timezoneOffset timezone activePrograms')
+      .select('userId notificationPrefs lastPushSentAt timezoneOffset timezone activePrograms externalWorkouts.date')
       .lean()
 
     const progressByUserId = new Map(
@@ -342,6 +343,13 @@ export async function GET(request: NextRequest) {
       // Only nudge on a training day: there must be a slot scheduled for TODAY.
       const todaySlots = keyed.filter((s) => s.status === 'scheduled' && s.key === userLocalDateKey)
       if (todaySlots.length === 0) continue
+
+      // Already trained today, outside Become — a tracked morning walk or run
+      // imported from Health (Jon, 2026-10-26). That ticks off "I did a
+      // workout today", so a "Today's workout is ready" push would be nagging
+      // someone who already showed up. The program slot itself stays
+      // scheduled; only the nudge is held back.
+      if (hasExternalWorkoutOn(progress?.externalWorkouts as Array<{ date: Date }> | undefined, userLocalDateKey)) continue
 
       // Name TODAY's workout — the same one the dashboard's "Up Next" shows.
       //

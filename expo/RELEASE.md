@@ -223,7 +223,7 @@ only if George asks. Until then, assume no OTA.
 | Promote to Open Testing / Production | Play Console → Production | After enough internal validation |
 | Data Safety form filled | Play Console → Data Safety | See "Google Data Safety form" below |
 | **App name and short description filled** | Play Console → Main store listing | **Blocking.** The SAME app name as the App Store (30 chars) plus the 80-character short description, both copied from [`STORE_LISTING.md`](./STORE_LISTING.md) |
-| Health apps declaration completed | Play Console → App content → Health apps | **Blocking.** Any `android.permission.health.*` in the manifest (NP-199 adds three) cannot be released until this is filled in and approved. See "Play health apps declaration" below |
+| Health apps declaration completed | Play Console → App content → Health apps | **Blocking.** Any `android.permission.health.*` in the manifest (NP-199 added three, card 6adf69c7 a fourth) cannot be released until this is filled in and approved. See "Play health apps declaration" below |
 | **Permission audit green** | `npx jest __tests__/releaseCandidatePermissions.test.ts` | **Blocking.** NP-206: the manifest declares only what v1 uses, each with its reason. See "Pre-submission permission audit" below |
 | **Demo account in the release notes** | Play Console → App content → App access | **Blocking.** All functionality is behind sign-in; give the same demo email + review code. See "Reviewer demo account" below |
 
@@ -298,12 +298,13 @@ modules' own platform sources:
 | iOS | `NSMicrophoneUsageDescription` | Follow along as the member speaks their affirmation |
 | iOS | `NSSpeechRecognitionUsageDescription` | Turn that speech into lit-up words |
 | iOS | `NSFaceIDUsageDescription` | Unlock on reopen instead of a fresh sign-in link |
-| iOS | `NSHealthShareUsageDescription` | Read weight from Apple Health, if the member turns that on |
+| iOS | `NSHealthShareUsageDescription` | Read weight, and workouts another app tracked, from Apple Health, if the member turns that on |
 | iOS | `NSHealthUpdateUsageDescription` | Write a logged weigh-in back to Apple Health, if the member turns that on |
 | Android | `CAMERA` | Same camera uses as iOS |
 | Android | `RECORD_AUDIO` | Same affirmation uses as iOS |
 | Android | `health.READ_WEIGHT` | Import weigh-ins the scale or another app recorded |
 | Android | `health.WRITE_WEIGHT` | Write a Become weigh-in back out |
+| Android | `health.READ_EXERCISE` | Import a workout another app tracked, so it counts toward the member's day |
 | Android | `health.WRITE_EXERCISE` | Write a finished workout out as a session |
 | Android | `POST_NOTIFICATIONS` | Workout reminders, streak alerts — at the considered moment, never at first launch |
 
@@ -316,7 +317,7 @@ stops it at the next launch (`lib/health/switches.ts`); nothing is saved to
 the photo library so there is no `NSPhotoLibraryAddUsageDescription`.
 
 The gate is `npx jest __tests__/releaseCandidatePermissions.test.ts` — it
-pins the iOS key set, the full Android manifest (six runtime + the two
+pins the iOS key set, the full Android manifest (seven runtime + the two
 biometric install-time permissions, nothing else), each Android reason
 anchored to its in-app copy, the considered-moment timing, the no-gating
 fallbacks, and the NP-014 rule that a new permission-bearing module without
@@ -340,13 +341,14 @@ Become collects these data types (declare in App Store Connect):
 | **User ID (JWT)** | Yes | App functionality (auth) | No |
 | **Push notification token** | Yes | Notifications (workout reminders, streak alerts) | No |
 | **Fitness — weight** | Yes | Health sync is opt-in, per direction (NP-185): a weigh-in read from Apple Health is sent to Become's own API and stored with the member's weight history | No |
+| **Fitness — workouts** | Yes | Same read switch (card 6adf69c7): a workout another app TRACKED (not one typed in by hand, and never Become's own) is read from Apple Health and stored as an extra activity — type, start/end, duration, distance, energy and the app's name | No |
 
 We do NOT collect: name, phone, contacts, location, photos, browsing history,
 financial data, advertising data. HealthKit read/write are both OFF by
 default and each is its own switch in Settings — nothing moves until the
 member turns a direction on, and turning one off stops it at the next
 launch. The privacy nutrition label should select "Data Linked to You" for
-all four types above and "Tracking: No".
+all five types above and "Tracking: No".
 
 ## Google Data Safety form
 
@@ -359,7 +361,7 @@ Mirror image:
 | **App activity** | In-app actions | Yes | No | Workout / mood / weight logs synced to backend |
 | **Device or other IDs** | Push token | Yes | Yes (notifications off) | Push reminders |
 | **Health & fitness** | Weight | Yes | Yes (health sync is opt-in, per direction) | Weigh-ins imported from Apple Health / Health Connect, stored with the member's weight history |
-| **Health & fitness** | Exercise (workout sessions) | No — written out only | Yes (health sync is opt-in, per direction) | Workouts finished in Become are written to Health Connect; none are read back |
+| **Health & fitness** | Exercise (workout sessions) | Yes | Yes (health sync is opt-in, per direction) | Workouts finished in Become are written to Health Connect; workouts another app TRACKED are read back (type, start/end, the app's name) and stored as an extra activity on the member's calendar (card 6adf69c7). Become's own sessions and ones typed in by hand are not imported |
 
 We do NOT collect: precise location, financial info, photos, audio, contacts,
 calendar, files, advertising IDs. Data is encrypted in transit (HTTPS). Users
@@ -369,7 +371,7 @@ can request deletion via in-app account → delete.
 
 Play Console → **App content → Health apps**. Required, and BLOCKING, because
 the manifest requests Health Connect permissions (NP-199). Answer it with
-exactly this; the three permissions below are the whole list, and
+exactly this; the four permissions below are the whole list, and
 `__tests__/androidHealthConnect.test.ts` fails the build if the manifest, the
 code or this table drift apart.
 
@@ -381,6 +383,7 @@ request.
 |---|---|---|---|---|
 | `android.permission.health.READ_WEIGHT` | Weight | Read | So a weigh-in recorded by the member's scale or another app appears in Become without being typed twice, on the day it was recorded | `lib/health/sync.ts` → `POST /api/weight` with `source: "health-connect"` |
 | `android.permission.health.WRITE_WEIGHT` | Weight | Write | So a weigh-in logged in Become is available to the member's other health apps | `lib/health/sync.ts` → `exportWeighInToHealth` |
+| `android.permission.health.READ_EXERCISE` | Exercise (session) | Read | So a workout another app tracked — an outdoor walk, a run — counts toward the member's day and shows on their Become calendar as an extra activity, without being logged twice. Steps are not read | `lib/health/sync.ts` → `POST /api/workouts/external` with `source: "health-connect"` |
 | `android.permission.health.WRITE_EXERCISE` | Exercise (session) | Write | So a workout finished in Become shows up as an exercise session alongside the rest of the member's activity | `lib/health/sync.ts` → `exportWorkoutToHealth` |
 
 Declaration answers, in the words the form asks for:
@@ -391,14 +394,18 @@ Declaration answers, in the words the form asks for:
   their own account and shown back to them.
 - **Is it used for anything other than the feature the member enabled?** No.
   Weight read from Health Connect appears in their own weight history and the
-  targets computed from it; a written weigh-in or session is their own data
-  going back out.
+  targets computed from it; a session read from it appears on their own
+  calendar and counts toward their own day; a written weigh-in or session is
+  their own data going back out.
 - **Is it processed on a server?** Weight is, yes: an imported weigh-in is sent
   to Become's own API (`POST /api/weight`) and stored with the member's history,
   tagged `source: "health-connect"` and de-duplicated on the sample's own id.
-  Workouts written to Health Connect come FROM that API and are not re-read.
-- **Is it retained after the member turns the feature off?** Weigh-ins already
-  imported stay in their Become history (it is their weight log, and they can
+  So is a workout session: an imported one is sent to `POST
+  /api/workouts/external`, tagged `source: "health-connect"` and de-duplicated
+  on the session's own id. Sessions Become itself wrote are filtered out by
+  their `dataOrigin` and never re-read; sessions typed in by hand are skipped.
+- **Is it retained after the member turns the feature off?** Weigh-ins and
+  workout sessions already imported stay in their Become history (it is their weight log, and they can
   delete their account or the entry). Nothing further is read or written: each
   direction has its own switch in Settings and both are off by default.
 - **Health permissions requested but not used?** None — see the table.

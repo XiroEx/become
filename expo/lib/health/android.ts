@@ -26,6 +26,7 @@ import type {
   StepSample,
   WeightSample,
   WeightWrite,
+  WorkoutSample,
   WorkoutWrite,
 } from "./types";
 import { HealthPermissionError, hasPermission } from "./types";
@@ -43,6 +44,13 @@ export interface AndroidWeightRecord {
   originPackage?: string;
 }
 
+/**
+ * One Health Connect `ExerciseSession`, already in Become's vocabulary — a
+ * session carries no unit to convert, so it crosses the boundary as the shape
+ * the sync reads.
+ */
+export type AndroidWorkoutRecord = WorkoutSample;
+
 export interface AndroidClientImpl {
   /** Health Connect present and up to date on this phone? */
   isAvailable: () => Promise<boolean>;
@@ -58,6 +66,8 @@ export interface AndroidClientImpl {
   querySteps: (
     range: DateRange,
   ) => Promise<{ count: number; timestamp: string }[]>;
+  /** Exercise sessions another app recorded; Become's own already dropped. */
+  queryWorkouts?: (range: DateRange) => Promise<AndroidWorkoutRecord[]>;
   writeWeightKg: (input: {
     valueKg: number;
     atISO: string;
@@ -102,6 +112,18 @@ export function createAndroidAdapter(impl: AndroidClientImpl): HealthClient {
       const samples = await impl.querySteps(range);
       return samples.map((s) => ({ count: s.count, timestamp: s.timestamp }));
     },
+
+    ...(impl.queryWorkouts
+      ? {
+          // `ExerciseSession/read` is its own grant: a member who allowed
+          // weight and declined workouts gets a HealthPermissionError here,
+          // never an empty list that reads as "no workouts".
+          async readWorkouts(range: DateRange): Promise<WorkoutSample[]> {
+            await assertGranted("workouts", "read");
+            return (await impl.queryWorkouts?.(range)) ?? [];
+          },
+        }
+      : {}),
 
     write: {
       async writeWeight(sample: WeightWrite): Promise<void> {

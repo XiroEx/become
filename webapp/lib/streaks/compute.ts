@@ -37,6 +37,7 @@ import {
   STREAK_VISIBLE_MIN, shiftDay, lostWeeks, withoutLostWeeks, onTrackDays, weekdayOf,
 } from '@/lib/streaks/pillars'
 import { applyFreezes, freezeAvailable, freezeReturnsOn } from '@/lib/streaks/freeze'
+import { trainedDayKeys } from '@/lib/workout/trainedDays'
 
 export const LOOKBACK_DAYS = 365
 
@@ -115,10 +116,13 @@ export async function computeStreaks(userId: string, tz: number, now = new Date(
   for (const k of Object.keys(credits) as CreditPillar[]) credits[k].sort()
 
   // ── Workout days (completed only) + credits ────────────────────────────
-  type WLog = { date: Date | string; completed?: boolean }
-  const wLogs = ((progress?.workoutLogs as WLog[] | undefined) ?? [])
-    .filter(l => l.completed === true && new Date(l.date) >= since)
-  const workoutDays = new Set(wLogs.map(l => dateKey(new Date(l.date), tz)))
+  // A tracked workout done outside Become and imported from Health counts as
+  // a workout day too (Jon, 2026-10-26) — `trainedDayKeys` is the one union.
+  const workoutDays = trainedDayKeys(
+    progress as Parameters<typeof trainedDayKeys>[0],
+    tz,
+    { since, sinceKey: fromKey },
+  )
   for (const k of credits.workout) workoutDays.add(k)
 
   // ── Nutrition days + credits ───────────────────────────────────────────

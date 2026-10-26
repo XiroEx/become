@@ -16,6 +16,7 @@
  * |--------------------|-----------------------------------------------------|
  * | `weight`           | `HKQuantityTypeIdentifierBodyMass`, kilograms        |
  * | `steps`            | `HKQuantityTypeIdentifierStepCount`                  |
+ * | `workouts`         | `HKWorkoutType` (the `Workout` permission)           |
  * | `read` / `write`   | share (read) vs update (write) authorization         |
  * | sample id          | the HealthKit object's own UUID (`HealthValue.id`)   |
  *
@@ -37,10 +38,18 @@
  * reaches `lib/health/sync.ts` — the same shape as Android's own-package
  * filter, implemented with the marker HealthKit actually gives this module to
  * work with.
+ *
+ * WORKOUTS ARE GUARDED DIFFERENTLY. `saveWorkout` takes no metadata (the native
+ * side passes nil), so a Become workout carries no marker. What
+ * `getAnchoredWorkouts` DOES return is the writing app's bundle identifier
+ * (`sourceId`), so `queryWorkouts` drops every session whose source is this
+ * app (`OWN_BUNDLE_ID`) — Become's own export must never come back in as a
+ * workout done "outside" (card 6adf69c7).
  */
 import { NativeModules, Platform, TurboModuleRegistry } from "react-native";
 import type { IosClientImpl, IosWeightSample } from "./ios";
-import type { HealthPermission } from "./types";
+import type { HealthPermission, WorkoutSample } from "./types";
+import { activityDisplayName } from "./activityNames";
 
 /** `HealthStatusCode` from `react-native-health` — mirrored here rather than
  * imported so this file never needs the package's types to be present for
@@ -64,6 +73,31 @@ interface HealthValue {
   endDate: string;
   metadata?: Record<string, unknown>;
 }
+
+/**
+ * One `getAnchoredWorkouts` row (`RCTAppleHealthKit+Queries.m`
+ * `fetchAnchoredWorkouts:`). `distance` is in MILES and `calories` in
+ * kilocalories, whatever the device's locale; `duration` is seconds.
+ */
+interface HealthKitWorkout {
+  id?: string;
+  activityName?: string;
+  calories?: number;
+  /** `HKMetadataKeyWasUserEntered` !== 1 — false when typed in by hand. */
+  tracked?: boolean;
+  sourceName?: string;
+  /** The writing app's bundle identifier. */
+  sourceId?: string;
+  distance?: number;
+  start?: string;
+  end?: string;
+  duration?: number;
+}
+
+/** This app's iOS bundle identifier (`app.json` → `expo.ios.bundleIdentifier`). */
+export const OWN_BUNDLE_ID = "io.redbtn.become";
+
+const KM_PER_MILE = 1.609344;
 
 interface HealthStatusResult {
   permissions: {
@@ -122,6 +156,16 @@ export interface HealthKitModule {
   getStepCount: (
     options: { date?: string },
     callback: (error: string, result: HealthValue) => void,
+  ) => void;
+  /**
+   * `getAnchoredWorkouts` — every workout type at once (`HKObjectType
+   * workoutType`), unsorted, plus an anchor this module does not keep: the
+   * server's (source, externalId) de-duplication makes re-reading the window on
+   * every launch free, exactly like weight.
+   */
+  getAnchoredWorkouts: (
+    options: { startDate?: string; endDate?: string; type?: string },
+    callback: (error: unknown, result: { anchor?: string; data?: HealthKitWorkout[] }) => void,
   ) => void;
 }
 
@@ -182,12 +226,10 @@ export const BECOME_HEALTHKIT_WORKOUT_TYPE = "TraditionalStrengthTraining";
 function toHealthKitPermission(p: HealthPermission): string | null {
   if (p.metric === "weight") return PERMISSION_WEIGHT;
   if (p.metric === "steps") return PERMISSION_STEP_COUNT;
-  // Workouts are write-only: nothing ever reads a session back out of
-  // HealthKit, so a read asks for nothing. The write asks for `Workout`,
-  // its own permission — separate from the weight one.
-  if (p.metric === "workouts") {
-    return p.direction === "write" ? PERMISSION_WORKOUT : null;
-  }
+  // `Workout` is one HealthKit permission in both directions — the write
+  // (NP-186) and, since card 6adf69c7, the read: a walk another app tracked
+  // ticks off the member's day. Separate from the weight permission.
+  if (p.metric === "workouts") return PERMISSION_WORKOUT;
   return null;
 }
 
@@ -292,6 +334,47 @@ export function createHealthKitImpl(module: HealthKitModule): IosClientImpl {
         module.getStepCount({ date: range.endISO }, cb),
       );
       return [{ count: result.value, timestamp: range.endISO }];
+    },
+
+    async queryWorkouts(range): Promise<WorkoutSample[]> {
+      const result = await promisify<{ data?: HealthKitWorkout[] }>((cb) =>
+        module.getAnchoredWorkouts(
+          { startDate: range.startISO, endDate: range.endISO, type: "Workout" },
+          cb,
+        ),
+      );
+      return (result?.data ?? [])
+        // THE LOOP GUARD — a workout Become wrote is not one done elsewhere.
+        .filter((w) => w.sourceId !== OWN_BUNDLE_ID)
+        .filter((w) => !!w.id && !!w.start && !!w.end)
+        .map((w) => {
+          const durationMin =
+            typeof w.duration === "number" && w.duration > 0
+              ? w.duration / 60
+              : undefined;
+          const distanceKm =
+            typeof w.distance === "number" && w.distance > 0
+              ? w.distance * KM_PER_MILE
+              : undefined;
+          const energyKcal =
+            typeof w.calories === "number" && w.calories > 0
+              ? w.calories
+              : undefined;
+          return {
+            externalId: w.id as string,
+            startISO: w.start as string,
+            endISO: w.end as string,
+            activityType: w.activityName || "Other",
+            activityName: activityDisplayName(w.activityName),
+            // Absent reads as tracked: the native side always sets it, and a
+            // missing flag is not evidence somebody typed the session in.
+            tracked: w.tracked !== false,
+            ...(durationMin != null ? { durationMin } : {}),
+            ...(distanceKm != null ? { distanceKm } : {}),
+            ...(energyKcal != null ? { energyKcal } : {}),
+            ...(w.sourceName ? { originApp: w.sourceName } : {}),
+          };
+        });
     },
 
     async writeWeightKg({ valueKg, atISO, clientId }): Promise<void> {

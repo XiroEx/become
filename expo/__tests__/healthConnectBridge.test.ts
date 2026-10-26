@@ -98,10 +98,13 @@ describe("permission mapping", () => {
     ).toBeNull();
   });
 
-  it("asks for three permissions, and workout READ is not one of them", () => {
+  // Card 6adf69c7 added workout READ: a walk another app tracked ticks off
+  // the member's day. Steps are still not read.
+  it("asks for four permissions — workout READ among them, steps not", () => {
     expect(HEALTH_CONNECT_PERMISSIONS).toEqual([
       { metric: "weight", direction: "read" },
       { metric: "weight", direction: "write" },
+      { metric: "workouts", direction: "read" },
       { metric: "workouts", direction: "write" },
     ]);
     expect(
@@ -109,6 +112,7 @@ describe("permission mapping", () => {
     ).toEqual([
       "android.permission.health.READ_WEIGHT",
       "android.permission.health.WRITE_WEIGHT",
+      "android.permission.health.READ_EXERCISE",
       "android.permission.health.WRITE_EXERCISE",
     ]);
   });

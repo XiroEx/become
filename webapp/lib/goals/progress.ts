@@ -25,6 +25,7 @@ import { computeWeekTraining, type WeekTrainingMetrics, type WeekWorkoutLog } fr
 import { suggestNutrition, suggestTraining, type Suggestion } from '@/lib/goals/suggestions'
 import { localDateKey, dateKey, localDayWindowForKey } from '@/lib/dayWindow'
 import { shiftDay, weekKeyOf, weekdayOf, lostWeeks } from '@/lib/streaks/pillars'
+import { trainedDayKeys } from '@/lib/workout/trainedDays'
 
 export interface NutritionGoalView {
   unit: 'lbs' | 'kg'
@@ -85,7 +86,7 @@ export async function computeGoalProgress(userId: string, tz: number, now = new 
   const [{ nutrition: nGoal, nutritionAchieved, training: tGoal }, user, progress, nutritionGoal, schedules] = await Promise.all([
     ensureGoals(userId, now),
     User.findById(userId, 'profile').lean() as Promise<{ profile?: { weightUnit?: 'lbs' | 'kg'; weeklyAvailability?: number } } | null>,
-    UserProgress.findOne({ userId }).select('weightHistory exercisePRs workoutLogs activePrograms').lean() as Promise<Record<string, unknown> | null>,
+    UserProgress.findOne({ userId }).select('weightHistory exercisePRs workoutLogs externalWorkouts.date activePrograms').lean() as Promise<Record<string, unknown> | null>,
     NutritionGoal.findOne({ userId }).select('protein').lean() as Promise<{ protein?: number } | null>,
     Schedule.find({ userId }, { programId: 1, 'settings.trainingDays': 1, updatedAt: 1 }).sort({ updatedAt: -1 }).limit(5).lean() as Promise<Array<{ programId: string; settings?: { trainingDays?: number[] } }>>,
   ])
@@ -151,8 +152,9 @@ export async function computeGoalProgress(userId: string, tz: number, now = new 
   }
 
   // ── Training ───────────────────────────────────────────────────────────
-  type WLog = { date: Date | string; completed?: boolean }
-  const workoutDays = new Set(((progress?.workoutLogs as WLog[] | undefined) ?? []).filter(l => l.completed === true).map(l => dateKey(new Date(l.date), tz)))
+  // Become workouts and tracked external ones (Health imports) alike: a day
+  // the member trained is a day toward the weekly target (Jon, 2026-10-26).
+  const workoutDays = trainedDayKeys(progress as Parameters<typeof trainedDayKeys>[0], tz)
   const target = tGoal?.target?.daysPerWeek ?? user?.profile?.weeklyAvailability ?? null
   const activeProgramId = ((progress?.activePrograms as Array<{ programId: string; status: string }> | undefined) ?? []).find(p => p.status === 'in-progress' || p.status === 'active')?.programId ?? null
   const sched = schedules.find(s => s.programId === activeProgramId) ?? schedules[0] ?? null

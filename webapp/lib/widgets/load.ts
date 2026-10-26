@@ -33,6 +33,7 @@ import {
 } from '@/lib/mindXP'
 import { buildWidgetFeed, type WidgetFeed, type WidgetFeedInput } from '@/lib/widgets/feed'
 import { isStreakAlive } from '@/lib/streak'
+import { externalWorkoutDayKeys, type ExternalWorkoutLike } from '@/lib/workout/trainedDays'
 
 /**
  * Minutes WEST of UTC for `zone` at `now`, matching Date.getTimezoneOffset().
@@ -142,13 +143,14 @@ export async function loadWidgetFeed(
   // The offset lives on UserProgress, so that document has to land before the
   // day-scoped queries can be built. Everything after it goes out together.
   const progress = await UserProgress.findOne({ userId })
-    .select('streakDays longestStreak streakFreezes lastActivityDate workoutLogs timezoneOffset timezone')
+    .select('streakDays longestStreak streakFreezes lastActivityDate workoutLogs externalWorkouts.date externalWorkouts.activityName timezoneOffset timezone')
     .lean<{
       streakDays?: number
       longestStreak?: number
       streakFreezes?: number
       lastActivityDate?: Date
       workoutLogs?: WorkoutLog[]
+      externalWorkouts?: Array<ExternalWorkoutLike & { activityName?: string }>
       timezoneOffset?: number
       timezone?: string
     } | null>()
@@ -254,6 +256,24 @@ export async function loadWidgetFeed(
     if (key === todayKey) loggedWorkoutToday = true
     if (weekKeyOf(key) === thisWeekKey) workoutsThisWeek += 1
   }
+  // A tracked workout done outside Become (an outdoor walk from Whoop, via
+  // Health) is "I did a workout today" too — Jon, 2026-10-26. It counts toward
+  // the day and the week, and never toward the program slot above: the
+  // training tile ticks off, the scheduled session stays scheduled.
+  // Counted per SESSION, like the logs above; its date is a day MARKER, so it
+  // is read at offset 0 (externalWorkoutDayKeys), never through `tz`.
+  let externalToday: string | null = null
+  for (const entry of progress?.externalWorkouts ?? []) {
+    const [key] = externalWorkoutDayKeys([entry])
+    if (!key) continue
+    if (key === todayKey) externalToday = entry.activityName || 'Workout'
+    if (weekKeyOf(key) === thisWeekKey) workoutsThisWeek += 1
+  }
+  // When the walk is the ONLY thing that ticked today off, the caption names
+  // the walk. Naming the still-scheduled program day under "Complete" would
+  // tell the member they did a session they have not done.
+  const trainedOnlyOutside = externalToday != null && !completedSlotToday && !loggedWorkoutToday
+  if (trainedOnlyOutside) title = externalToday
 
   const trainingDays = schedules.find((s) => (s.settings?.trainingDays ?? []).length > 0)?.settings?.trainingDays
   const weeklyTarget = trainingDays?.length || positive(user?.profile?.weeklyAvailability)
@@ -296,7 +316,7 @@ export async function loadWidgetFeed(
     },
     training: {
       title,
-      completedToday: completedSlotToday || loggedWorkoutToday,
+      completedToday: completedSlotToday || loggedWorkoutToday || externalToday != null,
       restDay: restToday,
     },
   }

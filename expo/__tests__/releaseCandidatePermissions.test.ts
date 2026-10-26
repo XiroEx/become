@@ -22,7 +22,7 @@ import {
  *
  * What it pins:
  *   1. iOS ships exactly the five v1 usage strings, each specific and honest.
- *   2. Android declares exactly the six v1 runtime permissions, plus only the
+ *   2. Android declares exactly the seven v1 runtime permissions, plus only the
  *      install-time normal permissions — nothing v1 does not use.
  *   3. Every Android runtime permission has its reason in the member's
  *      language, anchored to the in-app surface that states it.
@@ -150,7 +150,7 @@ describe("Android declares only the permissions v1 uses (NP-206)", () => {
   });
 
   it("declares the biometric install-time permissions and nothing else extra", () => {
-    // `app.json` declares exactly the six runtime permissions. The two
+    // `app.json` declares exactly the seven runtime permissions. The two
     // install-time normal permissions (`USE_BIOMETRIC`, `USE_FINGERPRINT`)
     // arrive via the `expo-local-authentication` config plugin — verified by
     // resolving the plugin chain (see the audit notes) — so they must NOT be
@@ -190,6 +190,7 @@ describe("Android declares only the permissions v1 uses (NP-206)", () => {
       [
         "android.permission.health.READ_WEIGHT",
         "android.permission.health.WRITE_WEIGHT",
+        "android.permission.health.READ_EXERCISE",
         "android.permission.health.WRITE_EXERCISE",
       ].sort(),
     );

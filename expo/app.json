@@ -21,7 +21,7 @@
         "NSPhotoLibraryUsageDescription": "Become opens your photo library only when you pick a photo — a meal, a food label, an avatar or a feedback screenshot — and reads nothing else from it.",
         "NSMicrophoneUsageDescription": "Become uses the microphone only to follow along as you speak your affirmation out loud.",
         "NSSpeechRecognitionUsageDescription": "Become uses speech recognition only to follow along as you speak your affirmation out loud.",
-        "NSHealthShareUsageDescription": "Become reads weight and steps from Apple Health so a weigh-in recorded there appears in Become, if you turn that on in Settings.",
+        "NSHealthShareUsageDescription": "Become reads weight and workouts from Apple Health so a weigh-in or a walk another app tracked appears in Become, if you turn that on in Settings.",
         "NSHealthUpdateUsageDescription": "Become writes a weigh-in you log here and a workout you finish back to Apple Health, if you turn that on in Settings."
       },
       "privacyManifests": {
@@ -86,6 +86,7 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.health.READ_WEIGHT",
         "android.permission.health.WRITE_WEIGHT",
+        "android.permission.health.READ_EXERCISE",
         "android.permission.health.WRITE_EXERCISE",
         "android.permission.POST_NOTIFICATIONS"
       ],

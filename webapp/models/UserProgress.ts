@@ -163,6 +163,37 @@ export interface IWorkoutLog {
   exercises: IExerciseLog[]
 }
 
+/**
+ * A workout the member did OUTSIDE Become and a tracker recorded — an outdoor
+ * walk from Whoop, a Strava run, an Apple Watch session — imported from Apple
+ * Health or Health Connect (card 6adf69c7, Jon 2026-10-26).
+ *
+ * Deliberately NOT a `workoutLogs` row. About 35 readers walk workoutLogs and
+ * treat a log with no `programId` as a quick session; a tracked walk has no
+ * exercises, no sets and no program, and must never complete a scheduled slot.
+ * It counts toward "did I train today" through `lib/workout/trainedDays.ts`,
+ * which is the one place the two arrays are unioned.
+ */
+export interface IExternalWorkout {
+  source: 'healthkit' | 'health-connect'
+  /** The platform's own id for the session. Unique per (source, externalId). */
+  externalId: string
+  /** 00:00Z DAY MARKER for the session's own local day (never the import day). */
+  date: Date
+  startedAt: Date
+  endedAt: Date
+  /** Normalised kebab-case type, e.g. 'walking', 'running-treadmill'. */
+  activityType: string
+  /** What the calendar prints, e.g. "Walking". */
+  activityName: string
+  durationMin: number
+  distanceKm?: number
+  energyKcal?: number
+  /** The app that recorded it, as a display name ("Strava", "Whoop"). */
+  originApp?: string
+  importedAt: Date
+}
+
 export interface IExerciseSwap {
   originalSlug: string       // The originally programmed exercise slug
   replacementSlug: string    // The replacement exercise slug
@@ -222,6 +253,8 @@ export interface IUserProgress {
     lastShownAt?: Date
   }
   workoutLogs: IWorkoutLog[]
+  /** Tracked workouts imported from Health — see IExternalWorkout. */
+  externalWorkouts?: IExternalWorkout[]
   activePrograms: IActiveProgram[]
   currentProgram?: {
     programId: string
@@ -445,6 +478,21 @@ const WorkoutLogSchema = new Schema<IWorkoutLog>({
   exercises: [ExerciseLogSchema]
 }, { _id: false })
 
+const ExternalWorkoutSchema = new Schema<IExternalWorkout>({
+  source: { type: String, enum: ['healthkit', 'health-connect'], required: true },
+  externalId: { type: String, required: true },
+  date: { type: Date, required: true },
+  startedAt: { type: Date, required: true },
+  endedAt: { type: Date, required: true },
+  activityType: { type: String, required: true },
+  activityName: { type: String, required: true },
+  durationMin: { type: Number, required: true },
+  distanceKm: { type: Number },
+  energyKcal: { type: Number },
+  originApp: { type: String },
+  importedAt: { type: Date, required: true },
+}, { _id: false })
+
 const PRDimensionSchema = new Schema<IPRDimension>({
   weight: { type: Number, required: true },
   reps:   { type: Number, required: true },
@@ -544,6 +592,9 @@ const UserProgressSchema = new Schema<IUserProgress>({
     lastShownAt: { type: Date }
   },
   workoutLogs: [WorkoutLogSchema],
+  // No default: absent and [] mean the same thing to every reader, and a
+  // default would stamp an empty array onto every document a save touches.
+  externalWorkouts: { type: [ExternalWorkoutSchema], default: undefined },
   activePrograms: { type: [ActiveProgramSchema], default: [] },
   currentProgram: {
     programId: String,
