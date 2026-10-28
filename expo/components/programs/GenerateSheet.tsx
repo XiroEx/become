@@ -1156,7 +1156,13 @@ function SliderRow({
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
+        // Claim a MOVE only when it is mostly sideways, and hand the touch
+        // back the moment the sheet's ScrollView asks for it: a slider that
+        // claimed every move held vertical scrolls hostage whenever the
+        // finger landed on a track (Jon, 2026-10-28).
+        onMoveShouldSetPanResponder: (_evt, g) => Math.abs(g.dx) > Math.abs(g.dy),
+        onPanResponderTerminationRequest: () => true,
+        onShouldBlockNativeResponder: () => false,
         onPanResponderGrant: (evt) => onChange(valueFromLocationX(evt.nativeEvent.locationX)),
         onPanResponderMove: (evt) => onChange(valueFromLocationX(evt.nativeEvent.locationX)),
       }),

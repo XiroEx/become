@@ -36,6 +36,11 @@ const mockApiFetch = apiFetch as unknown as jest.Mock;
 
 // A completed slot mid-month (rendered in the calendar grid) and a future
 // scheduled slot (actionable from the upcoming list).
+// MONTH-END DATE BOMB: the dates below are "today + 2/4 days", looked up in
+// the month grid the calendar opens on. In the last days of a month they fall
+// in NEXT month and are not on screen (failed on 2026-10-28). The clock is
+// pinned mid-month; `advanceTimers` keeps waitFor and real timeouts moving.
+jest.useFakeTimers({ now: new Date(2026, 9, 14, 12, 0, 0), advanceTimers: true });
 const today = new Date();
 const y = today.getFullYear();
 const monthStr = String(today.getMonth() + 1).padStart(2, "0");

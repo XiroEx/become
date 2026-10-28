@@ -1,4 +1,4 @@
-import { View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { Text } from "@/components/Text";
 import { Button } from "@/components/Button";
 import { BottomSheet } from "@/components/BottomSheet";
@@ -52,7 +52,15 @@ export function LiveExerciseSheet({
       >
         Tap to jump
       </Text>
-      <View style={{ gap: 8 }}>
+      {/* The sheet is a fixed 80% of the screen with overflow hidden, so a
+          long workout's rows past the bottom edge were unreachable. The list
+          scrolls (Jon, 2026-10-28: check every sheet). */}
+      <ScrollView
+        testID={`${testID}-exercise-sheet-scroll`}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ gap: 8, paddingBottom: 8 }}
+        showsVerticalScrollIndicator={false}
+      >
         {exercises.map((exercise, idx) => {
           const done = completed[idx] ?? false;
           const isCurrent = idx === currentExerciseIndex;
@@ -76,7 +84,7 @@ export function LiveExerciseSheet({
             </View>
           );
         })}
-      </View>
+      </ScrollView>
     </BottomSheet>
   );
 }

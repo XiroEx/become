@@ -1,4 +1,4 @@
-import { Modal as RNModal, Pressable } from "react-native";
+import { Modal as RNModal, Pressable, StyleSheet, View } from "react-native";
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -82,26 +82,27 @@ export function Modal({
       animationType={modalAnimation("fade", reduceMotion)}
       testID={testID}
     >
-      <Pressable
-        testID={testID ? `${testID}-backdrop` : undefined}
-        onPress={onClose}
-        accessible={false}
-        importantForAccessibility="no"
-        className="flex-1 bg-foreground/40 items-center justify-center px-6"
-      >
+      {/* Backdrop as a sibling, not a parent: see BottomSheet.tsx. A card's
+          own ScrollView must be the only responder under the finger. */}
+      <View className="flex-1 items-center justify-center px-6">
+        <Pressable
+          testID={testID ? `${testID}-backdrop` : undefined}
+          onPress={onClose}
+          accessible={false}
+          importantForAccessibility="no"
+          style={StyleSheet.absoluteFill}
+          className="bg-foreground/40"
+        />
         <Animated.View
           testID={testID ? `${testID}-rise` : undefined}
           style={[reduceMotion ? undefined : rise, { width: "100%" }]}
         >
-        <Pressable
+        <View
           testID={testID ? `${testID}-card` : undefined}
           accessibilityRole="none"
           accessibilityViewIsModal
           accessibilityLabel={accessibilityLabel ?? title}
           onAccessibilityEscape={onClose}
-          onPress={() => {
-            /* swallow so taps inside the card don't bubble to backdrop */
-          }}
           className="bg-card border border-border rounded-2xl p-5 w-full"
         >
           {title ? (
@@ -114,9 +115,9 @@ export function Modal({
             </Text>
           ) : null}
           {children}
-        </Pressable>
+        </View>
         </Animated.View>
-      </Pressable>
+      </View>
     </RNModal>
   );
 }
