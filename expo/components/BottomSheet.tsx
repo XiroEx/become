@@ -167,26 +167,34 @@ export function BottomSheet({
       animationType={animationType ?? modalAnimation("slide", reduceMotion)}
       testID={testID}
     >
-      <Pressable
-        testID={testID ? `${testID}-backdrop` : undefined}
-        onPress={onClose}
-        accessible={false}
-        importantForAccessibility="no"
-        className="flex-1 bg-foreground/40 justify-end"
-      >
+      {/* The backdrop is a SIBLING behind the sheet, never its parent. It used
+          to wrap the sheet, with the sheet itself a Pressable whose onPress
+          swallowed taps so they would not reach the backdrop. Two touch
+          responders around every sheet's ScrollView meant iOS often handed the
+          drag to a Pressable instead of the list: members could not scroll the
+          plate estimate, the workout generator or any long sheet (Jon,
+          2026-10-28). A tap on the sheet now never reaches the backdrop
+          because the backdrop is not under the finger, so nothing has to
+          swallow anything. */}
+      <View className="flex-1 justify-end">
+        <Pressable
+          testID={testID ? `${testID}-backdrop` : undefined}
+          onPress={onClose}
+          accessible={false}
+          importantForAccessibility="no"
+          style={StyleSheet.absoluteFill}
+          className="bg-foreground/40"
+        />
         <Animated.View
           testID={testID ? `${testID}-rise` : undefined}
           style={[reduceMotion ? undefined : rise, { width: "100%" }]}
         >
-        <Pressable
+        <View
           testID={testID ? `${testID}-sheet` : undefined}
           accessibilityRole="none"
           accessibilityViewIsModal
           accessibilityLabel={accessibilityLabel ?? title}
           onAccessibilityEscape={onClose}
-          onPress={() => {
-            /* swallow */
-          }}
           className="bg-card border-t border-border rounded-t-2xl p-5 pb-8"
           style={resolvedSheetStyle}
         >
@@ -213,9 +221,9 @@ export function BottomSheet({
             </View>
           ) : null}
           <View style={{ flexShrink: 1, flexGrow: 1, minHeight: 0 }}>{children}</View>
-        </Pressable>
+        </View>
         </Animated.View>
-      </Pressable>
+      </View>
     </RNModal>
   );
 }

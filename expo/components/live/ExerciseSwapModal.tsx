@@ -1011,7 +1011,11 @@ export function ExerciseSwapModal({
           ) : null}
 
           {/* Content */}
-          {isLoading ? (
+          {/* While the create form is open it takes the list's place. It used
+              to render BELOW the list's flex-1 ScrollView in this fixed-height
+              sheet, so the form was squeezed off the bottom with nothing to
+              scroll it (Jon, 2026-10-28). */}
+          {showCreateForm ? null : isLoading ? (
             <Text testID={`${testID}-loading`} className="text-muted-foreground py-6 text-center">
               Finding alternatives…
             </Text>
@@ -1355,6 +1359,12 @@ export function ExerciseSwapModal({
           {/* Cancel button */}
           <View style={{ height: 8 }} />
           {showCreateForm ? (
+            <ScrollView
+              testID={`${testID}-create-scroll`}
+              style={{ flex: 1 }}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
             <View testID={`${testID}-create-form`} style={{ marginTop: 8 }}>
               <View className="flex-row items-center gap-2 mb-3">
                 <Pressable
@@ -1382,6 +1392,7 @@ export function ExerciseSwapModal({
                 testID={`${testID}-create`}
               />
             </View>
+            </ScrollView>
           ) : (
             <>
               <Pressable

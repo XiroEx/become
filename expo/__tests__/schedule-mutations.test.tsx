@@ -33,6 +33,11 @@ import CalendarSettingsRoute from "../app/(app)/(tabs)/calendar/settings";
 
 const mockApiFetch = apiFetch as unknown as jest.Mock;
 
+// MONTH-END DATE BOMB: the dates below are "today + 2/4 days", looked up in
+// the month grid the calendar opens on. In the last days of a month they fall
+// in NEXT month and are not on screen (failed on 2026-10-28). The clock is
+// pinned mid-month; `advanceTimers` keeps waitFor and real timeouts moving.
+jest.useFakeTimers({ now: new Date(2026, 9, 14, 12, 0, 0), advanceTimers: true });
 const today = new Date();
 const plus = (d: number) =>
   new Date(today.getTime() + d * 86400000).toISOString().slice(0, 10);
