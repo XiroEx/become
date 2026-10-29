@@ -41,6 +41,16 @@ import type {
   WorkoutLiveActivityInstance,
   WorkoutLiveActivityProps,
 } from "@/lib/live/liveActivity/workoutLiveActivity";
+
+// Track ticks a set when the member LEAVES the box, not on the keystroke
+// (Jon, 2026-10-29), so a test that types a value leaves the box as well.
+function typeIn(
+  element: Parameters<typeof fireEvent.changeText>[0],
+  text: string,
+): void {
+  fireEvent.changeText(element, text);
+  fireEvent(element, "endEditing");
+}
 /* eslint-enable import/first */
 
 const mockApiFetch = apiFetch as unknown as jest.Mock;
@@ -134,10 +144,10 @@ describe("NP-188 acceptance, at the route", () => {
     await waitFor(() => expect(rec.started).toHaveLength(1));
 
     await act(async () => {
-      fireEvent.changeText(getByTestId("live-workout-bench-set-0-weight"), "100");
+      typeIn(getByTestId("live-workout-bench-set-0-weight"), "100");
     });
     await act(async () => {
-      fireEvent.changeText(getByTestId("live-workout-bench-set-0-reps"), "5");
+      typeIn(getByTestId("live-workout-bench-set-0-reps"), "5");
     });
     await act(async () => {
       fireEvent.press(getByTestId("live-workout-finish"));

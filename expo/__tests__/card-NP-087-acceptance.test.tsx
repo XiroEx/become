@@ -50,6 +50,16 @@ import {
 } from "@/lib/live/workoutPosition";
 import { positionKey, programScope } from "@become/core";
 import LiveWorkoutRoute from "../app/(app)/(tabs)/programming/[id]/workout/[idx]/live";
+
+// Track ticks a set when the member LEAVES the box, not on the keystroke
+// (Jon, 2026-10-29), so a test that types a value leaves the box as well.
+function typeIn(
+  element: Parameters<typeof fireEvent.changeText>[0],
+  text: string,
+): void {
+  fireEvent.changeText(element, text);
+  fireEvent(element, "endEditing");
+}
 /* eslint-enable import/first */
 
 const mockApiFetch = apiFetch as unknown as jest.Mock;
@@ -104,8 +114,8 @@ function logRepsWeightSet(
   weight: string,
   reps: string,
 ) {
-  fireEvent.changeText(getByTestId(`${prefix}-weight`), weight);
-  fireEvent.changeText(getByTestId(`${prefix}-reps`), reps);
+  typeIn(getByTestId(`${prefix}-weight`), weight);
+  typeIn(getByTestId(`${prefix}-reps`), reps);
 }
 
 describe("(id: e015c89a) Logging two sets in Track and switching to Live opens Live on the third set", () => {
@@ -351,13 +361,13 @@ describe("(id: e015c89b) Complete Workout appears only once every set is done, a
       });
       for (let i = 0; i < 2; i++) {
         await act(async () => {
-          fireEvent.changeText(
+          typeIn(
             screen.getByTestId(`live-workout-bench-set-${i}-weight`),
             "225",
           );
         });
         await act(async () => {
-          fireEvent.changeText(
+          typeIn(
             screen.getByTestId(`live-workout-bench-set-${i}-reps`),
             "5",
           );
@@ -448,20 +458,20 @@ describe("(id: e015c89b) Complete Workout appears only once every set is done, a
 
     for (let i = 0; i < 2; i++) {
       await act(async () => {
-        fireEvent.changeText(
+        typeIn(
           screen.getByTestId(`live-workout-bench-set-${i}-weight`),
           "225",
         );
       });
       await act(async () => {
-        fireEvent.changeText(
+        typeIn(
           screen.getByTestId(`live-workout-bench-set-${i}-reps`),
           "5",
         );
       });
     }
     await act(async () => {
-      fireEvent.changeText(
+      typeIn(
         screen.getByTestId("live-workout-notes"),
         "Felt strong, bar speed good.",
       );
@@ -522,7 +532,7 @@ describe("(id: e015c89c) Cardio exercises in Track use the duration and distance
 
     // Distance alone is a set that happened — `isSetFilled` accepts any of
     // duration, distance or speed for `time_distance`.
-    fireEvent.changeText(
+    typeIn(
       getByTestId("live-workout-treadmill-set-0-distance"),
       "1500",
     );
@@ -530,7 +540,7 @@ describe("(id: e015c89c) Cardio exercises in Track use the duration and distance
     expect(grid.treadmill![0]!.distance).toBe(1500);
     expect(grid.treadmill![0]!.completed).toBe(true);
 
-    fireEvent.changeText(
+    typeIn(
       getByTestId("live-workout-treadmill-set-0-duration"),
       "10",
     );
@@ -539,11 +549,11 @@ describe("(id: e015c89c) Cardio exercises in Track use the duration and distance
     expect(grid.treadmill![0]!.completed).toBe(true);
 
     // Clearing both un-ticks it: the tick follows the numbers.
-    fireEvent.changeText(
+    typeIn(
       getByTestId("live-workout-treadmill-set-0-distance"),
       "",
     );
-    fireEvent.changeText(
+    typeIn(
       getByTestId("live-workout-treadmill-set-0-duration"),
       "",
     );
@@ -551,13 +561,13 @@ describe("(id: e015c89c) Cardio exercises in Track use the duration and distance
     expect(grid.treadmill![0]!.completed).toBe(false);
 
     // A timed set needs its duration, and reps on a loaded set are not enough.
-    fireEvent.changeText(getByTestId("live-workout-plank-set-0-duration"), "45");
+    typeIn(getByTestId("live-workout-plank-set-0-duration"), "45");
     grid = onGridChange.mock.calls.at(-1)![0] as LiveGrid;
     expect(grid.plank![0]!.completed).toBe(true);
-    fireEvent.changeText(getByTestId("live-workout-squat-set-0-reps"), "5");
+    typeIn(getByTestId("live-workout-squat-set-0-reps"), "5");
     grid = onGridChange.mock.calls.at(-1)![0] as LiveGrid;
     expect(grid.squat![0]!.completed).toBe(false);
-    fireEvent.changeText(getByTestId("live-workout-squat-set-0-weight"), "225");
+    typeIn(getByTestId("live-workout-squat-set-0-weight"), "225");
     grid = onGridChange.mock.calls.at(-1)![0] as LiveGrid;
     expect(grid.squat![0]!.completed).toBe(true);
   });

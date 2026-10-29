@@ -336,6 +336,17 @@ export interface LiveWorkoutClientProps {
    */
   jumpRequest?: { exerciseIndex: number; token: number } | null;
   /**
+   * Resolve a still for an exercise that arrived without `thumbnailUrl`
+   * (added mid-workout, or swapped in from a row with none), so the Lock
+   * Screen tile shows THAT exercise. Routes pass
+   * `createExerciseThumbnailLookup(token)`; omitted, such an exercise draws
+   * the Become tile.
+   */
+  lookupExerciseThumbnail?: (exercise: {
+    slug?: string;
+    name: string;
+  }) => Promise<string | undefined>;
+  /**
    * Apply a structural change made from INSIDE the Track accordion card —
    * Move up / Move down / Remove on a single exercise, Ungroup on a
    * superset/circuit block (NP-287: the web offers all four from the card
@@ -594,6 +605,7 @@ export function LiveWorkoutClient({
   activeSeconds,
   manageExercises,
   jumpRequest,
+  lookupExerciseThumbnail,
   onExerciseChange,
   day,
   onViewPRs,
@@ -814,16 +826,31 @@ export function LiveWorkoutClient({
   );
 
   const handleSetChange = useCallback(
-    (exerciseIndex: number, setIndex: number, next: LiveSetState) => {
+    (
+      exerciseIndex: number,
+      setIndex: number,
+      next: LiveSetState,
+      opts?: { typing?: boolean },
+    ) => {
       const ex = workout.exercises[exerciseIndex];
       if (!ex) return;
       const prev = gridRef.current[ex.slug]?.[setIndex];
       // A tap on the checkbox is the member's own call and is always obeyed;
       // anything else re-asks `isSetFilled` whether the set is done.
+      //
+      // EXCEPT A KEYSTROKE, which may un-tick but never ticks (Jon,
+      // 2026-10-29): "1" of "12" reps ticked the set, started the rest and
+      // saved with the keyboard still up. The tick lands when the member
+      // leaves the box (`handleSetCommit`). A quick-pick tap is not typing
+      // and still ticks at once.
       const manualToggle = !!prev && prev.completed !== next.completed;
+      const filled = isSetFilled(ex.trackingType, typedSet(next));
       const resolved: LiveSetState = manualToggle
         ? next
-        : { ...next, completed: isSetFilled(ex.trackingType, typedSet(next)) };
+        : {
+            ...next,
+            completed: opts?.typing ? !!prev?.completed && filled : filled,
+          };
       const justCompleted = !prev?.completed && resolved.completed;
       const key = ex.slug + ":" + setIndex;
       if (manualToggle && !resolved.completed) {
@@ -878,6 +905,19 @@ export function LiveWorkoutClient({
       }
     },
     [workout.exercises, workoutFlow, flowIndexByKey, onGridChange, onSetComplete, rememberAfterEdit, rest],
+  );
+  // Blur on a Track number box: re-run the set through the normal path with
+  // the same values, which ticks it if it is now filled (rest, snapshot and
+  // save all follow from that path, exactly as a tick always has).
+  const handleSetCommit = useCallback(
+    (exerciseIndex: number, setIndex: number) => {
+      const ex = workout.exercises[exerciseIndex];
+      if (!ex) return;
+      const row = gridRef.current[ex.slug]?.[setIndex];
+      if (!row || row.completed) return;
+      handleSetChange(exerciseIndex, setIndex, row);
+    },
+    [workout.exercises, handleSetChange],
   );
 
   /**
@@ -1313,6 +1353,24 @@ export function LiveWorkoutClient({
     ? (activityRow?.weight ?? startingWeightFor(activityExercise, activitySetIndex))
     : null;
   const activityWeightStep = weightUnit === "kg" ? 2.5 : 5;
+  // THE REPS STEPPER (Jon, 2026-10-29), beside the weight one. Starts from
+  // what is typed, else the set's prefill, else the low end of the
+  // prescription ("8-12" starts at 8), the number the Live input shows.
+  const activityRepsTracked = activityExercise
+    ? setInputsFor(activityExercise.trackingType).reps
+    : false;
+  const startingRepsFor = (
+    ex: (typeof workout.exercises)[number] | undefined,
+    setIndex: number,
+  ): number => {
+    const prefilled = ex?.prefill?.[setIndex]?.reps;
+    if (typeof prefilled === "number") return prefilled;
+    const first = /\d+/.exec(ex?.repsLabel ?? "");
+    return first ? Number(first[0]) : 0;
+  };
+  const activityReps: number | null = activityRepsTracked
+    ? (activityRow?.reps ?? startingRepsFor(activityExercise, activitySetIndex))
+    : null;
   // THE EXERCISE STILL FRAME (the Live Activity tile). The extension cannot
   // play video, so it draws this cached `file://` still when one is ready —
   // else the Become arrow tile. Resolved from the current exercise's
@@ -1321,14 +1379,33 @@ export function LiveWorkoutClient({
   // advance. The cached file lives outside React (App Group container) and
   // resolves async, so the URI arrives in an effect.
   const activityThumbnail = activityExercise?.thumbnailUrl ?? null;
+  const activitySlug = activityExercise?.slug ?? "";
+  const activityName = activityExercise?.name ?? "";
   const activityNextThumbnail =
     workout.exercises[activityExerciseIndex + 1]?.thumbnailUrl ?? null;
   const [activityFrameUri, setActivityFrameUri] = useState<
     string | undefined
   >(undefined);
   useEffect(() => {
-    if (!activityThumbnail) return;
+    // Drop the previous exercise's still the moment the exercise changes. An
+    // exercise with no demo used to keep the LAST one's photo, so a chest
+    // raise showed the leg press (Jon, 2026-10-29); it now shows the Become
+    // tile until (or unless) its own frame resolves.
+    /* eslint-disable-next-line react-hooks/set-state-in-effect -- the still is
+       tied to the current exercise, which changes outside this state. */
+    setActivityFrameUri(undefined);
     let alive = true;
+    if (!activityThumbnail) {
+      if (!activitySlug || !lookupExerciseThumbnail) return;
+      void lookupExerciseThumbnail({ slug: activitySlug, name: activityName })
+        .then((thumb) => (thumb && alive ? exerciseFrameUri(thumb) : undefined))
+        .then((uri) => {
+          if (alive && uri) setActivityFrameUri(uri);
+        });
+      return () => {
+        alive = false;
+      };
+    }
     void exerciseFrameUri(activityThumbnail).then((uri) => {
       if (!alive) return;
       /* eslint-disable-next-line react-hooks/set-state-in-effect -- the cached
@@ -1338,7 +1415,10 @@ export function LiveWorkoutClient({
     return () => {
       alive = false;
     };
-  }, [activityThumbnail]);
+    // Keyed on the exercise as well as its still: two exercises in a row
+    // with no still must still drop the first one's frame and look up the
+    // second.
+  }, [activityThumbnail, activitySlug, activityName, lookupExerciseThumbnail]);
   useEffect(() => {
     if (activityNextThumbnail) prefetchExerciseFrame(activityNextThumbnail);
   }, [activityNextThumbnail]);
@@ -1372,6 +1452,31 @@ export function LiveWorkoutClient({
       handleLiveSetChange,
       exerciseHistory,
     ],
+  );
+  // The same typing path as the weight stepper: adjusting reps never ticks
+  // the set, starts a rest or saves.
+  const adjustActivityReps = useCallback(
+    (delta: number) => {
+      const ex = workout.exercises[activityExerciseIndex];
+      if (!ex || !setInputsFor(ex.trackingType).reps) return;
+      const prev = gridRef.current[ex.slug]?.[activitySetIndex];
+      const base = prev?.reps ?? startingRepsFor(ex, activitySetIndex);
+      const next = Math.max(0, Math.round(base + delta));
+      const current: LiveSetState = prev ?? {
+        reps: null,
+        weight: null,
+        durationSec: null,
+        distance: null,
+        speed: null,
+        completed: false,
+      };
+      handleLiveSetChange(activityExerciseIndex, activitySetIndex, {
+        ...current,
+        reps: next,
+      });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- startingRepsFor reads only the exercise
+    [workout.exercises, activityExerciseIndex, activitySetIndex, handleLiveSetChange],
   );
   // "Log set" without touching − / + logs the weight the Lock Screen SHOWS:
   // an empty input is seeded with it first (the typing path), and the
@@ -1414,6 +1519,11 @@ export function LiveWorkoutClient({
     // activity's rest phase follow from the normal completion.
     onLogSet: logActivitySet,
     resting: rest.active,
+    onAdjustReps: adjustActivityReps,
+    // The in-app rest bar's own handlers, so the Lock Screen and the screen
+    // can never disagree about a paused or skipped rest.
+    onToggleRest: rest.running ? rest.pause : rest.resume,
+    onSkipRest: rest.skip,
   });
   useWorkoutLiveActivity({
     active: workout.exercises.length > 0,
@@ -1428,6 +1538,17 @@ export function LiveWorkoutClient({
     // Omitted, never null — ActivityKit refuses a dictionary with null.
     ...(activityWeight !== null
       ? { weightLabel: loadLabel(activityWeight, weightUnit) }
+      : {}),
+    ...(activityReps !== null
+      ? { repsLabel: `${activityReps} ${activityReps === 1 ? "rep" : "reps"}` }
+      : {}),
+    ...(rest.active && !rest.running
+      ? {
+          restPaused: true,
+          restRemainingLabel: `${Math.floor(rest.remainingSec / 60)}:${String(
+            Math.max(0, Math.round(rest.remainingSec % 60)),
+          ).padStart(2, "0")}`,
+        }
       : {}),
     // Omitted, never null — ActivityKit refuses a dictionary with null.
     ...(activityFrameUri !== undefined ? { imageUri: activityFrameUri } : {}),
@@ -1814,6 +1935,7 @@ export function LiveWorkoutClient({
               totalRounds={totalRounds}
               onRoundChange={setRound}
               onSetChange={handleSetChange}
+              onSetCommit={handleSetCommit}
               onRequestSwap={onRequestSwap}
               notes={notes}
               onNotesChange={handleNotesChange}

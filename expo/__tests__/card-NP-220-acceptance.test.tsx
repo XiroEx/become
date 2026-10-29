@@ -18,6 +18,16 @@ import {
 } from "@/components/live/LiveWorkoutClient";
 import { buildWorkoutSaveRequest } from "@/lib/live/workoutSave";
 
+// Track ticks a set when the member LEAVES the box, not on the keystroke
+// (Jon, 2026-10-29), so a test that types a value leaves the box as well.
+function typeIn(
+  element: Parameters<typeof fireEvent.changeText>[0],
+  text: string,
+): void {
+  fireEvent.changeText(element, text);
+  fireEvent(element, "endEditing");
+}
+
 /** Superset of A and B, 3 sets each → 6 interleaved steps. */
 const SUPERSET: LiveWorkoutViewModel = {
   programId: "prog-1",
@@ -73,8 +83,8 @@ function logRepsWeightSet(
   weight: string,
   reps: string,
 ) {
-  fireEvent.changeText(getByTestId(`${prefix}-weight`), weight);
-  fireEvent.changeText(getByTestId(`${prefix}-reps`), reps);
+  typeIn(getByTestId(`${prefix}-weight`), weight);
+  typeIn(getByTestId(`${prefix}-reps`), reps);
 }
 
 function mockInterval() {
@@ -134,7 +144,7 @@ describe("(id: e5cece4a) Superset A+B with 3 sets runs A1, B1, A2, B2, A3, B3 by
       />,
     );
     // Type only the weight on A1, leave reps blank, then Complete.
-    fireEvent.changeText(
+    typeIn(
       getByTestId("live-workout-live-a-set-0-weight"),
       "135",
     );

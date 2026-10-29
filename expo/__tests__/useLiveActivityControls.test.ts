@@ -10,6 +10,10 @@
 import { act, renderHook } from "@testing-library/react-native";
 import {
   LIVE_ACTIVITY_LOG_SET,
+  LIVE_ACTIVITY_REPS_DOWN,
+  LIVE_ACTIVITY_REPS_UP,
+  LIVE_ACTIVITY_REST_SKIP,
+  LIVE_ACTIVITY_REST_TOGGLE,
   LIVE_ACTIVITY_WEIGHT_DOWN,
   LIVE_ACTIVITY_WEIGHT_UP,
   useLiveActivityControls,
@@ -124,5 +128,43 @@ describe("useLiveActivityControls", () => {
         useLiveActivityControls({ ...baseOptions(), subscribe: throwing }),
       ).unmount(),
     ).not.toThrow();
+  });
+
+  it("steps reps by one each way (Jon, 2026-10-29)", () => {
+    const { subscribe, fire } = subscribable();
+    const onAdjustReps = jest.fn();
+    renderHook(() =>
+      useLiveActivityControls({ ...baseOptions(), subscribe, onAdjustReps }),
+    );
+    fire({ source: WORKOUT_LIVE_ACTIVITY_NAME, target: LIVE_ACTIVITY_REPS_UP });
+    fire({ source: WORKOUT_LIVE_ACTIVITY_NAME, target: LIVE_ACTIVITY_REPS_DOWN });
+    expect(onAdjustReps).toHaveBeenNthCalledWith(1, 1);
+    expect(onAdjustReps).toHaveBeenNthCalledWith(2, -1);
+  });
+
+  it("pauses/resumes and skips the rest only while resting", () => {
+    const { subscribe, fire } = subscribable();
+    const onToggleRest = jest.fn();
+    const onSkipRest = jest.fn();
+    const { rerender } = renderHook(
+      ({ resting }: { resting: boolean }) =>
+        useLiveActivityControls({
+          ...baseOptions(),
+          subscribe,
+          resting,
+          onToggleRest,
+          onSkipRest,
+        }),
+      { initialProps: { resting: false } },
+    );
+    fire({ source: WORKOUT_LIVE_ACTIVITY_NAME, target: LIVE_ACTIVITY_REST_TOGGLE });
+    fire({ source: WORKOUT_LIVE_ACTIVITY_NAME, target: LIVE_ACTIVITY_REST_SKIP });
+    expect(onToggleRest).not.toHaveBeenCalled();
+    expect(onSkipRest).not.toHaveBeenCalled();
+    rerender({ resting: true });
+    fire({ source: WORKOUT_LIVE_ACTIVITY_NAME, target: LIVE_ACTIVITY_REST_TOGGLE });
+    fire({ source: WORKOUT_LIVE_ACTIVITY_NAME, target: LIVE_ACTIVITY_REST_SKIP });
+    expect(onToggleRest).toHaveBeenCalledTimes(1);
+    expect(onSkipRest).toHaveBeenCalledTimes(1);
   });
 });

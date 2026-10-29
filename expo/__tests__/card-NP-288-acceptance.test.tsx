@@ -39,6 +39,16 @@ import { KeyboardDoneBar } from "@/components/live/KeyboardDoneBar";
 import { upNextDetail, formatRest } from "@/components/live/RestOverlay";
 import { getTokens } from "@/lib/theme/tokens";
 
+// Track ticks a set when the member LEAVES the box, not on the keystroke
+// (Jon, 2026-10-29), so a test that types a value leaves the box as well.
+function typeIn(
+  element: Parameters<typeof fireEvent.changeText>[0],
+  text: string,
+): void {
+  fireEvent.changeText(element, text);
+  fireEvent(element, "endEditing");
+}
+
 const EXPO_DIR = path.resolve(__dirname, "..");
 const read = (rel: string) => fs.readFileSync(path.join(EXPO_DIR, rel), "utf8");
 
@@ -156,7 +166,7 @@ describe("(id: np288-step) The Live view is the web's full-screen step", () => {
     const typed = render(
       <LiveWorkoutClient enableSkipFlow workout={TWO_SETS} initialView="live" />,
     );
-    fireEvent.changeText(
+    typeIn(
       typed.getByTestId("live-workout-live-cable-woodchopper-set-0-reps"),
       "10",
     );
@@ -284,11 +294,11 @@ describe("(id: np288-rest) The rest overlay carries Up next and the presets", ()
     );
 
     // Typing is not logging: no rest while the member is still typing.
-    fireEvent.changeText(
+    typeIn(
       getByTestId("live-workout-live-cable-woodchopper-set-0-weight"),
       "40",
     );
-    fireEvent.changeText(
+    typeIn(
       getByTestId("live-workout-live-cable-woodchopper-set-0-reps"),
       "12",
     );
@@ -396,8 +406,8 @@ describe("(id: np288-update-set) No Update Set? for a set nobody completed", () 
     // A thumb types 18 as "1" then "18" — two renders. The first digit used
     // to tick the set done (and start the rest), which is what made the
     // snapshot disagree with the row.
-    fireEvent.changeText(getByTestId("live-workout-live-twist-set-0-reps"), "1");
-    fireEvent.changeText(getByTestId("live-workout-live-twist-set-0-reps"), "18");
+    typeIn(getByTestId("live-workout-live-twist-set-0-reps"), "1");
+    typeIn(getByTestId("live-workout-live-twist-set-0-reps"), "18");
     expect(queryByTestId("live-workout-rest")).toBeNull();
     expect(
       (onGridChange.mock.calls.at(-1)![0] as LiveGrid).twist![0]!.completed,
@@ -417,12 +427,12 @@ describe("(id: np288-update-set) No Update Set? for a set nobody completed", () 
       <LiveWorkoutClient workout={REPS_ONLY} onGridChange={onGridChange} />,
     );
     // Logged in TRACK, where typing is logging (the web's Track rule).
-    fireEvent.changeText(getByTestId("live-workout-twist-set-0-reps"), "18");
+    typeIn(getByTestId("live-workout-twist-set-0-reps"), "18");
     fireEvent.press(getByTestId("live-workout-view-live"));
     // Live opens on set 2; step back onto the logged one and change it.
     fireEvent.press(getByTestId("live-workout-live-prev"));
     expect(stepText(getByTestId)).toBe("Exercise 1/1 • Set 1/2");
-    fireEvent.changeText(getByTestId("live-workout-live-twist-set-0-reps"), "20");
+    typeIn(getByTestId("live-workout-live-twist-set-0-reps"), "20");
     fireEvent.press(getByTestId("live-workout-live-complete"));
 
     expect(getByTestId("live-workout-edit-modal")).toBeTruthy();
@@ -463,11 +473,11 @@ describe("(id: np288-last-set) The Last set line and the keyboard Done key", () 
     );
     // Set 1: nothing before it, so no line at all.
     expect(queryByTestId("live-workout-live-last-set")).toBeNull();
-    fireEvent.changeText(
+    typeIn(
       getByTestId("live-workout-live-cable-woodchopper-set-0-weight"),
       "40",
     );
-    fireEvent.changeText(
+    typeIn(
       getByTestId("live-workout-live-cable-woodchopper-set-0-reps"),
       "12",
     );

@@ -811,7 +811,14 @@ export function useLiveWorkout(
         originalExerciseSlug: origSlug,
         swappedFromName: origName,
         videoUrl: candidate.videoUrl ?? undefined,
-        thumbnailUrl: undefined,
+        // The replacement's OWN still when the alternatives row carries one
+        // (the swap list draws it), so the Lock Screen tile follows the swap.
+        // `thumbnailUrl` is passthrough on the candidate schema, hence the
+        // type check.
+        thumbnailUrl:
+          typeof (candidate as { thumbnailUrl?: unknown }).thumbnailUrl === "string"
+            ? ((candidate as { thumbnailUrl?: string }).thumbnailUrl as string)
+            : undefined,
         videoWidth: null,
         videoHeight: null,
         videoFraming: null,
