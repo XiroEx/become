@@ -174,7 +174,8 @@ describe("cardio inputs: which rows ask for what (id: e5cece51)", () => {
       />,
     );
     fireEvent.changeText(getByTestId("live-set-0-speed"), "6.5");
-    expect(onChange).toHaveBeenCalledWith(
+    // A keystroke also carries { typing: true }; check the set it sent.
+    expect(onChange.mock.calls.map((c: unknown[]) => c[0])).toContainEqual(
       expect.objectContaining({ speed: 6.5 }),
     );
   });
@@ -196,7 +197,8 @@ describe("the sec/min toggle stores seconds (id: e5cece52)", () => {
       "Time (min)",
     );
     fireEvent.changeText(getByTestId("live-set-0-duration"), "2");
-    expect(onChange).toHaveBeenCalledWith(
+    // A keystroke also carries { typing: true }; check the set it sent.
+    expect(onChange.mock.calls.map((c: unknown[]) => c[0])).toContainEqual(
       expect.objectContaining({ durationSec: 120 }),
     );
   });
@@ -227,7 +229,8 @@ describe("the sec/min toggle stores seconds (id: e5cece52)", () => {
     // 120 s reads as 2 min; typing 3 min stores 180 s.
     expect(getByTestId("live-set-0-duration").props.value).toBe("2");
     fireEvent.changeText(getByTestId("live-set-0-duration"), "3");
-    expect(onChange).toHaveBeenCalledWith(
+    // A keystroke also carries { typing: true }; check the set it sent.
+    expect(onChange.mock.calls.map((c: unknown[]) => c[0])).toContainEqual(
       expect.objectContaining({ durationSec: 180 }),
     );
   });
