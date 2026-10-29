@@ -86,9 +86,17 @@ export function ProgressFill({
     );
   }, [clamped, durationMs, reduced, from, to, p]);
 
-  const fill = useAnimatedStyle(() => ({
-    width: `${from.value + (clamped - from.value) * p.value}%`,
-  }));
+  // `[clamped]` is load-bearing. Without a dependency array the worklet kept
+  // the `clamped` it was first built with, so moving to a day with nothing
+  // logged animated toward the PREVIOUS day's percentage and the macro bars
+  // kept yesterday's colour (Jon, 2026-10-29). Rebuilding on `clamped` hands
+  // the worklet the new target the moment it changes.
+  const fill = useAnimatedStyle(
+    () => ({
+      width: `${from.value + (clamped - from.value) * p.value}%`,
+    }),
+    [clamped],
+  );
 
   return (
     <Animated.View
