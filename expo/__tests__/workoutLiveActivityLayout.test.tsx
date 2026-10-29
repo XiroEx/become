@@ -163,18 +163,18 @@ describe("WorkoutLiveActivityLayout controls", () => {
     expect(texts(found)).toContain("Bench Press");
   });
 
-  it("banner while resting keeps the countdown and draws only the steppers", () => {
+  it("banner while resting keeps the countdown, the steppers, and Pause + Skip instead of Log", () => {
     const found = rendered(layoutFn()(restingProps()).banner);
-    expect(targets(found)).toEqual(["weight-down", "weight-up"]);
+    expect(targets(found)).toEqual(["weight-down", "weight-up", "rest-toggle", "rest-skip"]);
     expect(timers(found)).toHaveLength(1);
     expect(texts(found)).toContain("135 lbs");
   });
 
-  it("banner while resting with no load draws no buttons at all", () => {
+  it("banner while resting with no load still offers Pause and Skip", () => {
     const found = rendered(
       layoutFn()({ ...LIFTING, phase: "rest", restEndsAtMs: Date.now() + 90_000, restTotalSec: 90 }).banner,
     );
-    expect(targets(found)).toEqual([]);
+    expect(targets(found)).toEqual(["rest-toggle", "rest-skip"]);
     expect(timers(found)).toHaveLength(1);
   });
 
@@ -184,10 +184,36 @@ describe("WorkoutLiveActivityLayout controls", () => {
     expect(texts(lifting)).toContain("Bench Press");
 
     const resting = rendered(layoutFn()(restingProps()).expandedBottom);
-    expect(targets(resting)).toEqual(["weight-down", "weight-up"]);
+    expect(targets(resting)).toEqual(["weight-down", "weight-up", "rest-toggle", "rest-skip"]);
 
     const unweighed = rendered(layoutFn()(LIFTING).expandedBottom);
     expect(targets(unweighed)).toEqual([]);
+  });
+
+  it("draws reps steppers beside the weight ones (Jon, 2026-10-29)", () => {
+    const found = rendered(layoutFn()(weighed({ repsLabel: "8 reps" })).banner);
+    expect(targets(found)).toEqual([
+      "weight-down",
+      "weight-up",
+      "reps-down",
+      "reps-up",
+      "log-set",
+    ]);
+    expect(texts(found)).toContain("8 reps");
+    // Bodyweight work: reps only.
+    const bodyweight = rendered(layoutFn()({ ...LIFTING, repsLabel: "12 reps" }).banner);
+    expect(targets(bodyweight)).toEqual(["reps-down", "reps-up", "log-set"]);
+  });
+
+  it("a PAUSED rest draws the time left frozen, not a running countdown, and offers Resume", () => {
+    const paused = rendered(
+      layoutFn()(
+        restingProps({ restEndsAtMs: null, restPaused: true, restRemainingLabel: "1:23" }),
+      ).banner,
+    );
+    expect(timers(paused)).toHaveLength(0);
+    expect(texts(paused)).toContain("1:23");
+    expect(targets(paused)).toEqual(["weight-down", "weight-up", "rest-toggle", "rest-skip"]);
   });
 
   it("uses @expo/ui swift-ui views and modifiers only — nothing else is in scope natively", () => {

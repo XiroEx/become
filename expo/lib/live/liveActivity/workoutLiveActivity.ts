@@ -60,6 +60,21 @@ export interface WorkoutLiveActivityProps {
    */
   weightLabel?: string;
   /**
+   * The current set's reps, e.g. `"8 reps"`, drawn beside its own − / +
+   * (Jon, 2026-10-29). Omitted for work that tracks no reps (timed, cardio).
+   * Omitted, never null (PR #2159).
+   */
+  repsLabel?: string;
+  /**
+   * True while the member has PAUSED the rest. A paused rest has no end
+   * instant (`restEndsAtMs` is null), so the layout draws
+   * `restRemainingLabel` frozen instead of a live countdown, and offers
+   * Resume where Pause was. Omitted when the rest is running or absent.
+   */
+  restPaused?: boolean;
+  /** "1:23", the time left in a paused rest. Present only with `restPaused`. */
+  restRemainingLabel?: string;
+  /**
    * A `file://` URI of the current exercise's still frame, cached in the
    * App Group the widget extension shares (`group.io.redbtn.become` — see
    * `exerciseFrameCache.ts`). The extension cannot play video, so it draws

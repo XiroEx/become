@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createExerciseThumbnailLookup } from "@/lib/live/liveActivity/exerciseThumbnailLookup";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { View } from "react-native";
 import { useLiveNativeSurfaces } from "@/lib/live/useLiveNativeSurfaces";
@@ -134,6 +135,12 @@ export default function LiveWorkoutRoute({
   const router = useRouter();
   const { colors } = useThemeTokens();
   const { token } = useAuth();
+  // The Lock Screen tile's still for an exercise added or swapped in without
+  // one (Jon, 2026-10-29). One lookup per session token.
+  const lookupExerciseThumbnail = useMemo(
+    () => createExerciseThumbnailLookup(token),
+    [token],
+  );
   // The member's lifting-load unit (NP-209 / NP-080): `profile.weightUnit ??
   // 'lbs'`, read ONCE here and handed to the live views and the summary, so
   // every load on this screen agrees. Native never asks for it — the web gate
@@ -538,6 +545,7 @@ export default function LiveWorkoutRoute({
         </View>
       ) : null}
       <LiveWorkoutClient
+        lookupExerciseThumbnail={lookupExerciseThumbnail}
         workout={vm}
         initialView={initialView}
         weightUnit={liftingUnit}
