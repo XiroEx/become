@@ -73,8 +73,10 @@ describe("LiveSetRow", () => {
       />,
     );
     fireEvent.changeText(getByTestId("live-set-0-weight"), "135");
+    // A keystroke is marked as typing: Track ticks on leaving the box.
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({ weight: 135 }),
+      { typing: true },
     );
   });
 
@@ -89,8 +91,10 @@ describe("LiveSetRow", () => {
       />,
     );
     fireEvent.changeText(getByTestId("live-set-0-reps"), "8");
+    // A keystroke is marked as typing: Track ticks on leaving the box.
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({ reps: 8 }),
+      { typing: true },
     );
   });
 
@@ -185,5 +189,21 @@ describe("LiveSetRow", () => {
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({ completed: true }),
     );
+  });
+
+  it("reports leaving any number box, which is when Track ticks a filled set", () => {
+    const onCommit = jest.fn();
+    const { getByTestId } = render(
+      <LiveSetRow
+        setIndex={0}
+        bell={{ style: null, showTotal: false }}
+        state={baseState}
+        onChange={jest.fn()}
+        onCommit={onCommit}
+      />,
+    );
+    fireEvent(getByTestId("live-set-0-reps"), "endEditing");
+    fireEvent(getByTestId("live-set-0-weight"), "endEditing");
+    expect(onCommit).toHaveBeenCalledTimes(2);
   });
 });

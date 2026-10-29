@@ -55,7 +55,13 @@ export interface TrackWorkoutViewProps {
     exerciseIndex: number,
     setIndex: number,
     next: LiveSetState,
+    opts?: { typing?: boolean },
   ) => void;
+  /**
+   * The member left a number box on this set: a filled set ticks now, not
+   * on the keystroke (Jon, 2026-10-29). Omitted, keystrokes tick as before.
+   */
+  onSetCommit?: (exerciseIndex: number, setIndex: number) => void;
   onRequestSwap?: (slug: string) => void;
   /**
    * The member's lifting-load unit (`profile.weightUnit ?? 'lbs'`, NP-209) —
@@ -216,6 +222,7 @@ export function TrackWorkoutView({
   totalRounds,
   onRoundChange,
   onSetChange,
+  onSetCommit,
   onRequestSwap,
   weightUnit = DEFAULT_LOAD_UNIT,
   bellChoices,
@@ -585,7 +592,8 @@ export function TrackWorkoutView({
                   setDurationUnits((prev) => ({ ...prev, [ex.slug]: next }))
                 }
                 testID={`${testID}-${ex.slug}-set-${i}`}
-                onChange={(next) => onSetChange(exIdx, i, next)}
+                onChange={(next, opts) => onSetChange(exIdx, i, next, opts)}
+                onCommit={() => onSetCommit?.(exIdx, i)}
               />
             ))}
             {onExerciseChange ? (
@@ -827,7 +835,8 @@ export function TrackWorkoutView({
                           setDurationUnits((prev) => ({ ...prev, [ex.slug]: next }))
                         }
                         testID={`${testID}-${ex.slug}-set-${r}`}
-                        onChange={(next) => onSetChange(exIdx, r, next)}
+                        onChange={(next, opts) => onSetChange(exIdx, r, next, opts)}
+                        onCommit={() => onSetCommit?.(exIdx, r)}
                       />
                     </View>
                   );

@@ -29,6 +29,16 @@ import { apiFetch } from "@become/api-client";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { createMemoryKeyValueStore } from "@/lib/live/liveWorkoutCache";
 import LiveWorkoutRoute from "../app/(app)/(tabs)/programming/[id]/workout/[idx]/live";
+
+// Track ticks a set when the member LEAVES the box, not on the keystroke
+// (Jon, 2026-10-29), so a test that types a value leaves the box as well.
+function typeIn(
+  element: Parameters<typeof fireEvent.changeText>[0],
+  text: string,
+): void {
+  fireEvent.changeText(element, text);
+  fireEvent(element, "endEditing");
+}
 /* eslint-enable import/first */
 
 const mockApiFetch = apiFetch as unknown as jest.Mock;
@@ -145,7 +155,7 @@ describe("LiveWorkoutRoute", () => {
       expect(first.getByTestId("live-workout-bench-set-0-weight")).toBeTruthy();
     });
     await act(async () => {
-      fireEvent.changeText(
+      typeIn(
         first.getByTestId("live-workout-bench-set-0-weight"),
         "135",
       );
@@ -236,22 +246,22 @@ describe("LiveWorkoutRoute", () => {
     // input). BOTH sets, because Complete Workout only exists once the whole
     // workout is done — the web's rule, ported in NP-087.
     await act(async () => {
-      fireEvent.changeText(
+      typeIn(
         getByTestId("live-workout-bench-set-0-weight"),
         "225",
       );
     });
     await act(async () => {
-      fireEvent.changeText(getByTestId("live-workout-bench-set-0-reps"), "5");
+      typeIn(getByTestId("live-workout-bench-set-0-reps"), "5");
     });
     await act(async () => {
-      fireEvent.changeText(
+      typeIn(
         getByTestId("live-workout-bench-set-1-weight"),
         "225",
       );
     });
     await act(async () => {
-      fireEvent.changeText(getByTestId("live-workout-bench-set-1-reps"), "5");
+      typeIn(getByTestId("live-workout-bench-set-1-reps"), "5");
     });
     await act(async () => {
       fireEvent.press(getByTestId("live-workout-finish"));
@@ -339,22 +349,22 @@ describe("LiveWorkoutRoute", () => {
       expect(ok.getByTestId("live-workout-bench-set-0-weight")).toBeTruthy();
     });
     await act(async () => {
-      fireEvent.changeText(
+      typeIn(
         ok.getByTestId("live-workout-bench-set-0-weight"),
         "200",
       );
     });
     await act(async () => {
-      fireEvent.changeText(ok.getByTestId("live-workout-bench-set-0-reps"), "5");
+      typeIn(ok.getByTestId("live-workout-bench-set-0-reps"), "5");
     });
     await act(async () => {
-      fireEvent.changeText(
+      typeIn(
         ok.getByTestId("live-workout-bench-set-1-weight"),
         "200",
       );
     });
     await act(async () => {
-      fireEvent.changeText(ok.getByTestId("live-workout-bench-set-1-reps"), "5");
+      typeIn(ok.getByTestId("live-workout-bench-set-1-reps"), "5");
     });
     // Cache populated by the in-flight edit.
     await waitFor(async () => {
@@ -388,25 +398,25 @@ describe("LiveWorkoutRoute", () => {
       expect(fail.getByTestId("live-workout-bench-set-0-weight")).toBeTruthy();
     });
     await act(async () => {
-      fireEvent.changeText(
+      typeIn(
         fail.getByTestId("live-workout-bench-set-0-weight"),
         "200",
       );
     });
     await act(async () => {
-      fireEvent.changeText(
+      typeIn(
         fail.getByTestId("live-workout-bench-set-0-reps"),
         "5",
       );
     });
     await act(async () => {
-      fireEvent.changeText(
+      typeIn(
         fail.getByTestId("live-workout-bench-set-1-weight"),
         "200",
       );
     });
     await act(async () => {
-      fireEvent.changeText(
+      typeIn(
         fail.getByTestId("live-workout-bench-set-1-reps"),
         "5",
       );
