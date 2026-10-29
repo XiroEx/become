@@ -154,6 +154,8 @@ describe("signed in with today's snapshot", () => {
       progress: 0.857,
       rings: [],
       url: "become://dashboard/nutrition",
+      // The medium tile's "+" opens food search (Jon, 2026-10-29).
+      addUrl: "become://dashboard/nutrition?log=true",
     });
     // Absent, never null: the bridge cannot decode a JSON null.
     if (first?.signedIn !== true) throw new Error("expected a signed-in row");

@@ -45,20 +45,28 @@
  * verifying the tap on a real device / simulator.
  *
  * PRIMITIVES ONLY. `@expo/ui/swift-ui` Text / VStack / HStack / Spacer /
- * ProgressView / Link — every one rendered by the extension's `DynamicView`
- * (`TextView`, `VStackView`, `HStackView`, `SpacerView`, `ProgressView`,
- * `LinkView`). Nothing else from `@expo/ui` may appear here: an unmapped view
+ * ProgressView / Link / Gauge / Image — every one rendered by the extension's
+ * `DynamicView` (`TextView`, `VStackView`, `HStackView`, `SpacerView`,
+ * `ProgressView`, `LinkView`, `GaugeView`, `ImageView`). Nothing else from `@expo/ui` may appear here: an unmapped view
  * is an `EmptyView` in release with no error anywhere.
  */
 import {
+  Gauge,
   HStack,
+  Image,
   Link,
   ProgressView,
   Spacer,
   Text,
   VStack,
 } from "@expo/ui/swift-ui";
-import { containerBackground, font, widgetURL } from "@expo/ui/swift-ui/modifiers";
+import {
+  containerBackground,
+  font,
+  gaugeStyle,
+  tint,
+  widgetURL,
+} from "@expo/ui/swift-ui/modifiers";
 import type { WidgetState } from "@become/api-client";
 import type { IosWidgetProps } from "@/lib/widgets/iosTimeline";
 
@@ -200,6 +208,74 @@ export function BecomeWidget(
               : `${props.title}: ${props.headline} · ${props.caption}`}
           </Text>
         </Link>
+      </VStack>
+    );
+  }
+  // THE NUTRITION TILE, MEDIUM (Jon, 2026-10-29): calories eaten top right
+  // with what is left under it, one filling ring per macro in the Nutrition
+  // screen's colours (protein blue-600, carbs green-600, fats yellow-400,
+  // `CalorieRing.tsx`), as the nearest CSS names (royalblue, seagreen, gold):
+  // hand-written hex and rgb() are banned (NP-123), the theme hook cannot run
+  // in the extension, and a widget's colour is fixed in both schemes anyway, with its grams and name under it (a Gauge's own
+  // value label is a slot view, which the widget renderer does not map), and
+  // a "+" bottom right that opens food search.
+  // `addUrl` is sent for the nutrition row only, so it selects this layout.
+  // Everything is inline: the extension evaluates this source alone.
+  if (family === "systemMedium" && props.addUrl) {
+    return (
+      <VStack alignment="leading" spacing={6} modifiers={[widgetURL(props.url), containerBackground({ type: "material", material: "regular" }, "widget")]}>
+        <HStack alignment="top" spacing={4}>
+          <Text modifiers={[font({ size: 13, weight: "semibold" })]}>
+            {props.title}
+          </Text>
+          <Spacer />
+          <VStack alignment="trailing" spacing={0}>
+            <Text modifiers={[font({ size: 17, weight: "bold" })]}>
+              {/* Thousands comma by arithmetic: the 'widget' stringifier strips a
+                  regex's backslashes, so /\B…/ would not survive to the device. */}
+              {(props.rings.find((ring) => ring.label === "Cal") ?? { value: 0 }).value >= 1000
+                ? `${Math.floor((props.rings.find((ring) => ring.label === "Cal") ?? { value: 0 }).value / 1000)},${String((props.rings.find((ring) => ring.label === "Cal") ?? { value: 0 }).value % 1000).padStart(3, "0")} cal`
+                : `${(props.rings.find((ring) => ring.label === "Cal") ?? { value: 0 }).value} cal`}
+            </Text>
+            <Text modifiers={[font({ size: 11 })]}>
+              {props.headlineUnit
+                ? `${props.headline} ${props.headlineUnit}`
+                : props.headline}
+            </Text>
+          </VStack>
+        </HStack>
+        <Spacer />
+        <HStack alignment="bottom" spacing={14}>
+          {props.rings
+            .filter((ring) => ring.label !== "Cal")
+            .map((ring) => (
+              <VStack key={ring.label} alignment="center" spacing={3}>
+                <Gauge
+                  value={typeof ring.pct === "number" ? ring.pct : 0}
+                  min={0}
+                  max={1}
+                  modifiers={[
+                    gaugeStyle("circularCapacity"),
+                    tint(
+                      ring.label === "Protein"
+                        ? "royalblue"
+                        : ring.label === "Carbs"
+                          ? "seagreen"
+                          : "gold",
+                    ),
+                  ]}
+                />
+                <Text modifiers={[font({ size: 12, weight: "semibold" })]}>
+                  {`${ring.value}${ring.unit}`}
+                </Text>
+                <Text modifiers={[font({ size: 10 })]}>{ring.label}</Text>
+              </VStack>
+            ))}
+          <Spacer />
+          <Link destination={props.addUrl}>
+            <Image systemName="plus.circle.fill" size={34} color="seagreen" />
+          </Link>
+        </HStack>
       </VStack>
     );
   }

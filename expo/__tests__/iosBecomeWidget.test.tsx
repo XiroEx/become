@@ -515,3 +515,90 @@ describe("BecomeWidget — family fallback", () => {
     }
   });
 });
+
+describe("BecomeWidget — medium Nutrition (rings, calories, +)", () => {
+  // Jon, 2026-10-29: calories top right with what is left, a filling ring per
+  // macro in the Nutrition screen's colours, and a "+" bottom right to log.
+  const medium = { widgetFamily: "systemMedium" };
+  const ADD = "become://dashboard/nutrition?log=true";
+  function withAdd(): IosWidgetProps {
+    const props = nutritionProps();
+    if (props.signedIn !== true) throw new Error("expected signed-in props");
+    return { ...props, addUrl: ADD };
+  }
+
+  function tints(node: Host | null, out: unknown[] = []): unknown[] {
+    if (!node) return out;
+    const mods = node.props["modifiers"];
+    if (Array.isArray(mods)) {
+      for (const m of mods) {
+        const mod = m as Record<string, unknown>;
+        if (mod && mod["$type"] === "tint") out.push(mod["color"] ?? mod["tint"] ?? mod["style"]);
+      }
+    }
+    for (const child of node.children ?? []) tints(child, out);
+    return out;
+  }
+
+  it("puts calories eaten and what is left at the top, and a ring per macro", () => {
+    const found = texts(rendered(withAdd(), medium));
+    expect(found).toContain("Nutrition");
+    expect(found).toContain("1,180 cal");
+    expect(found).toContain("820 cal left");
+    for (const t of ["120g", "Protein", "180g", "Carbs", "40g", "Fat"]) {
+      expect(found).toContain(t);
+    }
+    // The old bar rows are gone from this tile.
+    expect(found).not.toContain("Cal 1180cal");
+    // Three rings, filled to each macro's share of its target; no Cal ring.
+    expect(bars(rendered(withAdd(), medium))).toEqual([0.75, 0.75, 0.67]);
+  });
+
+  it("colours the rings like the Nutrition screen: protein blue, carbs green, fats yellow", () => {
+    expect(JSON.stringify(tints(rendered(withAdd(), medium)))).toBe(
+      JSON.stringify([
+        tints(rendered(withAdd(), medium))[0],
+        tints(rendered(withAdd(), medium))[1],
+        tints(rendered(withAdd(), medium))[2],
+      ]),
+    );
+    const src = BecomeWidget as unknown as string;
+    for (const colour of ["royalblue", "seagreen", "gold"]) {
+      expect(src).toContain(colour);
+    }
+  });
+
+  it("has a + that logs a meal, and still opens Nutrition on any other tap", () => {
+    const targets = tapTargets(rendered(withAdd(), medium));
+    expect(targets).toContain(ADD);
+    expect(targets).toContain("become://dashboard/nutrition");
+  });
+
+  it("an empty ring is drawn at zero, not left out", () => {
+    const props = withAdd();
+    if (props.signedIn !== true) throw new Error("expected signed-in props");
+    const empty = {
+      ...props,
+      rings: props.rings.map((r) => ({ ...r, value: 0, pct: 0 })),
+    };
+    expect(bars(rendered(empty, medium))).toEqual([0, 0, 0]);
+  });
+
+  it("renders with nothing but the extension's own scope", () => {
+    const src = BecomeWidget as unknown as string;
+    const scope: Record<string, unknown> = {
+      ...swiftUI,
+      ...modifiers,
+      React,
+      _jsx: jsx,
+      _jsxs: jsxs,
+      jsx,
+      jsxs,
+    };
+    const names = Object.keys(scope);
+    const bare = (
+      new Function(...names, `"use strict"; return (${src});`) as (...a: unknown[]) => LayoutFn
+    )(...names.map((n) => scope[n]));
+    expect(() => render(bare(withAdd(), medium) as never)).not.toThrow();
+  });
+});
