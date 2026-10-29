@@ -1821,6 +1821,9 @@ export function LiveWorkoutClient({
               exerciseHints={exerciseHints}
               onDismissHint={onDismissHint}
               onExerciseChange={onExerciseChange}
+              {...(manageExercises?.onAdd
+                ? { onAddExercise: manageExercises.onAdd }
+                : {})}
             />
             {/* Track keeps the compact rest bar: the web's Track page has no
                 rest UI at all, and a full-screen overlay there would cover the
