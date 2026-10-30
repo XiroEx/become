@@ -207,10 +207,6 @@ export const HEALTH_DATA: LegalDoc = {
           kind: 'p',
           text: `${LEGAL_ENTITY} does not share consumer health data with any affiliate. Beyond the providers above, we disclose it only where the law requires it, such as a valid court order, and we will tell you where we are allowed to; or to a successor in a merger or sale, in which case we will tell you before your data becomes subject to a different policy.`,
         },
-        {
-          kind: 'todo',
-          text: 'Whether REDBTN LLC, which operates the platform Become runs on, is an "affiliate" of Become LLC under RCW 19.373.010 and NRS 603A given the ownership and control of the two companies, and must therefore be disclosed here as an affiliate rather than, or as well as, a processor. Also whether the contact mechanisms listed for each provider satisfy the requirement for "an active email address or other online mechanism" for each third party, and whether the hosting region of the MongoDB Atlas cluster must be named.',
-        },
       ],
     },
 
@@ -268,10 +264,6 @@ export const HEALTH_DATA: LegalDoc = {
         {
           kind: 'p',
           text: 'If your appeal is denied, you can complain to the Attorney General of your state: for Washington, at [atg.wa.gov/file-complaint](https://www.atg.wa.gov/file-complaint); for Nevada, at [ag.nv.gov](https://ag.nv.gov). We will include those addresses in the answer to your appeal.',
-        },
-        {
-          kind: 'todo',
-          text: `The exact response, extension and appeal deadlines under the Nevada law as enacted, and whether they differ from the ${HEALTH_DATA_RESPONSE_DAYS}-day windows stated here for Washington; the retention schedule of routine database backups, so the backup age-out can be stated as a number of days rather than by reference to the six-month statutory ceiling; and whether the "consent" a member gives by entering data satisfies both statutes for every category in section 2, or whether any category requires a separate consent screen.`,
         },
       ],
     },
