@@ -160,6 +160,8 @@ export default function NutritionIndexRoute() {
     date?: string;
     quickAdd?: string;
     view?: string;
+    /** `log=true`: open food search on arrival (the Nutrition widget's "+"). */
+    log?: string;
   }>();
 
   const [viewMode, setViewMode] = useState<NutritionViewMode>(() => {
@@ -1535,6 +1537,18 @@ export default function NutritionIndexRoute() {
   const [addToLogId, setAddToLogId] = useState<string | null>(null);
   // A saved meal picked from the Meals filter waits here for its portion.
   const [mealToLog, setMealToLog] = useState<Meal | null>(null);
+
+  // The Nutrition widget's "+" (Jon, 2026-10-29) opens the app here with
+  // `log=true`: start logging immediately, as the screen's own "+" does. Once
+  // per arrival, keyed on the param, so a re-render cannot reopen it.
+  const logOpenedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (params.log !== "true" || logOpenedFor.current === params.log) return;
+    logOpenedFor.current = params.log;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync from route param (widget deep link)
+    openSearch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- openSearch is recreated every render; the param is the trigger
+  }, [params.log]);
   const [mealLogSubmitting, setMealLogSubmitting] = useState(false);
   const [mealLogError, setMealLogError] = useState<string | null>(null);
   // Plan mode on a future day (NP-232): a food picked from the search sheet

@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Pressable, View } from "react-native";
 import { Text } from "@/components/Text";
 import { Input } from "@/components/Input";
-import { ArrowUpDown, ChevronDown, Layers, Trash2, Unlink } from "lucide-react-native";
+import { ArrowUpDown, ChevronDown, Layers, Plus, Trash2, Unlink } from "lucide-react-native";
+import { needsMoreExercises } from "@become/core";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { onDarkForeground, rgbOf, webGradientTokens } from "@/lib/theme/tokens";
 import { WebGradient } from "@/components/WebGradient";
@@ -54,7 +55,13 @@ export interface TrackWorkoutViewProps {
     exerciseIndex: number,
     setIndex: number,
     next: LiveSetState,
+    opts?: { typing?: boolean },
   ) => void;
+  /**
+   * The member left a number box on this set: a filled set ticks now, not
+   * on the keystroke (Jon, 2026-10-29). Omitted, keystrokes tick as before.
+   */
+  onSetCommit?: (exerciseIndex: number, setIndex: number) => void;
   onRequestSwap?: (slug: string) => void;
   /**
    * The member's lifting-load unit (`profile.weightUnit ?? 'lbs'`, NP-209) —
@@ -98,6 +105,12 @@ export interface TrackWorkoutViewProps {
     exercises: LiveWorkoutExercise[];
     order: number[];
   }) => void;
+  /**
+   * Open the add-exercise sheet: the web Track page's dashed "Add exercise"
+   * button under the last exercise (`data-testid="track-add-exercise"` in
+   * WorkoutFormClient). Omitted, no button is drawn.
+   */
+  onAddExercise?: () => void;
   testID: string;
 }
 
@@ -209,6 +222,7 @@ export function TrackWorkoutView({
   totalRounds,
   onRoundChange,
   onSetChange,
+  onSetCommit,
   onRequestSwap,
   weightUnit = DEFAULT_LOAD_UNIT,
   bellChoices,
@@ -217,6 +231,7 @@ export function TrackWorkoutView({
   notes,
   onNotesChange,
   showNotes,
+  onAddExercise,
   exerciseHints,
   onDismissHint,
   onExerciseChange,
@@ -577,7 +592,8 @@ export function TrackWorkoutView({
                   setDurationUnits((prev) => ({ ...prev, [ex.slug]: next }))
                 }
                 testID={`${testID}-${ex.slug}-set-${i}`}
-                onChange={(next) => onSetChange(exIdx, i, next)}
+                onChange={(next, opts) => onSetChange(exIdx, i, next, opts)}
+                onCommit={() => onSetCommit?.(exIdx, i)}
               />
             ))}
             {onExerciseChange ? (
@@ -819,7 +835,8 @@ export function TrackWorkoutView({
                           setDurationUnits((prev) => ({ ...prev, [ex.slug]: next }))
                         }
                         testID={`${testID}-${ex.slug}-set-${r}`}
-                        onChange={(next) => onSetChange(exIdx, r, next)}
+                        onChange={(next, opts) => onSetChange(exIdx, r, next, opts)}
+                        onCommit={() => onSetCommit?.(exIdx, r)}
                       />
                     </View>
                   );
@@ -900,6 +917,47 @@ export function TrackWorkoutView({
 
         return renderExerciseCard(ex, exIdx);
       })}
+
+      {/* Build as you go (the web's Track page): under the last exercise.
+          Below RECOMMENDED_MIN_EXERCISES it turns green to ask for more, the
+          web's nudge without the pulse. */}
+      {onAddExercise ? (
+        <Pressable
+          testID={`${testID}-track-add-exercise`}
+          onPress={onAddExercise}
+          accessibilityRole="button"
+          accessibilityLabel="Add exercise"
+          accessibilityHint={
+            needsMoreExercises(exercises.length)
+              ? `Only ${exercises.length} exercises. Most sessions run 4 or more`
+              : undefined
+          }
+          className={`flex-row items-center justify-center rounded-xl border-2 border-dashed py-3.5 ${
+            needsMoreExercises(exercises.length)
+              ? "border-green-400 bg-green-50 dark:border-green-600 dark:bg-green-900/20"
+              : "border-border"
+          }`}
+          style={{ gap: 8, marginTop: 4 }}
+        >
+          <Plus
+            size={16}
+            color={
+              needsMoreExercises(exercises.length)
+                ? colors.success
+                : colors["muted-foreground"]
+            }
+          />
+          <Text
+            className={`text-sm font-semibold ${
+              needsMoreExercises(exercises.length)
+                ? "text-green-600 dark:text-green-400"
+                : "text-muted-foreground"
+            }`}
+          >
+            Add exercise
+          </Text>
+        </Pressable>
+      ) : null}
 
       {/* Session notes — the web's textarea, which appears once any set is
           done and is saved as `notes` on the workout log. */}

@@ -4,6 +4,16 @@ import {
   type LiveWorkoutViewModel,
 } from "@/components/live/LiveWorkoutClient";
 
+// Track ticks a set when the member LEAVES the box, not on the keystroke
+// (Jon, 2026-10-29), so a test that types a value leaves the box as well.
+function typeIn(
+  element: Parameters<typeof fireEvent.changeText>[0],
+  text: string,
+): void {
+  fireEvent.changeText(element, text);
+  fireEvent(element, "endEditing");
+}
+
 const baseWorkout: LiveWorkoutViewModel = {
   programId: "prog-1",
   workoutTitle: "Push A",
@@ -194,7 +204,7 @@ describe("LiveWorkoutClient", () => {
     const { getByTestId } = render(
       <LiveWorkoutClient workout={workout} onGridChange={onGridChange} />,
     );
-    fireEvent.changeText(getByTestId("live-workout-db-bench-set-0-weight"), "30");
+    typeIn(getByTestId("live-workout-db-bench-set-0-weight"), "30");
     expect(onGridChange).toHaveBeenCalled();
     const lastGrid =
       onGridChange.mock.calls[onGridChange.mock.calls.length - 1]![0];
@@ -428,7 +438,7 @@ describe("LiveWorkoutClient — trackingType-aware set logging + cache rehydrate
     const { getByTestId } = render(
       <LiveWorkoutClient workout={trackedWorkout} onGridChange={onGridChange} />,
     );
-    fireEvent.changeText(getByTestId("live-workout-plank-set-0-duration"), "45");
+    typeIn(getByTestId("live-workout-plank-set-0-duration"), "45");
     const lastGrid = onGridChange.mock.calls.at(-1)![0];
     expect(lastGrid.plank[0].durationSec).toBe(45);
   });
@@ -440,8 +450,8 @@ describe("LiveWorkoutClient — trackingType-aware set logging + cache rehydrate
     );
     // A `time_distance` row opens in minutes (the web's `defaultDurationUnit`
     // rule), so typing 10 stores 600 s — the stored value is always seconds.
-    fireEvent.changeText(getByTestId("live-workout-run-set-0-duration"), "10");
-    fireEvent.changeText(getByTestId("live-workout-run-set-0-distance"), "1500");
+    typeIn(getByTestId("live-workout-run-set-0-duration"), "10");
+    typeIn(getByTestId("live-workout-run-set-0-distance"), "1500");
     const lastGrid = onGridChange.mock.calls.at(-1)![0];
     expect(lastGrid.run[0].durationSec).toBe(600);
     expect(lastGrid.run[0].distance).toBe(1500);
@@ -457,9 +467,9 @@ describe("LiveWorkoutClient — trackingType-aware set logging + cache rehydrate
     const { getByTestId } = render(
       <LiveWorkoutClient workout={trackedWorkout} onGridChange={onGridChange} />,
     );
-    fireEvent.changeText(getByTestId("live-workout-plank-set-0-duration"), "45");
-    fireEvent.changeText(getByTestId("live-workout-run-set-0-duration"), "10");
-    fireEvent.changeText(getByTestId("live-workout-pushup-set-0-reps"), "12");
+    typeIn(getByTestId("live-workout-plank-set-0-duration"), "45");
+    typeIn(getByTestId("live-workout-run-set-0-duration"), "10");
+    typeIn(getByTestId("live-workout-pushup-set-0-reps"), "12");
     const lastGrid = onGridChange.mock.calls.at(-1)![0];
     expect(lastGrid.plank[0].durationSec).toBe(45);
     expect(lastGrid.run[0].durationSec).toBe(600);
@@ -471,13 +481,13 @@ describe("LiveWorkoutClient — trackingType-aware set logging + cache rehydrate
     const { getByTestId } = render(
       <LiveWorkoutClient workout={trackedWorkout} onFinish={onFinish} />,
     );
-    fireEvent.changeText(getByTestId("live-workout-plank-set-0-duration"), "30");
-    fireEvent.changeText(getByTestId("live-workout-pushup-set-0-reps"), "8");
+    typeIn(getByTestId("live-workout-plank-set-0-duration"), "30");
+    typeIn(getByTestId("live-workout-pushup-set-0-reps"), "8");
     // Complete Workout only exists once every set is done (NP-087) — each of
     // these three sets ticks itself the moment its tracking type is satisfied,
     // so the cardio row has to be logged too before the button is there.
     // The run row opens in minutes, so 10 min stores 600 s.
-    fireEvent.changeText(getByTestId("live-workout-run-set-0-duration"), "10");
+    typeIn(getByTestId("live-workout-run-set-0-duration"), "10");
     fireEvent.press(getByTestId("live-workout-finish"));
     expect(onFinish).toHaveBeenCalledTimes(1);
     const finished = onFinish.mock.calls[0]![0];

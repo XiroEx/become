@@ -23,6 +23,12 @@ import { Platform } from "react-native";
 export const LIVE_ACTIVITY_WEIGHT_UP = "weight-up";
 export const LIVE_ACTIVITY_WEIGHT_DOWN = "weight-down";
 export const LIVE_ACTIVITY_LOG_SET = "log-set";
+/** The reps − / + beside the weight ones (Jon, 2026-10-29). */
+export const LIVE_ACTIVITY_REPS_UP = "reps-up";
+export const LIVE_ACTIVITY_REPS_DOWN = "reps-down";
+/** Pause / resume the rest, one button that flips with the state. */
+export const LIVE_ACTIVITY_REST_TOGGLE = "rest-toggle";
+export const LIVE_ACTIVITY_REST_SKIP = "rest-skip";
 
 /** The slice of `expo-widgets`' `UserInteractionEvent` this hook reads. */
 export interface LiveActivityUserInteraction {
@@ -74,6 +80,12 @@ export interface UseLiveActivityControlsOptions {
   onLogSet: () => void;
   /** While resting the steppers adjust the next set and Log is ignored. */
   resting: boolean;
+  /** Reps − / +: called with -1 or +1. Omitted, the reps buttons do nothing. */
+  onAdjustReps?: (delta: number) => void;
+  /** Pause a running rest, or resume a paused one. Only while resting. */
+  onToggleRest?: () => void;
+  /** End the rest now. Only while resting. */
+  onSkipRest?: () => void;
   /** DI for tests. Omitted, the real `expo-widgets` listener loads. */
   subscribe?: AddUserInteractionListener;
 }
@@ -86,7 +98,16 @@ export interface UseLiveActivityControlsOptions {
 export function useLiveActivityControls(
   options: UseLiveActivityControlsOptions,
 ): void {
-  const { weightStep, onAdjustWeight, onLogSet, resting, subscribe } = options;
+  const {
+    weightStep,
+    onAdjustWeight,
+    onLogSet,
+    resting,
+    subscribe,
+    onAdjustReps,
+    onToggleRest,
+    onSkipRest,
+  } = options;
   useEffect(() => {
     const add = loadUserInteractionListener(subscribe);
     if (!add) return;
@@ -106,6 +127,14 @@ export function useLiveActivityControls(
           onAdjustWeight(-weightStep);
         } else if (target === LIVE_ACTIVITY_LOG_SET && !resting) {
           onLogSet();
+        } else if (target === LIVE_ACTIVITY_REPS_UP) {
+          onAdjustReps?.(1);
+        } else if (target === LIVE_ACTIVITY_REPS_DOWN) {
+          onAdjustReps?.(-1);
+        } else if (target === LIVE_ACTIVITY_REST_TOGGLE && resting) {
+          onToggleRest?.();
+        } else if (target === LIVE_ACTIVITY_REST_SKIP && resting) {
+          onSkipRest?.();
         }
       });
     } catch {
@@ -118,5 +147,14 @@ export function useLiveActivityControls(
         /* unmount must never break a workout */
       }
     };
-  }, [weightStep, onAdjustWeight, onLogSet, resting, subscribe]);
+  }, [
+    weightStep,
+    onAdjustWeight,
+    onLogSet,
+    resting,
+    subscribe,
+    onAdjustReps,
+    onToggleRest,
+    onSkipRest,
+  ]);
 }

@@ -160,7 +160,14 @@ export interface LiveSetRowProps {
   /** Target duration prescription string (e.g. "30s" or "30") for placeholder prefill. */
   targetDuration?: string | number | null;
   onSkip?: () => void;
-  onChange: (next: LiveSetState) => void;
+  /**
+   * `typing: true` marks a keystroke in one of the number boxes. Track does
+   * not tick a set on a keystroke (Jon, 2026-10-29: "1" of "12" reps was
+   * ticking the set with the keyboard still up); it ticks on `onCommit`.
+   */
+  onChange: (next: LiveSetState, opts?: { typing?: boolean }) => void;
+  /** The member left a number box (blur): the moment a filled set ticks. */
+  onCommit?: () => void;
   testID?: string;
 }
 
@@ -249,6 +256,7 @@ export function LiveSetRow({
   targetDuration,
   onSkip,
   onChange,
+  onCommit,
   testID,
 }: LiveSetRowProps) {
   const { colors } = useThemeTokens();
@@ -310,13 +318,13 @@ export function LiveSetRow({
   // member just typed on screen instead of letting the next render's
   // `String(number)` erase it.
   const [weightDraft, onWeightChangeText] = useNumberDraft(state.weight, (weight) =>
-    onChange({ ...state, weight }),
+    onChange({ ...state, weight }, { typing: true }),
   );
   const [distanceDraft, onDistanceChangeText] = useNumberDraft(state.distance, (distance) =>
-    onChange({ ...state, distance }),
+    onChange({ ...state, distance }, { typing: true }),
   );
   const [speedDraft, onSpeedChangeText] = useNumberDraft(state.speed, (speed) =>
-    onChange({ ...state, speed }),
+    onChange({ ...state, speed }, { typing: true }),
   );
   // Duration has its own flavour: the stored value is always seconds but the
   // member types in whichever unit the sec/min toggle is showing, so the
@@ -344,7 +352,7 @@ export function LiveSetRow({
     const seconds = unitDisplayToSeconds(text, durationUnit);
     const parsedSeconds = seconds === "" ? null : Number(seconds);
     durationSentRef.current = { seconds: parsedSeconds, unit: durationUnit };
-    onChange({ ...state, durationSec: parsedSeconds });
+    onChange({ ...state, durationSec: parsedSeconds }, { typing: true });
   };
 
   // The web-Track table row: label-less filled inputs with centred text
@@ -416,6 +424,7 @@ export function LiveSetRow({
               keyboardType="decimal-pad"
               value={weightDraft}
               onChangeText={onWeightChangeText}
+              onEndEditing={() => onCommit?.()}
               placeholder={
                 prefill?.weight !== null && prefill?.weight !== undefined
                   ? String(prefill.weight)
@@ -444,7 +453,8 @@ export function LiveSetRow({
               accessibilityLabel={`Reps for set ${setIndex + 1}`}
               keyboardType="number-pad"
               value={state.reps !== null ? String(state.reps) : ""}
-              onChangeText={(text) => onChange({ ...state, reps: parseNum(text) })}
+              onChangeText={(text) => onChange({ ...state, reps: parseNum(text) }, { typing: true })}
+              onEndEditing={() => onCommit?.()}
               placeholder={
                 prefill?.reps !== null && prefill?.reps !== undefined
                   ? String(prefill.reps)
@@ -476,6 +486,7 @@ export function LiveSetRow({
               keyboardType="decimal-pad"
               value={durationDraft}
               onChangeText={onDurationChangeText}
+              onEndEditing={() => onCommit?.()}
               placeholder={
                 prefill?.durationSec != null
                   ? secondsToUnitDisplay(prefill.durationSec, durationUnit)
@@ -507,6 +518,7 @@ export function LiveSetRow({
               keyboardType="decimal-pad"
               value={distanceDraft}
               onChangeText={onDistanceChangeText}
+              onEndEditing={() => onCommit?.()}
               placeholder={
                 prefill?.distance != null ? String(prefill.distance) : "0"
               }
@@ -534,6 +546,7 @@ export function LiveSetRow({
               keyboardType="decimal-pad"
               value={speedDraft}
               onChangeText={onSpeedChangeText}
+              onEndEditing={() => onCommit?.()}
               placeholder={
                 prefill?.speed != null ? String(prefill.speed) : "0.0"
               }
@@ -620,6 +633,7 @@ export function LiveSetRow({
             keyboardType="decimal-pad"
             value={weightDraft}
             onChangeText={onWeightChangeText}
+            onEndEditing={() => onCommit?.()}
             placeholder={
               prefill?.weight !== null && prefill?.weight !== undefined
                 ? String(prefill.weight)
@@ -694,7 +708,8 @@ export function LiveSetRow({
             label="Reps"
             keyboardType="number-pad"
             value={state.reps !== null ? String(state.reps) : ""}
-            onChangeText={(text) => onChange({ ...state, reps: parseNum(text) })}
+            onChangeText={(text) => onChange({ ...state, reps: parseNum(text) }, { typing: true })}
+            onEndEditing={() => onCommit?.()}
             placeholder={
               prefill?.reps !== null && prefill?.reps !== undefined
                 ? String(prefill.reps)
@@ -736,6 +751,7 @@ export function LiveSetRow({
             keyboardType="decimal-pad"
             value={durationDraft}
             onChangeText={onDurationChangeText}
+            onEndEditing={() => onCommit?.()}
             placeholder={
               prefill?.durationSec != null
                 ? secondsToUnitDisplay(prefill.durationSec, durationUnit)
@@ -754,6 +770,7 @@ export function LiveSetRow({
             keyboardType="decimal-pad"
             value={distanceDraft}
             onChangeText={onDistanceChangeText}
+            onEndEditing={() => onCommit?.()}
             placeholder={
               prefill?.distance != null ? String(prefill.distance) : "0"
             }
@@ -768,6 +785,7 @@ export function LiveSetRow({
             keyboardType="decimal-pad"
             value={speedDraft}
             onChangeText={onSpeedChangeText}
+            onEndEditing={() => onCommit?.()}
             placeholder={
               prefill?.speed != null ? String(prefill.speed) : "0.0"
             }

@@ -91,6 +91,12 @@ export type IosWidgetProps =
       progress?: number;
       rings: IosWidgetRing[];
       url: string;
+      /**
+       * The medium Nutrition tile's "+" (Jon, 2026-10-29): opens Nutrition
+       * straight into food search, the screen's own "+". Present on the
+       * nutrition row only; its presence is what selects that layout.
+       */
+      addUrl?: string;
     }
   | {
       signedIn: false;
@@ -129,6 +135,12 @@ export interface BuildIosTimelineArgs {
   refreshAfterSeconds?: number | null;
 }
 
+/**
+ * Where the Nutrition widget's "+" lands: the Nutrition tab with `log=true`,
+ * which opens food search on arrival (`app/(app)/(tabs)/nutrition/index.tsx`).
+ */
+export const NUTRITION_LOG_PATH = "/dashboard/nutrition?log=true";
+
 /** One macro ring, without the null: a missing target is an absent key. */
 function iosRing(ring: WidgetSnapshotRing): IosWidgetRing {
   const [label, value, pct, unit] = ring;
@@ -147,6 +159,9 @@ function rowProps(row: WidgetSnapshotRow): IosWidgetProps {
     ...(row.progress !== null ? { progress: row.progress } : {}),
     rings: (row.rings ?? []).map(iosRing),
     url: widgetTapUri(row.deepLink),
+    ...(row.key === "nutrition"
+      ? { addUrl: widgetTapUri(NUTRITION_LOG_PATH) }
+      : {}),
   };
 }
 

@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Image, Linking, Pressable, type StyleProp, View, type ViewStyle } from "react-native";
+import {
+  AppState,
+  Image,
+  Linking,
+  Pressable,
+  type StyleProp,
+  View,
+  type ViewStyle,
+} from "react-native";
 import { Dumbbell, Play } from "lucide-react-native";
 import {
   useVideoPlayer,
@@ -423,6 +431,33 @@ function DirectVideo({
       statusSub.remove();
     };
   }, [player, onDuration]);
+
+  // BACK FROM THE BACKGROUND (Jon, 2026-10-29): iOS pauses an AVPlayer when
+  // the app leaves the foreground and nothing played it again, so the Live
+  // workout's demo froze on its last frame for the rest of the session. A
+  // mounted DirectVideo is always meant to be playing (a list row that is not
+  // playing renders the thumbnail instead, with no player), so returning to
+  // `active` plays it again, back inside the trim window if it drifted out.
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state !== "active") return;
+      try {
+        const currentTrim = trimRef.current;
+        if (
+          !currentTrim.isFullLength &&
+          currentTrim.end !== null &&
+          (player.currentTime < currentTrim.start ||
+            player.currentTime >= currentTrim.end)
+        ) {
+          seekPlayer(player, currentTrim.start);
+        }
+        if (!player.playing) player.play();
+      } catch {
+        /* a released player (exercise changed mid-transition) is not an error */
+      }
+    });
+    return () => sub.remove();
+  }, [player]);
 
   // Initial seek to trim.start when trim changes
   useEffect(() => {

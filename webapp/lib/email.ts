@@ -374,3 +374,33 @@ export async function sendVerificationEmail(email: string, token: string, mode: 
     html: verificationEmailHtml({ verifyUrl, mode }),
   })
 }
+
+/**
+ * A billing notice Terms §9 promises (trial ending, annual renewal). The words
+ * come from lib/billing/reminders.ts#reminderCopy. Transactional: the postal
+ * address footer and no unsubscribe link, because a member cannot opt out of
+ * being told they are about to be charged.
+ */
+export function billingReminderEmailHtml(copy: {
+  heading: string
+  lines: string[]
+  cta: { label: string; path: string }
+}): string {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://become.redbtn.io'
+  const esc = (t: string) =>
+    t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  return emailShell({
+    title: copy.heading,
+    emoji: '🗓️',
+    content: `
+          <h2 class="b-ink" style="font-size: 22px; font-weight: 700; color: ${EMAIL_LIGHT.ink}; margin: 0 0 16px;">${esc(copy.heading)}</h2>
+          ${copy.lines
+            .map(
+              (l) =>
+                `<p class="b-muted" style="font-size: 16px; color: ${EMAIL_LIGHT.muted}; margin: 0 0 16px;">${esc(l)}</p>`,
+            )
+            .join('')}
+          <a class="b-button" href="${appUrl}${copy.cta.path}" style="display: inline-block; background-color: ${EMAIL_LIGHT.buttonSurface}; color: ${EMAIL_LIGHT.buttonInk}; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">${esc(copy.cta.label)}</a>
+          ${emailFooter({ reason: `You're receiving this because you have a Plus trial or subscription on ${appName}. It's a notice about a charge, so it can't be turned off.` })}`,
+  })
+}

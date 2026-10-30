@@ -18,6 +18,16 @@ import {
 import LiveWorkoutRoute from "@/app/(app)/(tabs)/programming/[id]/workout/[idx]/live";
 import type { AppStateStatus } from "react-native";
 
+// Track ticks a set when the member LEAVES the box, not on the keystroke
+// (Jon, 2026-10-29), so a test that types a value leaves the box as well.
+function typeIn(
+  element: Parameters<typeof fireEvent.changeText>[0],
+  text: string,
+): void {
+  fireEvent.changeText(element, text);
+  fireEvent(element, "endEditing");
+}
+
 const mockToken = "test-jwt";
 jest.mock("@/lib/auth/useAuth", () => ({
   useAuth: () => ({
@@ -452,13 +462,13 @@ describe("Live Workout Autosave & Crash-safe Local Draft (NP-079)", () => {
 
     // Enter set data
     await act(async () => {
-      fireEvent.changeText(
+      typeIn(
         screen.getByTestId("live-workout-bench-set-0-weight"),
         "225",
       );
     });
     await act(async () => {
-      fireEvent.changeText(
+      typeIn(
         screen.getByTestId("live-workout-bench-set-0-reps"),
         "5",
       );

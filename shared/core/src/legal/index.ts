@@ -34,7 +34,8 @@ export const LEGAL_CONTACT_EMAIL = 'info@becomeurbest.com'
 export const LEGAL_PRIMARY_DOMAIN = 'becomeurbest.com'
 export const LEGAL_SECONDARY_DOMAIN = 'become.redbtn.io'
 export const LEGAL_GOVERNING_LAW = 'the laws of the State of New York'
-export const LEGAL_VENUE = 'the state and federal courts located in Nassau County, New York'
+export const LEGAL_VENUE =
+  'the state courts located in Nassau County, New York, and the United States District Court for the Eastern District of New York'
 
 /** Shown at the top of every legal page, and asserted by the unit test.
  *
@@ -43,9 +44,9 @@ export const LEGAL_VENUE = 'the state and federal courts located in Nassau Count
  *  member whose stored version differs. So: bump it for a change a member has to
  *  agree to again (a new obligation, a new price, a new age rule), and leave it
  *  alone for a typo, or every member is stopped at the door for a comma. */
-export const LEGAL_LAST_UPDATED = 'September 24, 2026'
-export const LEGAL_LAST_UPDATED_ISO = '2026-09-24'
-export const LEGAL_VERSION = 'v1.2.0'
+export const LEGAL_LAST_UPDATED = 'October 30, 2026'
+export const LEGAL_LAST_UPDATED_ISO = '2026-10-30'
+export const LEGAL_VERSION = 'v1.3.0'
 
 /** The minimum age to hold an account. George's call, 2026-09-13: 13, not 18.
  *  Under-13s are COPPA territory and are refused outright; 13 to 17 may use

@@ -78,47 +78,100 @@ export function WorkoutLiveActivityLayout(
   props: WorkoutLiveActivityProps,
 ): LiveActivityLayout {
   "widget";
-  const resting = props.phase === "rest" && props.restEndsAtMs !== null;
-  // The − / + / Log set row, under the exercise block in the banner and the
-  // expanded bottom region. Only for weight-tracked sets (`weightLabel`
-  // present) — timed / bodyweight-only work shows no controls. While resting
-  // the countdown above keeps ticking and the steppers adjust the NEXT set's
-  // weight, so there is no Log button.
-  //
-  // `systemImage` on a Button is ignored without a `label` (the `@expo/ui`
-  // Button docs), so the icon-only steppers carry their glyph as a child
-  // `Image` instead and only the Log button uses `label` + `systemImage`.
-  const showControls = !!props.weightLabel;
-  const weightControls = showControls ? (
-    <HStack spacing={8} modifiers={[padding({ top: 10 })]}>
-      <Button
-        target="weight-down"
-        modifiers={[
-          buttonStyle("bordered"),
-          buttonBorderShape("circle"),
-          controlSize("small"),
-        ]}
-      >
-        <Image systemName="minus" modifiers={[frame({ width: 18, height: 18 })]} />
-      </Button>
-      <Text modifiers={[font({ size: 14, weight: "semibold" })]}>
-        {props.weightLabel}
+  // A PAUSED rest has no end instant, so it is "resting" by the flag rather
+  // than by `restEndsAtMs`; its clock is drawn frozen, not counting.
+  const paused = props.phase === "rest" && props.restPaused === true;
+  const resting =
+    props.phase === "rest" && (props.restEndsAtMs !== null || paused);
+  const restClock = (
+    size: number,
+    weight: "bold" | "semibold",
+    extra: ReturnType<typeof padding>[],
+  ) =>
+    paused ? (
+      <Text modifiers={[font({ size, weight }), ...extra]}>
+        {props.restRemainingLabel ?? "Paused"}
       </Text>
+    ) : (
+      <Text
+        timerInterval={{
+          lower: new Date(),
+          upper: new Date(props.restEndsAtMs as number),
+        }}
+        countsDown
+        modifiers={[font({ size, weight }), ...extra]}
+      />
+    );
+  // THE CONTROLS ROW (Jon, 2026-10-29): weight − / + and reps − / + side by
+  // side, then Log set while lifting, or Pause/Resume and Skip while resting.
+  // Each group draws only when the set tracks it (no weight on bodyweight
+  // work, no reps on timed work); the rest buttons draw whenever resting.
+  const stepper = (down: string, label: string, up: string) => (
+    <HStack spacing={4}>
       <Button
-        target="weight-up"
+        target={down}
         modifiers={[
           buttonStyle("bordered"),
           buttonBorderShape("circle"),
           controlSize("small"),
         ]}
       >
-        <Image systemName="plus" modifiers={[frame({ width: 18, height: 18 })]} />
+        <Image systemName="minus" modifiers={[frame({ width: 14, height: 14 })]} />
       </Button>
+      <Text modifiers={[font({ size: 14, weight: "semibold" })]}>{label}</Text>
+      <Button
+        target={up}
+        modifiers={[
+          buttonStyle("bordered"),
+          buttonBorderShape("circle"),
+          controlSize("small"),
+        ]}
+      >
+        <Image systemName="plus" modifiers={[frame({ width: 14, height: 14 })]} />
+      </Button>
+    </HStack>
+  );
+  const showControls = !!props.weightLabel || !!props.repsLabel || resting;
+  const weightControls = showControls ? (
+    <HStack spacing={10} modifiers={[padding({ top: 10 })]}>
+      {props.weightLabel
+        ? stepper("weight-down", props.weightLabel, "weight-up")
+        : null}
+      {props.repsLabel ? stepper("reps-down", props.repsLabel, "reps-up") : null}
       <Spacer />
-      {resting ? null : (
+      {resting ? (
+        <HStack spacing={6}>
+          <Button
+            target="rest-toggle"
+            modifiers={[
+              buttonStyle("bordered"),
+              buttonBorderShape("circle"),
+              controlSize("small"),
+            ]}
+          >
+            <Image
+              systemName={paused ? "play.fill" : "pause.fill"}
+              modifiers={[frame({ width: 14, height: 14 })]}
+            />
+          </Button>
+          <Button
+            target="rest-skip"
+            modifiers={[
+              buttonStyle("bordered"),
+              buttonBorderShape("circle"),
+              controlSize("small"),
+            ]}
+          >
+            <Image
+              systemName="forward.end.fill"
+              modifiers={[frame({ width: 14, height: 14 })]}
+            />
+          </Button>
+        </HStack>
+      ) : (
         <Button
           target="log-set"
-          label="Log set"
+          label="Log"
           systemImage="checkmark"
           modifiers={[buttonStyle("bordered"), controlSize("small")]}
         />
@@ -186,19 +239,14 @@ export function WorkoutLiveActivityLayout(
             {props.exerciseName}
           </Text>
           <Text modifiers={[font({ size: 12 })]}>
-            {resting ? `${props.setLabel} · Resting` : props.setLabel}
+            {resting
+              ? `${props.setLabel} · ${paused ? "Paused" : "Resting"}`
+              : props.setLabel}
           </Text>
         </VStack>
         <Spacer />
         {resting ? (
-          <Text
-            timerInterval={{
-              lower: new Date(),
-              upper: new Date(props.restEndsAtMs as number),
-            }}
-            countsDown
-            modifiers={[font({ size: 28, weight: "bold" })]}
-          />
+          restClock(28, "bold", [])
         ) : null}
       </HStack>
       {weightControls}
@@ -210,14 +258,7 @@ export function WorkoutLiveActivityLayout(
   );
 
   const compactTrailing = resting ? (
-    <Text
-      timerInterval={{
-        lower: new Date(),
-        upper: new Date(props.restEndsAtMs as number),
-      }}
-      countsDown
-      modifiers={[font({ size: 13, weight: "semibold" }), padding({ trailing: 4 })]}
-    />
+    restClock(13, "semibold", [padding({ trailing: 4 })])
   ) : (
     <Text modifiers={[font({ size: 13 }), padding({ trailing: 4 })]}>
       {props.setLabel}
@@ -225,14 +266,7 @@ export function WorkoutLiveActivityLayout(
   );
 
   const minimal = resting ? (
-    <Text
-      timerInterval={{
-        lower: new Date(),
-        upper: new Date(props.restEndsAtMs as number),
-      }}
-      countsDown
-      modifiers={[font({ size: 11, weight: "semibold" })]}
-    />
+    restClock(11, "semibold", [])
   ) : (
     <Image assetName="BecomeArrow" />
   );
@@ -245,14 +279,7 @@ export function WorkoutLiveActivityLayout(
   );
 
   const expandedTrailing = resting ? (
-    <Text
-      timerInterval={{
-        lower: new Date(),
-        upper: new Date(props.restEndsAtMs as number),
-      }}
-      countsDown
-      modifiers={[font({ size: 22, weight: "bold" }), padding({ trailing: 10, top: 6 })]}
-    />
+    restClock(22, "bold", [padding({ trailing: 10, top: 6 })])
   ) : (
     <Text
       modifiers={[font({ size: 14, weight: "semibold" }), padding({ trailing: 10, top: 6 })]}
@@ -280,7 +307,7 @@ export function WorkoutLiveActivityLayout(
             {props.exerciseName}
           </Text>
           {resting ? (
-            <Text modifiers={[font({ size: 12 })]}>Resting</Text>
+            <Text modifiers={[font({ size: 12 })]}>{paused ? "Paused" : "Resting"}</Text>
           ) : null}
         </VStack>
       </HStack>

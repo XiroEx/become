@@ -47,6 +47,9 @@ export interface UseWorkoutLiveActivityOptions {
    * DI for tests, and the route's real value. Omitted = no controls.
    */
   weightLabel?: string;
+  repsLabel?: string;
+  restPaused?: boolean;
+  restRemainingLabel?: string;
   /**
    * `file://` URI of the current exercise's cached still frame (see
    * `imageUri` on the props). Omitted until the frame cache resolves one —
@@ -84,6 +87,11 @@ export function useWorkoutLiveActivity(
     ...(options.weightLabel !== undefined
       ? { weightLabel: options.weightLabel }
       : {}),
+    ...(options.repsLabel !== undefined ? { repsLabel: options.repsLabel } : {}),
+    ...(options.restPaused ? { restPaused: true } : {}),
+    ...(options.restPaused && options.restRemainingLabel !== undefined
+      ? { restRemainingLabel: options.restRemainingLabel }
+      : {}),
     ...(options.imageUri !== undefined ? { imageUri: options.imageUri } : {}),
   };
 
@@ -119,6 +127,9 @@ export function useWorkoutLiveActivity(
     options.restEndsAtMs,
     options.restTotalSec,
     options.weightLabel,
+    options.repsLabel,
+    options.restPaused,
+    options.restRemainingLabel,
     options.imageUri,
     factory,
   ]);

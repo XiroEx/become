@@ -235,13 +235,19 @@ test('no certification, compliance or security claim Become cannot back', () => 
   )
 })
 
-test('every open question is marked for counsel, and marked the same way', () => {
+test('every counsel question is resolved: no marker is left on any page', () => {
+  // This used to require open markers ("a draft with no open questions has
+  // probably invented some answers"). The Oct 29-30 2026 legal package closed
+  // all 17: counsel's answers applied as edits, the rest closed by Jon's
+  // decisions or recorded deferrals (board card "Lawyer review"), never by
+  // inventing an answer. tests/unit/legal/legalPackageOct2026.test.ts pins the
+  // wording. A new open question must come back as a marker AND turn this test
+  // around again.
   const all = [...counselTodos(TERMS), ...counselTodos(PRIVACY), ...counselTodos(HEALTH_DATA), ...counselTodos(SUPPORT)]
-  assert.ok(all.length > 0, 'a draft with no open questions has probably invented some answers')
+  assert.deepEqual(all, [])
 
-  // The marker renders on the page, so an unresolved item cannot ship unseen.
   const termsHtml = renderToStaticMarkup(<TermsPage />)
-  assert.ok(has(termsHtml, COUNSEL_TODO), 'the counsel marker is not rendered')
+  assert.ok(!has(termsHtml, COUNSEL_TODO), 'a counsel marker still renders on /terms')
 
   // No arbitration clause has been drafted, so none may be implied.
   assert.ok(
