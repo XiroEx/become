@@ -222,6 +222,9 @@ export interface IUser {
    *  never asked = nothing may be sent. See lib/aiConsent.ts. */
   aiConsent?: IUserAiConsent
   emailPreferences?: IUserEmailPreferences
+  /** The billing notices already sent (lib/billing/reminders.ts): one key per
+   *  trial and one per annual renewal period, so a notice goes out once. */
+  billingReminders?: { trialEnding?: string | null; renewal?: string | null }
   /** Set when the member asks for their account to be deleted; unset when they
    *  restore it. Absent is the normal state. See lib/accountDeletion.ts. */
   deletion?: IUserDeletion
@@ -412,6 +415,15 @@ const UserSchema = new Schema<IUser, UserModel, IUserMethods>({
   // lib/aiConsent.ts#aiConsentGranted answers false, so nothing is dispatched.
   aiConsent: { type: UserAiConsentSchema, default: undefined },
   emailPreferences: { type: UserEmailPreferencesSchema, default: undefined },
+  // Terms §9's trial-ending and annual-renewal notices, one per trial and per
+  // renewal period (lib/billing/reminders.ts). Absent = nothing sent yet.
+  billingReminders: {
+    type: new Schema(
+      { trialEnding: { type: String, default: null }, renewal: { type: String, default: null } },
+      { _id: false },
+    ),
+    default: undefined,
+  },
   // Absent = no deletion pending, which is the state every row is in until a
   // member asks. Never defaulted to an object: `deletion.requestedAt` being
   // present is the whole predicate the purge selector runs on.

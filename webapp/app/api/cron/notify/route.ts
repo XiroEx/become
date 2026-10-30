@@ -42,6 +42,7 @@ import { checkInFactsForToday } from '@/lib/checkin/todayFacts'
 import { loadWidgetFeed } from '@/lib/widgets/load'
 import { buildDailyGlance } from '@/lib/widgets/glance'
 import { hasExternalWorkoutOn } from '@/lib/workout/trainedDays'
+import { runBillingReminders } from '@/lib/billing/runReminders'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -766,5 +767,16 @@ export async function GET(request: NextRequest) {
   // `qualified: 19, delivered: 0, noSubscription: 19` is the signal that the
   // pipeline is fine and nobody has push enabled — previously indistinguishable
   // from "nobody qualified".
-  return NextResponse.json({ success: true, notifications: t, ...results })
+  // ── Billing notices Terms §9 promises (trial ending in 3 days, annual
+  // renewal 30 days out). Wrapped: a billing email may never cost a member a
+  // reminder above, and the reverse.
+  let billingReminders: { sent: number; failed: number } | null = null
+  try {
+    billingReminders = await runBillingReminders(now)
+  } catch (err) {
+    console.error('[notify] billing reminders failed', err)
+    results.errors++
+  }
+
+  return NextResponse.json({ success: true, notifications: t, ...results, billingReminders })
 }

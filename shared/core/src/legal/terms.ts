@@ -23,7 +23,6 @@ import {
   LEGAL_PRIMARY_DOMAIN,
   LEGAL_REFUND_WINDOW_DAYS,
   LEGAL_SECONDARY_DOMAIN,
-  LEGAL_VENUE,
   MANAGE_BILLING_LABEL,
   RENEWAL_TERMS,
   type LegalDoc,
@@ -115,8 +114,12 @@ export const TERMS: LegalDoc = {
           text: `The Service is not directed to children under ${LEGAL_MINIMUM_AGE}, and we do not knowingly collect personal information from them. If you believe a child under ${LEGAL_MINIMUM_AGE} has given us personal information, email us and we will delete it.`,
         },
         {
-          kind: 'todo',
-          text: 'Members aged 13 to 17 are admitted on their own say-so plus a parent-or-guardian permission clause. Confirm whether that permission needs to be verified and recorded (for example a guardian email confirmation), whether a minor can validly agree to the subscription terms at all in New York, and what the resulting App Store and Google Play age ratings must be.',
+          kind: 'p',
+          text: 'For members aged 13 to 17, consent to the collection, tracking, and sharing of personal data is obtained directly from the member. We do not knowingly collect personal information from children under 13; where consent must come from a parent or legal guardian, it must be the parent\'s or guardian\'s.',
+        },
+        {
+          kind: 'p',
+          text: 'Notifications sent between 12:00 AM and 6:00 AM require parental consent for members under 17.',
         },
       ],
     },
@@ -187,10 +190,6 @@ export const TERMS: LegalDoc = {
           kind: 'p',
           text: 'We do not sell Your Content, and we do not use it to advertise to you. What we do with it, and who processes it for us, is set out in the [Privacy Policy](/privacy).',
         },
-        {
-          kind: 'todo',
-          text: 'Whether Become can state that its AI provider does not use member content to train models. That depends on the exact Google Gemini terms applying to the redbtn platform account Become dispatches through, and on the agreement between Become and the platform operator. Until it is confirmed, this document makes no claim either way.',
-        },
       ],
     },
 
@@ -228,6 +227,10 @@ export const TERMS: LegalDoc = {
           text: 'Become has a free plan with limits on some features, and a paid plan called Plus that removes them. You can use the free plan for as long as you like.',
         },
         {
+          kind: 'p',
+          text: 'Free trials: new members may start with a 7-day free trial that requires no payment method. We will tell you 3 days before the trial ends. If you do not add a payment method, your account returns to the free plan when the trial ends and nothing is charged. You may then start a second 7-day trial by adding a payment method and choosing a recurring monthly or annual Plus plan. We will tell you 3 days before that trial ends. Unless you cancel in the app before it ends, your chosen plan will be charged when the trial ends and will then renew automatically as described below. Cancelling during a trial stops the charge and returns your account to the free plan. The 14-day first-payment refund in section 10 applies to the first charge after a trial.',
+        },
+        {
           kind: 'callout',
           tone: 'info',
           title: 'Automatic renewal terms',
@@ -247,15 +250,11 @@ export const TERMS: LegalDoc = {
         },
         {
           kind: 'p',
-          text: 'If we change the price of a plan, the change does not apply to a period you have already paid for. We will tell you before a new price takes effect for you, so you can cancel first if you want to.',
+          text: 'If we change the price of a plan, the change does not apply to a period you have already paid for. We will tell you at least 5 days and no more than 30 days before a new price takes effect for you, delivered in the same manner you selected for notices from us (email, mail, or app notification). If the price increases, we will either obtain your affirmative consent to the new price, or allow you to cancel and receive a prorated refund of the unused portion of your current period within 14 days following the increase.',
         },
         {
-          kind: 'todo',
-          text: 'The notice period and the notice mechanism required before an automatic-renewal price change, under New York GBL 527-a and the automatic-renewal statutes of the other states Become sells into (California, Colorado and others). This draft commits to notice "before" a change without naming a number.',
-        },
-        {
-          kind: 'todo',
-          text: 'Whether New York GBL 527-a also requires Become to send a separate renewal reminder before each renewal for annual plans, and, if so, at what interval and with what content.',
+          kind: 'p',
+          text: 'If your initial subscription is for one year or longer, we will also send you a renewal reminder at least 15 days and no more than 45 days before the cancellation deadline for that subscription. The reminder will be delivered in the same manner you used to sign up, and will include any price increase and clear instructions on how to cancel.',
         },
       ],
     },
@@ -274,7 +273,7 @@ export const TERMS: LegalDoc = {
         },
         {
           kind: 'p',
-          text: '**After that window, cancelling part-way through a period does not by itself produce a refund, and we do not automatically refund the unused part of a period you have already paid for.**',
+          text: '**After that window, cancelling part-way through a period does not by itself produce a refund (except where section 9 provides a prorated refund following a price increase), and we do not automatically refund the unused part of a period you have already paid for.**',
         },
         {
           kind: 'p',
@@ -287,10 +286,6 @@ export const TERMS: LegalDoc = {
         {
           kind: 'p',
           text: 'If you ever buy Become through an app store rather than from us, that store takes the payment and its own refund process applies. We cannot refund a charge we did not take.',
-        },
-        {
-          kind: 'todo',
-          text: `The ${LEGAL_REFUND_WINDOW_DAYS}-day first-payment refund is a commercial promise, not a legal one. Confirm what this section must additionally say for members with a statutory cooling-off right, including the 14-day right of withdrawal in the EU and UK, its interaction with immediate access to digital content, and whether that right also has to be honoured on renewals.`,
         },
       ],
     },
@@ -343,15 +338,11 @@ export const TERMS: LegalDoc = {
         },
         {
           kind: 'p',
-          text: 'To the fullest extent the law allows, our total liability for all claims arising out of or connected with the Service is limited to the greater of the amount you paid Become in the 12 months before the event giving rise to the claim, or 100 US dollars.',
+          text: 'To the fullest extent the law allows, our total liability for all claims arising out of or connected with the Service is limited to the amount you paid Become in the 12 months before the event giving rise to the claim.',
         },
         {
           kind: 'p',
           text: 'Nothing in these Terms excludes or limits liability that cannot be excluded or limited by law, including liability for fraud, for willful misconduct, or for death or personal injury caused by negligence where the law does not permit that limitation.',
-        },
-        {
-          kind: 'todo',
-          text: 'The liability cap figure and its enforceability in New York for a consumer product that touches physical activity and health-related data, and whether the exclusion of personal-injury damages is enforceable as drafted alongside the assumption of risk in section 1.',
         },
       ],
     },
@@ -363,10 +354,6 @@ export const TERMS: LegalDoc = {
         {
           kind: 'p',
           text: 'You agree to indemnify Become against claims, damages and reasonable costs arising from your breach of these Terms, from content you upload, or from your use of the Service in a way these Terms do not allow.',
-        },
-        {
-          kind: 'todo',
-          text: 'Whether a consumer-facing indemnity of this kind is appropriate and enforceable for Become, and if so how it should be scoped and worded.',
         },
       ],
     },
@@ -381,15 +368,11 @@ export const TERMS: LegalDoc = {
         },
         {
           kind: 'p',
-          text: `These Terms are governed by ${LEGAL_GOVERNING_LAW}, without regard to its conflict of law rules. You and Become agree that any dispute will be brought only in ${LEGAL_VENUE}, and both of us consent to personal jurisdiction there.`,
+          text: `These Terms are governed by ${LEGAL_GOVERNING_LAW}, without regard to its conflict of law rules. You and Become agree that any dispute will be brought only in the state courts located in Nassau County, New York, and the United States District Court for the Eastern District of New York, and both of us consent to personal jurisdiction there.`,
         },
         {
           kind: 'p',
           text: '**There is no arbitration agreement and no class-action waiver in these Terms.** None has been drafted, so none applies.',
-        },
-        {
-          kind: 'todo',
-          text: 'Whether Become wants binding arbitration and a class-action waiver at all. If yes, counsel needs to draft the clause itself: the arbitration provider and rules, seat, cost allocation, the small-claims carve-out, the opt-out mechanism and its deadline, and the notice a member must be given. Nothing of that kind has been invented here.',
         },
         {
           kind: 'p',
@@ -472,10 +455,6 @@ export const TERMS: LegalDoc = {
                 ' acknowledge and agree that **Apple, and Apple’s subsidiaries, are third-party beneficiaries of these Terms**, and that, upon your acceptance of these Terms, Apple will have the right (and will be deemed to have accepted the right) to enforce these Terms against you as a third-party beneficiary of them.',
             },
           ],
-        },
-        {
-          kind: 'todo',
-          text: 'The equivalent Google Play requirements (the Play Developer Distribution Agreement and the User Data policy), once Become ships through that store; and whether the Apple terms above should be published as a standalone EULA document in App Store Connect rather than, or as well as, a section of these Terms.',
         },
       ],
     },

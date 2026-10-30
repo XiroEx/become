@@ -31,8 +31,8 @@ import {
 
 /** When THIS document last changed. The Terms and the other legal pages keep
  *  LEGAL_LAST_UPDATED; a privacy-only correction must not re-date them. */
-export const PRIVACY_LAST_UPDATED = 'October 26, 2026'
-export const PRIVACY_LAST_UPDATED_ISO = '2026-10-26'
+export const PRIVACY_LAST_UPDATED = 'October 30, 2026'
+export const PRIVACY_LAST_UPDATED_ISO = '2026-10-30'
 
 export const PRIVACY: LegalDoc = {
   slug: 'privacy',
@@ -296,10 +296,6 @@ export const PRIVACY: LegalDoc = {
           kind: 'p',
           text: 'No automated decision in Become produces a legal or similarly significant effect on you. AI output sets suggestions and estimates. It never decides your eligibility, your price or your access.',
         },
-        {
-          kind: 'todo',
-          text: 'Whether Become can state that Google does not use member content submitted through the redbtn platform to train its models, and whether a written data processing agreement covering that is in place with the platform operator and with Google.',
-        },
       ],
     },
 
@@ -355,10 +351,6 @@ export const PRIVACY: LegalDoc = {
             'To a successor in a merger, acquisition or sale of assets, in which case we will tell you before your information becomes subject to a different policy.',
           ],
         },
-        {
-          kind: 'todo',
-          text: 'Whether a written data processing agreement is signed with each processor above, whether this list must name specific sub-processors and hosting regions, and whether the MongoDB Atlas cluster region needs to be disclosed by name here.',
-        },
       ],
     },
 
@@ -390,13 +382,9 @@ export const PRIVACY: LegalDoc = {
             'Account, training, nutrition and mind data: kept while your account exists, so your history stays useful to you.',
             `After a deletion request: your account is scheduled for deletion immediately, you have ${RESTORE_WINDOW_DAYS} days to undo it, and everything is then removed — always within the ${LEGAL_DELETION_DAYS} days we commit to, except for copies sitting in routine backups until those backups age out on their normal schedule.`,
             'Sign-in links: deleted automatically 15 minutes after they are created, whether or not they were used.',
-            'Payment records: Stripe keeps its own transaction records for its legal and tax obligations, and we keep the minimum billing metadata we need for accounting.',
+            'Payment records: Stripe keeps its own transaction records for its legal and tax obligations, and we keep the minimum billing metadata we need for accounting. Financial and tax records are kept for 6 years, as New York law requires.',
             'Server logs: kept only as long as they are useful for diagnosing problems and spotting abuse.',
           ],
-        },
-        {
-          kind: 'todo',
-          text: 'The retention period Become must apply to financial and tax records under New York and federal law, and the exact server log retention period once that is fixed in the infrastructure, so both can be stated here as numbers instead of descriptions.',
         },
       ],
     },
@@ -526,8 +514,12 @@ export const PRIVACY: LegalDoc = {
           text: 'Do Not Track: browsers send this signal in inconsistent ways and there is no agreed standard for responding to it, so we do not respond to it. We do not track you across other websites in any case. Under California’s Shine the Light law, we do not disclose personal information to third parties for their own direct marketing.',
         },
         {
-          kind: 'todo',
-          text: 'Whether Become must honour the Global Privacy Control given that it neither sells nor shares personal information, and what verification process is required for an authorised agent making a request on a Californian member’s behalf.',
+          kind: 'p',
+          text: 'We do not sell or share personal information, so there is no sale or sharing for a Global Privacy Control signal to opt out of. You can still exercise the rights in section 12 at any time.',
+        },
+        {
+          kind: 'p',
+          text: 'An authorised agent may make a request for you if they can show they are authorised, and we will confirm it with you directly.',
         },
       ],
     },
@@ -544,10 +536,6 @@ export const PRIVACY: LegalDoc = {
           kind: 'p',
           text: 'You have the rights to access, rectification, erasure, restriction, portability and objection, and the right to withdraw a consent at any time without affecting what was done before you withdrew it. You can also complain to your local supervisory authority, or to the Information Commissioner’s Office in the UK.',
         },
-        {
-          kind: 'todo',
-          text: 'Whether Become is required to appoint an Article 27 representative in the EU and in the UK, and whether a Data Protection Officer is required, before it markets to members in those regions.',
-        },
       ],
     },
 
@@ -558,10 +546,6 @@ export const PRIVACY: LegalDoc = {
         {
           kind: 'p',
           text: 'Become operates from the United States and its processors are principally United States companies. If you use Become from outside the United States, your personal information is transferred to and processed in the United States, which may not give it the same protection as the law where you live.',
-        },
-        {
-          kind: 'todo',
-          text: 'The transfer mechanism that must be in place with each processor before Become markets to EEA or UK residents: Standard Contractual Clauses, the UK International Data Transfer Addendum, or the EU-US Data Privacy Framework, and which of Become’s processors are certified under it.',
         },
       ],
     },
