@@ -141,8 +141,10 @@ this document and to `/privacy`.
 | Source code, this program, operational documentation, CI secrets | **GitHub** — `XiroEx/become` (private) | GitHub, Inc. | No member data. Holds credentials for CI (private registry auth, cron secret) |
 | Local working copies: a principal's laptop with a repo clone, a live admin session, a database client | Principal devices | Become LLC | The least-controlled surface in the whole inventory. See R11 |
 
-Atlas cluster tier, region, network access list and backup configuration:
-`[CONFIRM AT SIGN-OFF: C5]`. Physical siting of the fleet host that runs the platform, MinIO and the
+Atlas cluster: the free shared tier (M0) in AWS us-east-1 (Ashburn, Virginia), established
+2026-10-30. **The free tier has no Atlas backups**, so the only backup is the nightly home copy in
+section 9 ("Backups"). Network access list and any change of tier: `[CONFIRM AT SIGN-OFF: C5]`.
+Physical siting of the fleet host that runs the platform, MinIO and the
 secret store: `[CONFIRM AT SIGN-OFF: C6]`.
 
 ## 5. Risk assessment
@@ -158,7 +160,7 @@ be identified and the sufficiency of the safeguards against them to be assessed.
 | R3 | **One member's data served to another** — a route without an ownership check, a token used where it should not be, an object fetched by guessing a key | `verifyAuth()` on every data route; ownership checks per resource; `lib/blobAccess.ts` derives the owner from the object key and **defaults to deny** on an unrecognised prefix; scoped AI tokens are rejected by every route that did not opt in; admin is confirmed against the database, never from a token claim; CI runs the unit suite on every PR | Moderate impact, low likelihood. Best-tested area of the system |
 | R4 | **Abuse of the unauthenticated sign-in endpoint** — email bombing a third party, or enumerating members | 30-second per-email cooldown on `POST /api/auth/send-link`; magic links are single-use, 15-minute, TTL-deleted; passwordless, so there is no password to guess | Moderate. No general rate limiting anywhere else (G2) |
 | R5 | **AI processing carries more than the request needs** to a third party | Request context is assembled server-side and is deliberately compact; inputs are sanitised (`lib/ai/sanitize.ts`); the callback token is scoped and lives 15 minutes; run state expires in about an hour | Moderate, pending C9 |
-| R6 | **Destruction or corruption of member data** — a maintenance script run against production, or ransomware on the fleet host | Maintenance scripts in `webapp/scripts/` default to dry-run; `webapp/tests/unit/_guard.ts` refuses to run the unit suite against anything but a loopback `*-test` database; Atlas keeps managed backups | **High impact.** Restore has never been rehearsed (G4), backup configuration unconfirmed (C5) |
+| R6 | **Destruction or corruption of member data** — a maintenance script run against production, or ransomware on the fleet host | Maintenance scripts in `webapp/scripts/` default to dry-run; `webapp/tests/unit/_guard.ts` refuses to run the unit suite against anything but a loopback `*-test` database; a nightly encrypted dump of both Atlas databases is kept for 7 days on the fleet backup drive, and a restore was rehearsed 2026-10-30 (section 9) | **High impact, reduced.** Up to a day of data can be lost; the Atlas free tier itself has no backups (C5) |
 | R7 | **Physical compromise of the fleet host** holding member photos and the secret store | Private LAN, not a public object-storage endpoint; premises access `[CONFIRM AT SIGN-OFF: C6]` | High impact, low likelihood. Full-disk encryption unconfirmed (C6) |
 | R8 | **Access broader than the job** — both principals and the agent automation can reach live member data; `role: 'admin'` bypasses every entitlement gate | Two principals only; admin role held by a very small number of rows; admin verified server-side against the database | Moderate. No access review cadence (G5), no audit trail of admin reads (G6), and who holds admin is not written down `[CONFIRM AT SIGN-OFF: C4]` |
 | R9 | **Beta and production share one MongoDB**, so code on beta reads and writes live member data | Deliberate and documented in `AGENTS.md`; the billing mode fence stops test-mode Stripe events overwriting live subscription state | Accepted, with eyes open. Beta is a code preview, never a data sandbox, and must never be treated as one |
@@ -271,7 +273,7 @@ provider, an incident, or a new data category is a trigger, not a note for next 
 - This document is itself tested (`webapp/tests/unit/legal/securityProgram.test.ts`).
 - At each annual review the Coordinator re-walks section 4 against the code and the provider
   consoles, re-rates section 5, and records the result in section 13.
-- Not yet done: a rehearsed restore from backup (G4), a periodic access review (G5), and any
+- A restore from the nightly backup was rehearsed on 2026-10-30 (section 9). Not yet done: a periodic access review (G5), and any
   external test or scan (G12).
 
 ## 8. Physical safeguards — GBL § 899-bb(2)(b)(ii)(C)
@@ -328,6 +330,7 @@ cryptographically erased or destroyed, and the disposal is recorded by the Coord
 | Legacy password hashes | Retained today, needed by nothing | Should be dropped (G11) |
 | Billing records | As long as tax and accounting law requires | Stripe keeps its own records; Become keeps the minimum metadata |
 | Email in the sending mailbox | Sent transactional mail accumulates in the Gmail mailbox | Not currently pruned (G13) |
+| Backups of the Atlas databases (`jondonfitdb`, `become_auth`) | **7 days**, rolling | `~/bin/become-atlas-nightly-backup.sh` on the fleet host runs nightly at 03:30 UTC inside the fleet backup suite, encrypts each dump with age on the host before it touches disk (the decryption keys are on the Coordinator's laptop and the build workstation, never on the backup host), writes it to the dedicated backup drive only (no second copy), and deletes copies older than 7 days. A failure DMs the Coordinator. 7 days is chosen so a deleted member ages out of the backups well inside the 30-day promise: 7-day undo window + 7 days = 14. Restore rehearsed 2026-10-30: decrypted on the workstation into a throwaway local database, 55 collections and every member present, scratch copy deleted |
 | Local exports and dumps | For the life of the task only | Deleted, from the trash too, when the task ends |
 | Drives and devices that held member data | — | Cryptographically erased or destroyed before disposal or reuse; recorded by the Coordinator |
 
@@ -418,7 +421,7 @@ Written down because an undocumented gap is an unmanaged one. Owner "Coordinator
 | G1 | No security response headers: no CSP, HSTS, `X-Frame-Options` or `Referrer-Policy`. `next.config.ts` sets caching and video CORS only | R3 | Coordinator | 2026-10-31 |
 | G2 | No general rate limiting on API routes; the only throttle anywhere is the 30-second send-link cooldown | R4 | Coordinator | 2026-11-30 |
 | G3 | No centralised logging, alerting or error monitoring. Nothing would tell us an attack or a mass export was under way | R1, R8 | Coordinator | 2026-11-30 |
-| G4 | Backups never rehearsed: no documented schedule, retention or tested restore | R6 | Coordinator | 2026-10-31 |
+| G4 | *CLOSED 2026-10-30.* Backups never rehearsed: no documented schedule, retention or tested restore. Now: nightly encrypted dump, 7-day retention, restore rehearsed (section 9). Re-rehearse at each annual review | R6 | Coordinator | Closed 2026-10-30 |
 | G5 | No periodic access review and no written record of who holds admin on each provider account and in the app | R8 | Coordinator | At sign-off, then quarterly |
 | G6 | No audit trail of administrative access to member data | R8 | Coordinator | 2027-01-31 |
 | G7 | Sessions last 30 days and slide on use, with no way to revoke a single session or device | R11 | Coordinator | 2027-01-31 |
