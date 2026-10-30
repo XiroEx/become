@@ -157,6 +157,15 @@ collections empty, a couple hundred stray food rows) and nothing reads it.
 Verified 2026-08-12 — `jondonfitdb` holds the live data (60 users, meal logs
 from that day).
 
+**The cluster is the Atlas FREE tier (M0, us-east-1), which has no backups.** The only
+backup is a nightly home copy (since 2026-10-30): `~/bin/become-atlas-nightly-backup.sh` on
+.10, step 6 of the 03:30 UTC fleet backup suite, dumps `jondonfitdb` and `become_auth`,
+age-encrypts them on the host and keeps **7 days** in `/mnt/backups/become` (no copy to .3).
+The retention is short on purpose: a deleted member must age out of the backups well inside
+the 30-day deletion promise. Do not lengthen it or add copies without George. Decryption
+keys are on George's MacBook and on alphaSystem (`~/.config/age/become-backup.key`), never on
+.10. Restore steps are in the script header; details in `SECURITY_PROGRAM.md` section 9.
+
 The fleet box is still in the picture for one thing: the **redsecrets store**
 (`redshared` on `192.168.1.10:27017`), which is where the real connection
 string comes from.
