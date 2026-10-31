@@ -343,10 +343,10 @@ export class RunStore {
       const rec = this.runs.get(runId);
       if (!rec || rec.status !== "pending") return;
 
-      if (this.config.now() - rec.startedAt > this.config.timeoutMs) {
-        this.update(runId, { status: "error", error: "timeout" });
-        return;
-      }
+      // Past the deadline we still ask the server ONE more time before giving
+      // up: iOS freezes timers while the app is backgrounded, so a member who
+      // returns after the deadline must get a result that finished meanwhile.
+      const expired = this.config.now() - rec.startedAt > this.config.timeoutMs;
 
       try {
         const client = createApiClient({
@@ -391,6 +391,11 @@ export class RunStore {
         }
       } catch {
         // Transient network error: keep polling
+      }
+
+      if (expired) {
+        this.update(runId, { status: "error", error: "timeout" });
+        return;
       }
 
       const timer = setTimeout(tick, this.config.pollMs);
