@@ -18,6 +18,20 @@
  * module constant, so a component still calls the same hooks in the same
  * order on every render.
  *
+ * THE SHARED-VALUE SHAPE. Every motion component in this app writes its
+ * shared values through `.set()` and reads them through `.get()` (the
+ * compiler-safe API Reanimated documents for exactly this: assignment to
+ * `.value` is a setter call the React Compiler's static analysis cannot see,
+ * so `.set()` is what the week card's edge light and every enter/pop/fill
+ * already use). Real Reanimated 4.x provides `get`/`set` on every shared
+ * value (`addCompilerSafeGetAndSet` in its `mutables`), and the jest mock
+ * provides them too — but the static stand-in here used to be the odd one
+ * out, so `useSharedValue` is wrapped on BOTH paths: the real hook's box is
+ * returned as-is (it already carries `value`/`get`/`set`), and the static
+ * hook builds the same box. Either way the caller gets one `SharedBox`
+ * shape, and a component written against `.set()`/`.get()`/`.value` paints
+ * on a real phone exactly the way it paints in a test.
+ *
  * This changes nothing about Reduce Motion: every caller still asks
  * `useReducedMotion()` and cuts its travel when the OS says so.
  */
@@ -39,12 +53,24 @@ export function motionAvailable(): boolean {
   return MOTION_AVAILABLE;
 }
 
-type SharedBox<T> = {
+export type SharedBox<T> = {
   value: T;
   get: () => T;
   set: (next: T | ((prev: T) => T)) => void;
 };
 
+/**
+ * One `SharedBox` shape on both paths. The real hook already returns a box
+ * carrying `value`/`get`/`set` (Reanimated 4.x adds them to every shared
+ * value for the React Compiler, which cannot see through a `.value =`
+ * assignment); the static hook builds the same box over `useState`, with
+ * `set` applying plain values and updater functions and `withTiming` et al
+ * already collapsed to their end values by the static animation stand-ins
+ * below. Callers therefore always get `.set()`/`.get()`/`.value`, whether
+ * the phone runs the real driver or a test runs the still frame — which is
+ * what keeps ScreenEnter/ProgressFill painting on device the way they paint
+ * in jest.
+ */
 function useStaticSharedValue<T>(init: T): SharedBox<T> {
   const [box] = useState<SharedBox<T>>(() => {
     const b: SharedBox<T> = {
@@ -58,6 +84,21 @@ function useStaticSharedValue<T>(init: T): SharedBox<T> {
     return b;
   });
   return box;
+}
+
+const useRealSharedValue = (
+  MOTION_AVAILABLE ? real.useSharedValue : useStaticSharedValue
+) as <T>(init: T) => SharedBox<T>;
+
+/**
+ * The wrapped hook both paths share. The branch is chosen once at module
+ * load (`MOTION_AVAILABLE` is a constant), so every render calls exactly one
+ * hook: the real `useSharedValue` — whose box already satisfies `SharedBox`
+ * — when Reanimated is present, the static box builder when it is missing.
+ * One name, one shape, every caller.
+ */
+function useSharedValueBox<T>(init: T): SharedBox<T> {
+  return useRealSharedValue(init);
 }
 
 function useStaticAnimatedStyle(): undefined {
@@ -88,9 +129,7 @@ const Animated = (
   MOTION_AVAILABLE ? real.default : staticAnimated
 ) as typeof Reanimated.default;
 
-export const useSharedValue = (
-  MOTION_AVAILABLE ? real.useSharedValue : useStaticSharedValue
-) as typeof Reanimated.useSharedValue;
+export const useSharedValue = useSharedValueBox as typeof Reanimated.useSharedValue;
 
 export const useAnimatedStyle = (
   MOTION_AVAILABLE ? real.useAnimatedStyle : useStaticAnimatedStyle
